@@ -79,6 +79,27 @@ PRIMARY_SOURCE_FOR = {
     "stock_rank_forecast_cninfo": "stock_profit_forecast_ths",
 }
 
+# ============================================================
+# 性能优化：已知全市场 API 列表（返回全量但分析只用1行）
+# 拉取后自动 filter 到目标股票，避免内存飙升
+# ============================================================
+FULL_MARKET_APIS = {
+    "stock_zh_a_spot_em": "代码",           # 实时行情，列名：代码
+    "stock_fund_flow_individual": "股票代码", # 资金流向，列名：股票代码
+    "stock_rank_forecast_cninfo": "证券代码", # 机构评级，列名：证券代码
+    "bond_zh_cov": "正股代码",               # 可转债
+    "stock_tfp_em": "代码",                 # 停复牌
+}
+
+# 已知全历史 API：自动截取最近 N 行（下游只需近期数据）
+HISTORY_APIS = {
+    "stock_financial_report_sina": 12,    # 最近 12 期（3年季度）
+    "stock_financial_abstract": 12,       # 最近 12 期
+    "stock_zh_a_daily": 750,              # 最近 750 个交易日（~3年）
+    "stock_zh_a_hist": 750,               # 同上
+    "macro_china_pmi": 12,                # 最近 12 期
+}
+
 
 class DataSnapshot:
     """
@@ -124,6 +145,15 @@ class DataSnapshot:
         """从磁盘加载当日缓存"""
         if not self._cache_path.exists():
             return
+        # 性能优化：缓存文件超过 10MB 则删除重建（可能是旧的全市场数据）
+        try:
+            file_size_mb = self._cache_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > 10:
+                self._cache_path.unlink()
+                self._warnings.append(f"[cache] 磁盘缓存 {file_size_mb:.1f}MB 超限，已删除重建")
+                return
+        except OSError:
+            pass
         try:
             with open(self._cache_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -435,6 +465,26 @@ class DataSnapshot:
 
             if df.empty:
                 return {"status": "failed", "error": f"{api_name} 返回空数据"}
+
+            # 性能优化：全市场 API 自动过滤到目标股票
+            if api_name in FULL_MARKET_APIS:
+                code_col = FULL_MARKET_APIS[api_name]
+                if code_col in df.columns:
+                    stock_code_str = str(self.stock_code).zfill(6)
+                    df_filtered = df[df[code_col].astype(str).str.zfill(6) == stock_code_str]
+                    if len(df_filtered) == 0:
+                        # 尝试不带前缀匹配
+                        df_filtered = df[df[code_col].astype(str).str[-6:] == stock_code_str]
+                    if len(df_filtered) > 0:
+                        df = df_filtered
+                    # 如果仍然匹配不到，保留全量（降级行为）
+
+            # 性能优化：全历史 API 自动截取最近 N 行
+            # 注意：大部分 API 返回数据是最新在前（head=最新），用 head() 截取
+            if api_name in HISTORY_APIS:
+                max_rows = HISTORY_APIS[api_name]
+                if len(df) > max_rows:
+                    df = df.head(max_rows).reset_index(drop=True)
 
             return {
                 "status": "ok",
