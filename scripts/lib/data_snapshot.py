@@ -330,12 +330,16 @@ class DataSnapshot:
                     continue
 
                 # 检查该场景的所有子项是否全部 failed
+                # 修正 D: rows=0 也视为失败（空数据 = 假性成功）
                 all_items_failed = True
                 for key, val in data.items():
                     if isinstance(val, dict):
                         if val.get("status") in ("ok", "cached"):
-                            all_items_failed = False
-                            break
+                            # 检查是否有实际数据
+                            rows = val.get("rows", -1)  # -1 表示无 rows 字段（非数据型）
+                            if rows != 0:  # rows=0 视为失败，rows=-1 或 rows>0 视为有数据
+                                all_items_failed = False
+                                break
 
                 if all_items_failed and data:
                     critical_scenes.append(scene)

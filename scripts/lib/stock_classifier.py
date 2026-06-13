@@ -186,43 +186,51 @@ def classify_by_rules(facts: dict) -> dict:
                 },
             }
 
-    # Step 5: 无法分类，返回低置信度
+    # Step 5: 无法分类，返回 None 强制走 LLM
+    # 修正 E: 不再默认消费股，让 LLM 判断
     return {
-        "primary_type": "消费股",  # 默认消费股（宁多勿少）
-        "confidence": 0.40,
+        "primary_type": None,
+        "confidence": 0.0,
         "evidence": {
-            "source": "default",
+            "source": "no_match",
             "value": f"board={board}, csrc={csrc}",
-            "matched_rule": "无匹配，使用默认",
+            "matched_rule": "无匹配，需要 LLM 判断",
         },
-        "warnings": ["分类置信度低，建议人工确认"],
+        "warnings": ["规则无法分类，需要 LLM 兜底"],
     }
 
 
 def classify_stock(stock_code: str) -> dict:
     """
-    股票分类主入口。
+    股票分类主入口。三级降级：
+    1. 东财 datacenter API → BOARD_NAME_LEVEL 规则分类
+    2. AkShare stock_individual_info_em → 东财分类（非申万）
+    3. 返回 None 强制 LLM 兜底
 
     返回格式:
     {
-      "primary_type": "周期股|成长股|消费股|金融股|防御股|多元化控股",
+      "primary_type": "周期股|成长股|消费股|金融股|防御股|多元化控股|None",
       "confidence": 0.0-1.0,
       "evidence": {"source": "...", "value": "...", "matched_rule": "..."},
       "warnings": ["..."],
       "raw_facts": {"industry_csrc": "...", "board_name_level": "...", ...}
     }
     """
-    # Step 1: 拉取事实
+    # Step 1: 拉取事实（东财 datacenter）
     facts = fetch_org_info(stock_code)
     if facts.get("status") != "ok":
-        # 拉取失败，返回低置信度默认分类
+        # Tier 2: 尝试 AkShare
+        facts = _fetch_via_akshare(stock_code)
+
+    if facts.get("status") != "ok":
+        # 全部失败，返回 None 强制 LLM
         return {
-            "primary_type": "消费股",
-            "confidence": 0.30,
+            "primary_type": None,
+            "confidence": 0.0,
             "evidence": {
-                "source": "fallback",
+                "source": "all_failed",
                 "value": f"行业数据拉取失败: {facts.get('error', 'unknown')}",
-                "matched_rule": "数据不可用，使用默认",
+                "matched_rule": "数据不可用，需要 LLM 判断",
             },
             "warnings": [f"行业数据拉取失败: {facts.get('error', '')}"],
             "raw_facts": facts,
@@ -232,6 +240,34 @@ def classify_stock(stock_code: str) -> dict:
     result = classify_by_rules(facts)
     result["raw_facts"] = facts
     return result
+
+
+def _fetch_via_akshare(stock_code: str) -> dict:
+    """Tier 2: 通过 AkShare 获取个股信息"""
+    try:
+        import akshare as ak
+        info = ak.stock_individual_info_em(symbol=stock_code)
+        if info is not None and not info.empty:
+            # 转换为 dict
+            info_dict = {}
+            for _, row in info.iterrows():
+                key = row.iloc[0] if len(row) > 0 else ""
+                val = row.iloc[1] if len(row) > 1 else ""
+                info_dict[str(key)] = str(val)
+
+            # 提取行业字段
+            industry = info_dict.get("行业", "")
+            return {
+                "status": "ok",
+                "industry_csrc": industry,
+                "board_name_level": industry,  # AkShare 返回的是东财分类
+                "em2016": industry,
+                "main_business": info_dict.get("主营业务", ""),
+                "name": info_dict.get("股票简称", ""),
+            }
+        return {"status": "failed", "error": "AkShare 返回空"}
+    except Exception as e:
+        return {"status": "failed", "error": f"AkShare: {str(e)[:200]}"}
 
 
 # ============================================================
