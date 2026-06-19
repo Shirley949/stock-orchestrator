@@ -34,17 +34,6 @@ MODE_FORCED_SKILLS = {
         "data-source-registry",
         "financial-data-routing",
     ],
-    "C": [
-        "stock-orchestrator",
-        "data-source-registry",
-        "financial-data-routing",
-    ],
-    "D": [
-        "stock-orchestrator",
-        "data-source-registry",
-        "financial-data-routing",
-        "stock-analysis-quality",
-    ],
 }
 
 # 用户问题关键词 → 额外需要的子文件
@@ -112,18 +101,6 @@ MODE_SCENARIO_FILES = {
         "financial-data-routing/references/scenarios/s2-quote-kline.md",
         "stock-analysis-quality/references/modules/m3-technical.md",
         "stock-analysis-quality/references/modules/m6-decision.md",
-        "stock-analysis-quality/references/modules/m11-gates.md",
-    ],
-    "C": [
-        "financial-data-routing/references/scenarios/s5-events-18.md",
-        "stock-analysis-quality/references/modules/m4-sentiment.md",
-        "stock-analysis-quality/references/modules/m11-gates.md",
-    ],
-    "D": [
-        "financial-data-routing/references/scenarios/s4-rating.md",
-        "financial-data-routing/references/scenarios/s9-news-peer.md",
-        "financial-data-routing/references/scenarios/s11-peer.md",
-        "stock-analysis-quality/references/modules/m5-valuation.md",
         "stock-analysis-quality/references/modules/m11-gates.md",
     ],
 }
@@ -195,6 +172,4 @@ def get_mode_profile(mode: str) -> str:
     return {
         "A": "profile_full",
         "B": "profile_quick",
-        "C": "profile_event_scan",
-        "D": "profile_valuation",
     }.get(mode, "profile_full")

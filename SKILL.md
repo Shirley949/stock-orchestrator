@@ -24,9 +24,11 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_check
   --output /tmp/analysis_checklist_{timestamp}.md
 ```
 不跑清单 = 不知道该做什么 = 不能开始分析。
+→ 原因：清单是 Phase 判断的唯一依据。跳过清单会导致后续 Phase 不知道该拉哪些数据、加载哪些模块，最终产出质量不可控。
 
 ### 约束 2：清单项必须跟踪
 清单生成后 → 用 `TaskCreate` 把每个 `[ ]` 项加到 task list（让 Claude 的 task 系统也跟踪）。
+→ 原因：跟踪清单项可以防止遗漏，确保每个步骤都被执行。如果没有跟踪，Claude 可能会跳过某些步骤，导致分析不完整。
 
 ### 约束 3：完成必须打勾
 每完成一个 `[ ]` 项 → 用 `update_checklist.py` 更新清单：
@@ -35,9 +37,11 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checkli
   --check c01 \
   --file /tmp/analysis_checklist_{timestamp}.md
 ```
+→ 原因：打勾是进度跟踪的唯一方式。如果不打勾，Phase 门控无法判断是否可以进入下一阶段，可能导致未完成的步骤被跳过。
 
 ### 约束 4：Phase 门控
 Phase N 结束前 → 检查 Phase N 所有 `[ ]` 项是否打勾，**未打勾不许进入 Phase N+1**。
+→ 原因：Phase 门控是质量保证的关键机制。如果允许跳过未完成的步骤，可能会导致数据缺失或分析错误，最终影响报告质量。
 
 ### 约束 5：Gate 硬关卡
 报告写完后、输出前 → **必须**运行 `verify_gates.py`：
@@ -47,6 +51,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
   --profile full
 ```
 `sys.exit(1)` = 报告不能输出，必须补全。
+→ 原因：Gate 校验是最后一道质量关卡。如果不运行 Gate 校验，可能会输出不符合质量标准的报告，影响用户决策。
 
 ### 约束 6：两段式问题映射
 清单中的"用户问题映射"表，映射表匹配的标记 `映射表`，未匹配的标记 `[LLM兜底]`。
@@ -56,9 +61,12 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ## 触发条件（必须最先加载）
 
+以下条件满足任一即触发（OR 关系）：
+
 - 股票代码（6 位数字 / SH·SZ 前缀 / .SS·.SZ 后缀）
-- 已知股票名称（`references/stock-name-list.md` 维护白名单）
 - 分析动词："分析 / 看看 / 买不买 / 估值 / 风险 / 事件 / 财报 / 怎么样"
+
+**兜底规则：** 无股票代码时，只要有分析动词就触发。opencode 用 `websearch` 搜索确认股票代码后继续执行。
 
 ---
 
@@ -69,10 +77,8 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 | 触发关键词 | 模式 | 后续 Phase 加载 |
 |-----------|-----|----------------|
-| 深度分析/帮我看看/买不买/估值/财报分析/全面分析 | **A：完整** | Phase 1 + 2 + 3 + 4 |
+| 深度分析/帮我看看/买不买/估值/财报分析/全面分析/风险/事件/贵不贵 | **A：完整** | Phase 1 + 2 + 3 + 4 |
 | 今天买不买/盘中/能加仓/要不要卖 | **B：当日** | Phase 1 + 2 |
-| 有没有风险/事件/最近有什么公告 | **C：事件扫描** | Phase 1（仅 s5）|
-| 估值/贵不贵/PE多少 | **D：估值** | Phase 1（仅 s9/s11）+ 部分 Phase 3 |
 
 ### Phase 0 执行步骤
 1. 运行 `generate_checklist.py` → 生成 `/tmp/analysis_checklist_*.md`
@@ -82,7 +88,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ### 混合模式处理规则
 
-1. **多个模式关键词同时命中** → 取最高优先级 A > D > C > B（A 已含 C 的事件扫描和 D 的估值）
+1. **多个模式关键词同时命中** → 取最高优先级 A > B（A 已含 B 所需数据）
 2. **对比请求**（"对比/和/vs"）→ 对每只股票分别跑模式 A，同业对比合并写
 3. **组合请求**（"分析+风险"）→ 直接跑模式 A（已包含 m4.1.1 + m5）
 4. **模糊请求**（"看看 xxx"）→ 默认模式 A（宁多勿少）
@@ -92,14 +98,16 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ## Phase 1：会话级初始化（始终运行）
 
-1. 加载 `data-source-registry/SKILL.md`（200 行评级体系）
-2. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发：
-   ```bash
-   python3 ~/.hermes/skills/stock-analysis/data-source-registry/references/runtime-probe.py
-   ```
-   - 同日首次运行：探测 8 个 API，~5 秒，结果缓存到 `~/.cache/skill-probes/YYYY-MM-DD.json`
-   - 同日再次运行：读缓存，瞬间返回
-3. 静态评级已足够覆盖大部分场景（东财源断连等已标注），probe 是诊断工具不是必经步骤
+1. 加载 `data-source-registry/SKILL.md`（评级体系）
+2. **数据源架构（2026-06-13重构）**：
+   - 财报快速: 东财datacenter API (curl)
+   - 财报深挖: cninfo全文PDF (curl+pdfplumber) — 3步happy path
+   - K线: 新浪K线API (curl, datalen=60)
+   - 机构EPS: AkShare stock_profit_forecast_ths
+   - 北向/期货/行业: bing搜索 (mcporter)
+   - 技术指标: 自算(新浪K线+Python)
+   - API模板: `financial-data-routing/references/api-templates/`
+3. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发
 
 ---
 
@@ -109,6 +117,11 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ```
 串行：s1-financial（财报必须先拿到）
+    ↓
+强制：s1 内部已自动执行以下步骤（runner 已实现）：
+  ├─ 步骤3: fetch_cninfo_reports() → cninfo 年报/季报 PDF 下载+解析
+  ├─ 步骤3.5: fetch_research_reports() → 东财机构研报 PDF 下载+解析
+  └─ 步骤3.6: fetch_annual_report_analysis() → 年报 6 维度数据提取（D2-D6）
     ↓
 并行 4 路 explore subagent：
   ├─ Agent 1: s2 行情 + s3 资金流
@@ -122,23 +135,9 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 ### 模式 B 调用顺序
 
 ```
-串行：s2 行情（实时行情快照）
-串行：s2 K 线（近 60 日）
-串行：s2 技术指标（自算）
-串行：s2 盘口解读
-```
-
-### 模式 C 调用顺序
-
-```
-串行：s5 事件扫描（18 类）
-```
-
-### 模式 D 调用顺序
-
-```
-串行：s9 情景概率 + s11 可比公司
-串行：s4 机构评级/目标价
+并行：s2 行情（实时行情快照）+ s2 K 线（近 60 日，同源拉取）
+串行：s2 技术指标（自算，依赖 K 线数据）
+串行：s2 盘口解读（依赖实时行情）
 ```
 
 ---
@@ -149,8 +148,6 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 |------|------------|
 | **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m11 |
 | **B** | m3 / m6 / m11 |
-| **C** | m4 / m11 |
-| **D** | m5 / m11 |
 
 ---
 
@@ -163,7 +160,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
    ```bash
    python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
      --report /tmp/analysis_report.md \
-     --profile full  # 或 quick/event_scan/valuation
+      --profile full  # 或 quick
    ```
 3. 脚本输出每个 Gate 的通过/失败状态 + 自评分
 4. **如果 `sys.exit(1)`** → 报告不能输出，必须按脚本提示补全失败的 Gate
@@ -174,8 +171,6 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 |------|---------|---------|
 | A | profile_full | 3 |
 | B | profile_quick | 2 |
-| C | profile_event_scan | 1 |
-| D | profile_valuation | 2 |
 
 ---
 

@@ -38,44 +38,33 @@ from parse_user_question import parse_user_question
 # ============================================================
 
 def detect_mode(user_prompt: str) -> str:
-    """根据用户 prompt 自动判定分析模式。长匹配优先，避免子串误判。"""
+    """根据用户 prompt 自动判定分析模式。只支持 A/B 两种模式。"""
     # 按长度降序排列，优先匹配更长的触发词
     mode_b_triggers = sorted([
         "今天买不买", "要不要卖", "当日操作", "盘中建议",
         "现在能买吗", "现在能加仓吗", "要不要减仓", "盘中", "能加仓"
     ], key=len, reverse=True)
-    mode_c_triggers = sorted([
-        "有没有风险", "最近有什么公告", "事件扫描", "有没有雷", "风险", "事件"
-    ], key=len, reverse=True)
-    mode_d_triggers = sorted([
-        "估值多少", "贵不贵", "值不值得买", "PE多少"
-    ], key=len, reverse=True)
     mode_a_triggers = sorted([
         "深度分析", "整体分析", "财报分析", "全面分析",
         "值不值得买", "分析一下", "帮我看看", "怎么样",
-        "买不买", "估值", "分析", "看看"
+        "买不买", "估值", "分析", "看看",
+        # 原 C/D 模式触发词现在也触发 A
+        "有没有风险", "最近有什么公告", "事件扫描", "有没有雷", "风险", "事件",
+        "估值多少", "贵不贵", "PE多少"
     ], key=len, reverse=True)
 
-    # 先检查 B（更具体的短操作词）——如果 B 命中且 A 也命中，取 A
+    # 🔴 强触发词 early override：这些词一旦出现，直接判定 A，不被后续短词截胡
+    a_strong_triggers = ["深度分析", "整体分析", "财报分析", "全面分析", "帮我看看"]
+    for trigger in a_strong_triggers:
+        if trigger in user_prompt:
+            return "A"
+
+    # 再检查 B（更具体的短操作词）
     for trigger in mode_b_triggers:
         if trigger in user_prompt:
-            # 检查是否同时命中 A 的更具体触发词
-            for a_trigger in ["深度分析", "整体分析", "财报分析", "全面分析", "帮我看看"]:
-                if a_trigger in user_prompt:
-                    return "A"
             return "B"
 
-    # 再检查 D
-    for trigger in mode_d_triggers:
-        if trigger in user_prompt:
-            return "D"
-
-    # 再检查 C
-    for trigger in mode_c_triggers:
-        if trigger in user_prompt:
-            return "C"
-
-    # 最后检查 A
+    # 最后检查 A 的触发词
     for trigger in mode_a_triggers:
         if trigger in user_prompt:
             return "A"
@@ -118,6 +107,9 @@ PHASE_STEPS = {
             {"id": "c13", "desc": "runner 返回的财务三表数据确认（8季度）", "agent": 2},
             {"id": "c14", "desc": "runner 返回的合同负债趋势确认", "agent": 2},
             {"id": "c15", "desc": "提取扣非净利润（从 runner snapshot）", "agent": 2},
+            {"id": "c_pdf_annual", "desc": "cninfo 年报/季报 PDF 已下载（runner fetch_cninfo_reports）", "agent": 2},
+            {"id": "c_pdf_research", "desc": "东财机构研报 PDF 已下载（≥3份，runner fetch_research_reports）", "agent": 2},
+            {"id": "c_analyst_forecast", "desc": "机构盈利预测已提取并展示（EPS/PE/评级分布）", "agent": 2},
             {"id": "c16", "desc": "runner 返回的新闻 → Claude 执行 18 类事件语义分类", "agent": 3},
             {"id": "c17", "desc": "runner 返回的公告标题 → Claude 筛选中标/重大合同", "agent": 3},
             {"id": "c18", "desc": "runner Layer 0-3 数据确认 + Claude 判断间接出海", "agent": 4},
@@ -136,11 +128,16 @@ PHASE_STEPS = {
         "phase_3": [
             {"id": "c60", "desc": "m0 分类"},
             {"id": "c61", "desc": "m2 财务（含扣非诊断 + 利润归因 + 现金流三件套）"},
+            {"id": "c_d2_safety", "desc": "m2.10 资产安全检查（货币资金 vs 有息负债 + 商誉）"},
+            {"id": "c_d3_growth", "desc": "m2.11 行业位置与成长性（行业景气度 + 市场份额 + 研发）"},
             {"id": "c62", "desc": "m25 订单诊断（来自 order-intelligence runner）"},
             {"id": "c63", "desc": "m3 技术（TD 4 步 + 多指标交叉）"},
             {"id": "c64", "desc": "m4.1.1 事件扫描结果"},
-            {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比）"},
+            {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比 + 机构一致预期）"},
             {"id": "c66", "desc": "m6 决策树 + m9 信号矩阵 + m10 三档情景"},
+            {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性）"},
+            {"id": "c_d5_governance", "desc": "m9.2 股东结构与治理（控股股东 + 质押 + 关联交易）"},
+            {"id": "c_d6_audit", "desc": "m9.3 审计意见排雷（审计意见类型 + 非标原因）"},
             {"id": "c67", "desc": "m7 风险 + 反转假设"},
             {"id": "c68", "desc": "m8 局限性 ≥ 3 条"},
         ],
@@ -175,49 +172,6 @@ PHASE_STEPS = {
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）"},
-        ],
-        "phase_5": [
-            {"id": "c80", "desc": "报告输出"},
-        ],
-    },
-    "C": {
-        "phase_0": [
-            {"id": "c01", "desc": "Skills 加载（orchestrator + routing + registry）"},
-            {"id": "c02", "desc": "用户问题映射表已生成"},
-        ],
-        "phase_1": [
-            {"id": "c10", "desc": "事件扫描 18 类"},
-        ],
-        "phase_2": [
-            {"id": "c50", "desc": "事件收单完成"},
-        ],
-        "phase_3": [
-            {"id": "c60", "desc": "m4 事件/情绪"},
-        ],
-        "phase_4": [
-            {"id": "c70", "desc": "运行 verify_gates.py（profile_event_scan）"},
-        ],
-        "phase_5": [
-            {"id": "c80", "desc": "报告输出"},
-        ],
-    },
-    "D": {
-        "phase_0": [
-            {"id": "c01", "desc": "Skills 加载（orchestrator + routing + registry + quality）"},
-            {"id": "c02", "desc": "用户问题映射表已生成"},
-        ],
-        "phase_1": [
-            {"id": "c10", "desc": "s9 情景概率 + s11 可比公司"},
-            {"id": "c11", "desc": "s4 机构评级/目标价"},
-        ],
-        "phase_2": [
-            {"id": "c50", "desc": "数据收单完成"},
-        ],
-        "phase_3": [
-            {"id": "c60", "desc": "m5 估值"},
-        ],
-        "phase_4": [
-            {"id": "c70", "desc": "运行 verify_gates.py（profile_valuation）"},
         ],
         "phase_5": [
             {"id": "c80", "desc": "报告输出"},
@@ -479,7 +433,7 @@ def main():
     parser = argparse.ArgumentParser(description="执行清单生成器（机制 1）")
     parser.add_argument("--user-prompt", required=True, help="用户的原始分析请求")
     parser.add_argument("--stock-codes", help="股票代码（逗号分隔），不传则自动提取")
-    parser.add_argument("--mode", choices=["A", "B", "C", "D"], help="分析模式，不传则自动判定")
+    parser.add_argument("--mode", choices=["A", "B"], help="分析模式，不传则自动判定")
     parser.add_argument("--output", help="输出清单文件路径")
     args = parser.parse_args()
 

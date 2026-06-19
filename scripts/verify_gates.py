@@ -218,7 +218,7 @@ def main():
     parser.add_argument("--report", required=True, help="报告文件路径（.md）")
     parser.add_argument("--data-snapshot", help="数据快照文件路径（.json，可选）")
     parser.add_argument("--profile", default="full",
-                        choices=["full", "quick", "event_scan", "valuation"],
+                         choices=["full", "quick"],
                         help="Gate Profile（默认 full）")
     parser.add_argument("--output", help="输出 JSON 结果文件路径（可选）")
     parser.add_argument("--quiet", action="store_true", help="静默模式，仅输出 JSON")

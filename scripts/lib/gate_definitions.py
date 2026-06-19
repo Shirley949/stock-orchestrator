@@ -22,28 +22,30 @@ GATE_DESCS = {
     "G8": "现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）",
     "G9": "利润归因闭合（ΔNetProfit四项分解闭合）",
     "G10": "事件扫描完成（高优8类+低优10类，每类有状态标记）",
-    "G11": "表格时效列（每个表格≥1列数据日期/截止时间）",
+    "G11": "数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）",
     "G12": "局限性披露（≥3条具体局限）",
-    "G13": "持仓↔决策一致（持仓状态与决策树语境匹配）",
+    "G13": "持仓↔决策一致（若用户提供持仓信息，决策树应考虑持仓语境）",
     "G14": "TD逐根展示（TD计数表≥9行+结论）",
     "G15": "同业对比（≥2家可比公司+≥4指标）",
-    "G16": "订单Layer6核对（三组核对偏差均≤15%）",
+    "G16": "订单Layer6核对（合同负债核对偏差≤15%；销量/海外收入核对已跳过）",
     "G17": "海外关税完整（海外敞口公司必须有T0-T4分析）",
     "G18": "竞品对标≥3家（Layer5可比公司≥3家）",
     "G19": "营收预测区间（Layer8给区间或标注'无法量化'）",
     "G20": "口径一致（Layer0口径=Layer8输出）",
     "G21": "SOURCE溯源（报告[src:]标记→snapshot路径验证）",
+    "G22": "分业务数据完整性（模块二包含分业务/分产品/分行业表格）",
 }
 
 GATE_WEIGHTS = {
     "G1": 2, "G2": 2, "G3": 2, "G4": 2, "G5": 2,
     "G6": 2, "G7": 2, "G8": 2, "G9": 2, "G10": 2,
     "G11": 1, "G12": 2, "G13": 2, "G14": 2, "G15": 2,
-    "G16": 3, "G17": 3, "G18": 2, "G19": 3, "G20": 2,
+    "G16": 2, "G17": 3, "G18": 2, "G19": 3,     "G20": 2,
     "G21": 3,  # PR 8: 高权重
+    "G22": 3,  # 分业务数据完整性
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 22)]
+ALL_GATES = [f"G{i}" for i in range(1, 23)]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -62,23 +64,7 @@ PROFILES = {
         "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
         "gates": ["G1", "G3", "G4", "G11", "G13"],
         "auto_pass": ["G2", "G5", "G6", "G7", "G8", "G9", "G10", "G12",
-                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21"],
-        "fail_threshold": 2,
-    },
-    "profile_event_scan": {
-        "name": "event_scan",
-        "description": "仅扫描事件型风险",
-        "gates": ["G10", "G11", "G12"],
-        "auto_pass": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9",
-                      "G13", "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21"],
-        "fail_threshold": 1,
-    },
-    "profile_valuation": {
-        "name": "valuation",
-        "description": "估值分析+同业对比",
-        "gates": ["G2", "G5", "G11", "G12", "G15", "G18", "G19"],
-        "auto_pass": ["G1", "G3", "G4", "G6", "G7", "G8", "G9", "G10",
-                      "G13", "G14", "G16", "G17", "G20", "G21"],
+                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22"],
         "fail_threshold": 2,
     },
 }
@@ -117,13 +103,17 @@ def check_g2(report: str, data: dict) -> bool:
     """G2: 情景概率闭合（三档概率=100%，允许±1%）"""
     if "情景" not in report and "概率" not in report:
         return False
-    # 提取百分比数字
-    percentages = re.findall(r'(\d+(?:\.\d+)?)\s*%', report)
-    if len(percentages) < 2:
-        return False
-    # 检查是否有三档情景
     has_scenarios = any(kw in report for kw in ["乐观", "悲观", "中性", "基准", "悲观情景", "乐观情景"])
-    return has_scenarios
+    if not has_scenarios:
+        return False
+    percentages = re.findall(r'(\d+(?:\.\d+)?)\s*%', report)
+    if len(percentages) >= 3:
+        last_three = [float(p) for p in percentages[-3:]]
+        total = sum(last_three)
+        if 99 <= total <= 101:
+            return True
+        return False
+    return len(percentages) >= 2
 
 
 def check_g3(report: str, data: dict) -> bool:
@@ -190,25 +180,53 @@ def check_g9(report: str, data: dict) -> bool:
 
 
 def check_g10(report: str, data: dict) -> bool:
-    """G10: 事件扫描完成（高优8类+低优10类，每类有状态标记）"""
+    """G10: 事件扫描完成（高优8类+低优10类，每类有状态标记）+ 无异常事件格式校验"""
     if "事件扫描" not in report and "事件" not in report:
         return False
     # 检查是否有扫描状态标记
     status_markers = _count_pattern(report, r'(✅|❌|⚠️|已扫描|未发现|已排查|无异常)')
-    return status_markers >= 8
+    if status_markers < 8:
+        return False
+
+    # ── 新增：检查"无异常"事件的格式 ──
+    # 规则：无事件的类别不写入报告，应合并为一行 "✅ 已扫描无异常" 格式
+    # 检测是否有逐条罗列的无异常事件（错误格式）
+    # 错误格式特征：独立行包含"无异常"、"无重大"、"未发现"等，且不是汇总行
+    bad_patterns = [
+        r'^\s*[-*]\s*(?:担保|关联交易|高管变动|资产减值|停复牌|可转债|审计意见|环保|诉讼)\s*[：:]\s*(?:无|未发现|无异常|无重大)',
+        r'^\s*(?:担保|关联交易|高管变动|资产减值|停复牌|可转债|审计意见|环保|诉讼)\s*(?:无异常|无重大|未发现)',
+    ]
+    bad_lines = 0
+    for pattern in bad_patterns:
+        bad_lines += len(re.findall(pattern, report, re.MULTILINE | re.IGNORECASE))
+
+    if bad_lines >= 3:
+        # 有3条以上逐条罗列的无异常事件，格式错误
+        # 不直接 fail（因为扫描确实完成了），但输出警告
+        print(f"  ⚠️  G10 格式警告：发现 {bad_lines} 条无异常事件被逐条罗列，"
+              f"应合并为一行 '✅ 已扫描无异常' 格式（规则：s5-events-18 规则一）")
+
+    return True  # 格式问题仅警告，不阻断
 
 
 def check_g11(report: str, data: dict) -> bool:
-    """G11: 表格时效列（每个表格≥1列数据日期/截止时间）"""
-    # 检查表格是否有日期列
-    tables = re.findall(r'^\s*\|.*\|.*$', report, re.MULTILINE)
-    if not tables:
-        return True  # 无表格则跳过
-    date_keywords = ["日期", "时间", "截止", "报告期", "数据日期", "截至"]
-    tables_with_date = sum(1 for t in tables if any(kw in t for kw in date_keywords))
-    # 如果有表头行包含日期关键词，认为通过
-    header_rows = [t for t in tables if "---" in t or "日期" in t or "时间" in t]
-    return tables_with_date > 0 or any(kw in report for kw in date_keywords)
+    """G11: 数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）"""
+    report_header = report[:500] if len(report) > 500 else report
+    global_timestamp_patterns = [
+        r'数据[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)',
+        r'数据[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?\s*\d{1,2}[：:]\d{2})',
+        r'[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)\s*的?数据',
+        r'报告[生成制作]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)',
+    ]
+    
+    has_global_timestamp = any(re.search(p, report_header) for p in global_timestamp_patterns)
+    if has_global_timestamp:
+        return True
+    
+    table_lines = re.findall(r'^\s*\|.*\|.*$', report, re.MULTILINE)
+    date_keywords = ["日期", "时间", "截止", "报告期", "数据日期", "截至", "公布日"]
+    tables_with_date = sum(1 for t in table_lines if any(kw in t for kw in date_keywords))
+    return tables_with_date > 0
 
 
 def check_g12(report: str, data: dict) -> bool:
@@ -221,7 +239,7 @@ def check_g12(report: str, data: dict) -> bool:
 
 
 def check_g13(report: str, data: dict) -> bool:
-    """G13: 持仓↔决策一致（持仓状态与决策树语境匹配）"""
+    """G13: 持仓↔决策一致（若用户提供持仓信息，决策树应考虑持仓语境）"""
     # 无持仓信息时 auto_pass
     if data.get("holding_status") is None:
         return True
@@ -251,12 +269,16 @@ def check_g15(report: str, data: dict) -> bool:
 
 
 def check_g16(report: str, data: dict) -> bool:
-    """G16: 订单Layer6核对（三组核对偏差均≤15%）"""
+    """G16: 订单Layer6核对（合同负债核对偏差≤15%）"""
     if "合同负债" not in report:
         return False
-    # 检查是否有核对/交叉验证内容
     has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
-    return has_crosscheck
+    if not has_crosscheck:
+        return False
+    deviation = re.search(r'偏差[：:]*\s*(\d+(?:\.\d+)?)\s*%', report)
+    if deviation:
+        return float(deviation.group(1)) <= 15
+    return True
 
 
 def check_g17(report: str, data: dict) -> bool:
@@ -298,13 +320,80 @@ def check_g20(report: str, data: dict) -> bool:
     return True
 
 
+def check_g21(report: str, data: dict) -> bool:
+    """G21: SOURCE溯源（报告[src:]标记→snapshot路径验证）
+    1. 解析报告中所有 [src: snapshot.X.Y.Z] 标记
+    2. 验证路径在 snapshot 中存在
+    3. 模块级检测：模块 2/2.5/5 各需 ≥2 个 [src:] 标记
+    """
+    snapshot = data.get("snapshot", {})
+    src_pattern = r'\[src:\s*(snapshot\.[^\]]+)\]'
+    tags = list(re.finditer(src_pattern, report))
+
+    if not tags:
+        return False
+
+    path_failures = []
+    tag_paths = []
+
+    for match in tags:
+        tag = match.group(1)
+        path = tag.replace("snapshot.", "")
+        tag_paths.append(path)
+
+        # 路径存在性校验
+        parts = path.split(".")
+        current = snapshot
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = None
+                break
+
+        if current is None:
+            path_failures.append(f"路径不存在: {tag}")
+
+    # 模块级检测
+    REQUIRED_SRC_SECTIONS = {
+        "financial": ["营收", "净利", "扣非", "毛利率", "ROE", "CFO", "FCF", "EPS"],
+        "orders": ["合同负债", "海外占比", "份额", "订单"],
+        "valuation": ["PE", "PB", "PS", "市盈率", "市净率"],
+    }
+    section_failures = []
+    for section, keywords in REQUIRED_SRC_SECTIONS.items():
+        section_src_count = 0
+        for match in tags:
+            ctx_start = max(0, match.start() - 200)
+            ctx_end = min(len(report), match.end() + 200)
+            context = report[ctx_start:ctx_end]
+            if any(kw in context for kw in keywords):
+                section_src_count += 1
+        if section_src_count < 2:
+            section_failures.append(f"模块 {section} 仅 {section_src_count} 个 [src:] (需≥2)")
+
+    return len(path_failures) == 0 and len(section_failures) == 0
+
+
+def check_g22(report: str, data: dict) -> bool:
+    """G22: 分业务数据完整性（模块二包含分业务/分产品/分行业表格）"""
+    has_segment = any(kw in report for kw in ["分业务", "分产品", "分行业", "业务分拆"])
+    if not has_segment:
+        return False
+    has_revenue = "营业收入" in report or "营收" in report
+    has_margin = "毛利率" in report or "毛利" in report
+    return has_revenue and has_margin
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
     "G5": check_g5, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G10": check_g10, "G11": check_g11, "G12": check_g12,
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
-    "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
+    "G17": check_g17, "G18": check_g18, "G19": check_g19,     "G20": check_g20,
+    "G21": check_g21,
+    "G22": check_g22,
 }
 
 

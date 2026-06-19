@@ -31,6 +31,14 @@ CHECKID_TO_SNAPSHOT_PATH = {
     "c17": "s5_events.data.news",
     "c18": "s2_quote_kline.data.realtime_quote",
     "c19": "s2_quote_kline.data.daily_kline",
+    "c_pdf_annual": "s3_cninfo_pdf.data",
+    "c_pdf_research": "s35_research_reports.data",
+    "c_analyst_forecast": "s73_forecast.data",
+    "c_d2_safety": "s36_annual_analysis.data",
+    "c_d3_growth": "s36_annual_analysis.data",
+    "c_d4_dividend": "s36_annual_analysis.data",
+    "c_d5_governance": "s36_annual_analysis.data",
+    "c_d6_audit": "s36_annual_analysis.data",
 }
 
 
@@ -133,8 +141,8 @@ def update_checklist(
                 content = new_content
 
     # 更新完成进度
-    total = len(re.findall(r'<!--c\d+-->', content))
-    checked = len(re.findall(r'\[x\] <!--c\d+-->', content))
+    total = len(re.findall(r'<!--c[\w]+-->', content))
+    checked = len(re.findall(r'\[x\] <!--c[\w]+-->', content))
     progress_pattern = r'\*\*完成进度：\d+/\d+\*\*'
     new_progress = f'**完成进度：{checked}/{total}**'
     content = re.sub(progress_pattern, new_progress, content)
@@ -144,7 +152,7 @@ def update_checklist(
         next_step = "**下一步**：所有步骤已完成，进入 Gate 校验"
     else:
         # 找到第一个未完成的 check_id
-        remaining = re.findall(r'\[ \] <!--(c\d+)-->', content)
+        remaining = re.findall(r'\[ \] <!--(c[\w]+)-->', content)
         if remaining:
             next_step = f"**下一步**：继续执行 {remaining[0]}"
         else:

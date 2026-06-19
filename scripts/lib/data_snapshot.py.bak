@@ -59,6 +59,7 @@ SOURCE_GRADE = {
     "stock_financial_report_sina": "A",
     "stock_financial_abstract": "A",
     "stock_news_em": "A",
+    "stock_individual_fund_flow": "A",
     "stock_comment_detail_zlkp_jgcyd_em": "A",
     "stock_profit_forecast_ths": "A",
     # B 级 — 中性，需交叉验证
@@ -69,10 +70,6 @@ SOURCE_GRADE = {
     "web_search": "C",
     # D 级 — 已失效
     "stock_institute_recommend": "D",
-    "stock_individual_fund_flow": "D",  # 东财push2his被封，2026-06-08起不可用
-    "stock_individual_fund_flow_rank": "D",  # 东财push2his被封，2026-06-17确认不可用
-    "stock_market_fund_flow": "D",  # 东财push2his被封，2026-06-17确认不可用
-    "stock_main_fund_flow": "D",  # 东财push2his被封，2026-06-17确认不可用
 }
 
 # 降级源到首选源的映射（用于 cross_check）
@@ -88,26 +85,18 @@ PRIMARY_SOURCE_FOR = {
 # ============================================================
 FULL_MARKET_APIS = {
     "stock_zh_a_spot_em": "代码",           # 实时行情，列名：代码
+    "stock_fund_flow_individual": "股票代码", # 资金流向，列名：股票代码
     "stock_rank_forecast_cninfo": "证券代码", # 机构评级，列名：证券代码
     "bond_zh_cov": "正股代码",               # 可转债
     "stock_tfp_em": "代码",                 # 停复牌
-}
-
-# ============================================================
-# 全量接口黑名单（禁止使用）
-# 这些接口返回全市场数据（数千行），耗时长，内存占用大
-# 技术上强制阻止，防止误用
-# ============================================================
-FULL_MARKET_APIS_BLACKLIST = {
-    "stock_fund_flow_individual": "全量接口（5194行），耗时13秒，无filter，禁止使用",
 }
 
 # 已知全历史 API：自动截取最近 N 行（下游只需近期数据）
 HISTORY_APIS = {
     "stock_financial_report_sina": 12,    # 最近 12 期（3年季度）
     "stock_financial_abstract": 12,       # 最近 12 期
-    "stock_zh_a_daily": 750,              # 全历史，需 tail(N) 截断（无日期参数，返回从上市日起，不保证"最近"）
-    "stock_zh_a_hist": 750,               # 全历史，需 tail(N) 截断
+    "stock_zh_a_daily": 750,              # 最近 750 个交易日（~3年）
+    "stock_zh_a_hist": 750,               # 同上
     "macro_china_pmi": 12,                # 最近 12 期
 }
 
@@ -445,13 +434,6 @@ class DataSnapshot:
             self._warnings.append(msg)
             return {"status": "failed", "error": msg}
 
-        # 检查是否在全量接口黑名单中
-        if api_name in FULL_MARKET_APIS_BLACKLIST:
-            reason = FULL_MARKET_APIS_BLACKLIST[api_name]
-            msg = f"[akshare] {api_name} 在黑名单中，禁止使用: {reason}"
-            self._warnings.append(msg)
-            return {"status": "failed", "error": msg}
-
         # 检查是否已知失效
         grade = SOURCE_GRADE.get(api_name, "B")
         if grade == "D":
@@ -518,13 +500,7 @@ class DataSnapshot:
             }
 
         except Exception as e:
-            err_str = str(e)
-            if "Length mismatch" in err_str and "axis has 0" in err_str:
-                msg = f"[akshare] {api_name} 返回空数据（当日无记录）"
-            elif "NoneType" in err_str and "subscriptable" in err_str:
-                msg = f"[akshare] {api_name} 返回 null（东财无该股数据）"
-            else:
-                msg = f"[akshare] {api_name} 失败: {err_str[:200]}"
+            msg = f"[akshare] {api_name} 失败: {str(e)[:200]}"
             self._warnings.append(msg)
             return {"status": "failed", "error": msg, "api_used": api_name}
 

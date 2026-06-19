@@ -9,13 +9,25 @@
 ### 核心规则：subagent_type 和 category 互斥
 
 ```
-❌ 错误：同时传 subagent_type="Explore" 和 category="deep"
+❌ 错误：同时传 subagent_type="explore" 和 category="quick"
 ✅ 正确：只传 subagent_type，或只传 category，二选一
 ```
 
-- `subagent_type`：使用 Claude Code 内置的 agent 类型（如 `Explore`、`Plan`、`general-purpose`）
+- `subagent_type`：使用 Claude Code 内置的 agent 类型（如 `explore`、`librarian`、`oracle`）
 - `category`：自定义任务分类（如 `deep`、`quick`），用于路由到不同执行策略
-- **两者互斥**，同时传会导致参数冲突
+- **两者互斥**，同时传系统直接拒绝执行
+
+**实际报错行为：**
+```
+同时传 subagent_type + category → Tool execution aborted（系统拒绝执行）
+```
+
+**修复方法：**
+```
+遇到此错误时 → 去掉 category 参数，只保留 subagent_type。
+explore/librarian/oracle/metis/momus 只用 subagent_type，
+category 只用于业务任务（deep/quick/visual-engineering 等）。
+```
 
 ### 触发条件
 
