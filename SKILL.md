@@ -99,13 +99,14 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 ## Phase 1：会话级初始化（始终运行）
 
 1. 加载 `data-source-registry/SKILL.md`（评级体系）
-2. **数据源架构（2026-06-13重构）**：
+2. **数据源架构（2026-06-19 更新）**：
    - 财报快速: 东财datacenter API (curl)
    - 财报深挖: cninfo全文PDF (curl+pdfplumber) — 3步happy path
    - K线: 新浪K线API (curl, datalen=60)
    - 机构EPS: AkShare stock_profit_forecast_ths
    - 北向/期货/行业: bing搜索 (mcporter)
    - 技术指标: 自算(新浪K线+Python)
+   - **富途数据**: futu_client.py（分析师评级/目标价/资金分布/财报预测/主营构成/三大表）
    - API模板: `financial-data-routing/references/api-templates/`
 3. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发
 
@@ -146,7 +147,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 | 模式 | 加载模块文件 |
 |------|------------|
-| **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m11 |
+| **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m10 / m11 |
 | **B** | m3 / m6 / m11 |
 
 ---
