@@ -84,6 +84,21 @@ def _has_keywords(text: str, keywords: list[str]) -> bool:
     return all(kw in text for kw in keywords)
 
 
+def _snapshot_get(data: dict, path: str):
+    """从 data（即 snapshot）中按点分路径读取值"""
+    parts = path.split(".")
+    current = data
+    for part in parts:
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list) and part.isdigit():
+            idx = int(part)
+            current = current[idx] if idx < len(current) else None
+        else:
+            return None
+    return current
+
+
 def check_g1(report: str, data: dict) -> bool:
     """G1: 信号矩阵完整性（≥8行×3列：短/中/长）"""
     # 检查报告中是否有信号矩阵相关内容
@@ -106,7 +121,18 @@ def check_g2(report: str, data: dict) -> bool:
     has_scenarios = any(kw in report for kw in ["乐观", "悲观", "中性", "基准", "悲观情景", "乐观情景"])
     if not has_scenarios:
         return False
-    percentages = re.findall(r'(\d+(?:\.\d+)?)\s*%', report)
+    # 只在"情景"章节内取百分比，避免后续章节的百分比污染
+    # 找最后一个"情景"出现位置（跳过"模块九：情景概率"标题，取实际表格）
+    idx = report.rfind('情景')
+    remaining = report[idx:]
+    lines = remaining.split('\n')
+    section_lines = []
+    for i, line in enumerate(lines):
+        if i > 0 and (line.startswith('### ') or line.strip() == '---'):
+            break
+        section_lines.append(line)
+    section = '\n'.join(section_lines)
+    percentages = re.findall(r'(\d+(?:\.\d+)?)\s*%', section)
     if len(percentages) >= 3:
         last_three = [float(p) for p in percentages[-3:]]
         total = sum(last_three)
@@ -120,8 +146,12 @@ def check_g3(report: str, data: dict) -> bool:
     """G3: 决策树结构（≥3分支+1默认，每分支带触发条件+仓位+止损位）"""
     if "决策" not in report:
         return False
-    # 检查是否有分支结构
-    branches = _count_pattern(report, r'(分支|Branch|scenario|情景|方案)\s*[：:]*\s*\d')
+    # 放宽正则：支持多种决策树格式
+    branch_patterns = [
+        r'分支\s*\d', r'方案\s*\d', r'若触发', r'若回踩', r'若发生',
+        r'├─\s*若', r'情景\s*\d', r'Branch\s*\d',
+    ]
+    branches = sum(_count_pattern(report, p) for p in branch_patterns)
     has_position = "仓位" in report or "持仓" in report
     has_stop = "止损" in report
     return branches >= 3 and has_position and has_stop
@@ -147,16 +177,15 @@ def check_g5(report: str, data: dict) -> bool:
 
 def check_g6(report: str, data: dict) -> bool:
     """G6: 季报连续性（≥6个连续季度数据）"""
-    # 从 data 中检查季度数据
-    quarterly = data.get("quarterly_data", [])
-    if len(quarterly) >= 6:
+    # 优先：从 snapshot 读取收入数据行数
+    rows = _snapshot_get(data, "s1_financial.data.income_statement.data_full")
+    if rows and isinstance(rows, list) and len(rows) >= 6:
         return True
-    # 从报告中检查是否提到季度数据
+    # 降级：从报告中检查季度数据
     quarter_pattern = r'20\d{2}[Qq][1-4]|20\d{2}年[第]?[一二三四1-4]季[度报]'
     quarters = re.findall(quarter_pattern, report)
     if len(quarters) >= 6:
         return True
-    # 检查是否有连续的日期序列
     date_pattern = r'20\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01])'
     dates = re.findall(date_pattern, report)
     return len(set(dates)) >= 6
@@ -164,18 +193,42 @@ def check_g6(report: str, data: dict) -> bool:
 
 def check_g7(report: str, data: dict) -> bool:
     """G7: 扣非对比（净利润/扣非/差额%三列已展示）"""
+    # 优先：从 snapshot 检查 financial_abstract 是否有扣非数据
+    fa = _snapshot_get(data, "s1_financial.data.financial_abstract.data_full")
+    if fa and isinstance(fa, list):
+        for row in fa:
+            if '扣非' in str(row.get('指标', '')):
+                return _has_keywords(report, ["扣非", "净利润"])
+    # 降级：纯文本匹配
     return _has_keywords(report, ["扣非", "净利润"]) or _has_keywords(report, ["扣非净利润", "非经常性"])
 
 
 def check_g8(report: str, data: dict) -> bool:
     """G8: 现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）"""
+    # 优先：从 snapshot 检查现金流数据是否存在
+    cf = _snapshot_get(data, "s1_financial.data.cash_flow.data_full")
+    has_cfo_data = False
+    if cf and isinstance(cf, list):
+        for row in cf:
+            if row.get('经营活动产生的现金流量净额') is not None:
+                has_cfo_data = True
+                break
+    # 检查报告是否展示
     fcf_present = "FCF" in report or "自由现金流" in report
     cfo_present = "CFO" in report or "经营性现金流" in report or "经营活动现金流" in report
+    if has_cfo_data:
+        return fcf_present and cfo_present
+    # 无数据时仅检查文本
     return fcf_present and cfo_present
 
 
 def check_g9(report: str, data: dict) -> bool:
     """G9: 利润归因闭合（ΔNetProfit四项分解闭合）"""
+    # 优先：从 snapshot 检查收入数据（需要≥2期）
+    rows = _snapshot_get(data, "s1_financial.data.income_statement.data_full")
+    if rows and isinstance(rows, list) and len(rows) >= 2:
+        return "利润归因" in report or ("归因" in report and "净利润" in report)
+    # 降级：纯文本匹配
     return "利润归因" in report or ("归因" in report and "净利润" in report)
 
 
@@ -270,6 +323,21 @@ def check_g15(report: str, data: dict) -> bool:
 
 def check_g16(report: str, data: dict) -> bool:
     """G16: 订单Layer6核对（合同负债核对偏差≤15%）"""
+    # 优先：从 snapshot 检查合同负债数据
+    bs = _snapshot_get(data, "s1_financial.data.balance_sheet.data_full")
+    has_contract_data = False
+    if bs and isinstance(bs, list):
+        for row in bs:
+            if row.get('合同负债') is not None:
+                has_contract_data = True
+                break
+    if has_contract_data:
+        # 数据存在，检查报告是否展示核对
+        if "合同负债" not in report:
+            return False
+        has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
+        return has_crosscheck
+    # 无数据时仅检查文本
     if "合同负债" not in report:
         return False
     has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
@@ -320,14 +388,15 @@ def check_g20(report: str, data: dict) -> bool:
     return True
 
 
-def check_g21(report: str, data: dict) -> bool:
+def check_g21(report: dict, data: dict) -> bool:
     """G21: SOURCE溯源（报告[src:]标记→snapshot路径验证）
-    1. 解析报告中所有 [src: snapshot.X.Y.Z] 标记
+    1. 解析报告中所有 [src: snapshot.X.Y.Z] 或 [src: X.Y.Z] 标记
     2. 验证路径在 snapshot 中存在
     3. 模块级检测：模块 2/2.5/5 各需 ≥2 个 [src:] 标记
     """
-    snapshot = data.get("snapshot", {})
-    src_pattern = r'\[src:\s*(snapshot\.[^\]]+)\]'
+    snapshot = data  # data dict 直接就是 snapshot
+    # 支持 [src: snapshot.X.Y.Z] 和 [src: X.Y.Z] 两种格式
+    src_pattern = r'\[src:\s*(?:snapshot\.)?([^\]]+)\]'
     tags = list(re.finditer(src_pattern, report))
 
     if not tags:

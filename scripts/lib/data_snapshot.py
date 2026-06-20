@@ -194,6 +194,34 @@ class DataSnapshot:
     # 核心接口: fetch_or_cache
     # --------------------------------------------------------
 
+    # --------------------------------------------------------
+    # 数据时效性检查
+    # --------------------------------------------------------
+
+    def _is_data_stale(self, api_name: str, result: dict) -> bool:
+        """检查时序数据是否过期（防止脏缓存被返回）"""
+        data_full = result.get("data_full", [])
+        if not data_full:
+            return False
+
+        # K线数据：检查最新日期是否在 30 天内
+        KLINE_APIS = {"stock_zh_a_daily", "stock_zh_a_hist", "curl_eastmoney_kline"}
+        if api_name in KLINE_APIS:
+            latest = data_full[-1].get("date", "")
+            if latest:
+                try:
+                    days_old = (datetime.now() - datetime.strptime(latest, "%Y-%m-%d")).days
+                    if days_old > 30:
+                        return True
+                except Exception:
+                    pass
+
+        # 财务数据：检查是否有足够行数
+        if "financial" in api_name and len(data_full) < 4:
+            return True
+
+        return False
+
     def fetch_or_cache(
         self,
         api_name: str,
@@ -226,12 +254,15 @@ class DataSnapshot:
         """
         key = self._cache_key(api_name, params)
 
-        # 1. 缓存命中
+        # 1. 缓存命中（含时效性二次检查）
         if key in self._mem_cache:
             cached = self._mem_cache[key].copy()
-            cached["status"] = "cached"
-            cached["_warnings"] = []
-            return cached
+            if self._is_data_stale(api_name, cached):
+                del self._mem_cache[key]  # 删除过期缓存，重新拉取
+            else:
+                cached["status"] = "cached"
+                cached["_warnings"] = []
+                return cached
 
         # 2. 调用 API
         result = self._call_akshare(api_name, params)
@@ -247,9 +278,15 @@ class DataSnapshot:
             result.setdefault("_warnings", []).extend(auto_warnings)
             self._warnings.extend(auto_warnings)
 
-        # 4. 缓存
+        # 4. 缓存（含时效性检查，拒绝缓存过期数据）
         if result.get("status") == "ok":
-            self._mem_cache[key] = result.copy()
+            if self._is_data_stale(api_name, result):
+                result["status"] = "stale"
+                result.setdefault("_warnings", []).append(
+                    f"[stale] {api_name} 数据过期，拒绝缓存"
+                )
+            else:
+                self._mem_cache[key] = result.copy()
             self._fetch_log.append({
                 "api": api_name,
                 "params": params,
@@ -289,6 +326,7 @@ class DataSnapshot:
             result = self.fetch_or_cache(api, p, cross_check=cross_check)
             if result.get("status") in ("ok", "cached"):
                 return result
+            # stale 数据视为失败，继续尝试下一个降级源
 
         # 全部失败
         all_tried = [a for a, _ in apis_to_try]
@@ -498,11 +536,23 @@ class DataSnapshot:
                     # 如果仍然匹配不到，保留全量（降级行为）
 
             # 性能优化：全历史 API 自动截取最近 N 行
-            # 注意：大部分 API 返回数据是最新在前（head=最新），用 head() 截取
+            # 按日期排序方向决定 head 还是 tail：
+            #   - 最新在前（head=最新）→ head() 截取
+            #   - 最早在前（tail=最新）→ tail() 截取
+            OLDEST_FIRST_APIS = {"stock_zh_a_daily", "stock_zh_a_hist"}
             if api_name in HISTORY_APIS:
                 max_rows = HISTORY_APIS[api_name]
                 if len(df) > max_rows:
-                    df = df.head(max_rows).reset_index(drop=True)
+                    if api_name in OLDEST_FIRST_APIS:
+                        df = df.tail(max_rows).reset_index(drop=True)
+                    else:
+                        df = df.head(max_rows).reset_index(drop=True)
+
+            # data_preview：时序数据取最近 5 行，非时序取前 5 行
+            if "date" in df.columns and api_name in OLDEST_FIRST_APIS:
+                data_preview = df.tail(5).to_dict(orient="records")
+            else:
+                data_preview = df.head(5).to_dict(orient="records")
 
             return {
                 "status": "ok",
@@ -510,7 +560,7 @@ class DataSnapshot:
                 "params": params,
                 "rows": len(df),
                 "columns": list(df.columns),
-                "data_preview": df.head(5).to_dict(orient="records"),
+                "data_preview": data_preview,
                 "data_full": df.to_dict(orient="records"),
                 "fetch_time": datetime.now().isoformat(),
                 "_grade": grade,
