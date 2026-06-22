@@ -34,6 +34,8 @@ GATE_DESCS = {
     "G20": "口径一致（Layer0口径=Layer8输出）",
     "G21": "SOURCE溯源（报告[src:]标记→snapshot路径验证）",
     "G22": "分业务数据完整性（模块二包含分业务/分产品/分行业表格）",
+    "G23": "PDF数据完整性（D2-D6覆盖率+质量标记）",
+    "G24": "数据交叉验证（PDF vs API 一致性）",
 }
 
 GATE_WEIGHTS = {
@@ -43,9 +45,11 @@ GATE_WEIGHTS = {
     "G16": 2, "G17": 3, "G18": 2, "G19": 3,     "G20": 2,
     "G21": 3,  # PR 8: 高权重
     "G22": 3,  # 分业务数据完整性
+    "G23": 3,  # PDF数据完整性
+    "G24": 2,  # 数据交叉验证
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 23)]
+ALL_GATES = [f"G{i}" for i in range(1, 25)]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -233,18 +237,14 @@ def check_g9(report: str, data: dict) -> bool:
 
 
 def check_g10(report: str, data: dict) -> bool:
-    """G10: 事件扫描完成（高优8类+低优10类，每类有状态标记）+ 无异常事件格式校验"""
+    """G10: 事件扫描完成（高优8类+低优10类，每类有状态标记）+ 内容质量检查"""
     if "事件扫描" not in report and "事件" not in report:
         return False
-    # 检查是否有扫描状态标记
+    
     status_markers = _count_pattern(report, r'(✅|❌|⚠️|已扫描|未发现|已排查|无异常)')
     if status_markers < 8:
         return False
 
-    # ── 新增：检查"无异常"事件的格式 ──
-    # 规则：无事件的类别不写入报告，应合并为一行 "✅ 已扫描无异常" 格式
-    # 检测是否有逐条罗列的无异常事件（错误格式）
-    # 错误格式特征：独立行包含"无异常"、"无重大"、"未发现"等，且不是汇总行
     bad_patterns = [
         r'^\s*[-*]\s*(?:担保|关联交易|高管变动|资产减值|停复牌|可转债|审计意见|环保|诉讼)\s*[：:]\s*(?:无|未发现|无异常|无重大)',
         r'^\s*(?:担保|关联交易|高管变动|资产减值|停复牌|可转债|审计意见|环保|诉讼)\s*(?:无异常|无重大|未发现)',
@@ -254,12 +254,34 @@ def check_g10(report: str, data: dict) -> bool:
         bad_lines += len(re.findall(pattern, report, re.MULTILINE | re.IGNORECASE))
 
     if bad_lines >= 3:
-        # 有3条以上逐条罗列的无异常事件，格式错误
-        # 不直接 fail（因为扫描确实完成了），但输出警告
         print(f"  ⚠️  G10 格式警告：发现 {bad_lines} 条无异常事件被逐条罗列，"
               f"应合并为一行 '✅ 已扫描无异常' 格式（规则：s5-events-18 规则一）")
 
-    return True  # 格式问题仅警告，不阻断
+    quant_patterns = [
+        r'\d+\.?\d*(?:万元|亿元)',
+        r'\d+\.?\d*%',
+        r'\d{4}年\d{1,2}月\d{1,2}日',
+    ]
+    quant_count = sum(_count_pattern(report, p) for p in quant_patterns)
+    
+    src_count = _count_pattern(report, r'\[src:')
+    event_details = _count_pattern(report, r'(?:公告|披露|表示|指出|称)')
+    
+    quality_score = 0
+    if quant_count >= 3:
+        quality_score += 30
+    if src_count >= 2:
+        quality_score += 30
+    if event_details >= 2:
+        quality_score += 20
+    if status_markers >= 8:
+        quality_score += 20
+    
+    if quality_score < 60:
+        print(f"  ⚠️  G10 内容质量不足: {quality_score}/100 (需>=60)")
+        return False
+    
+    return True
 
 
 def check_g11(report: str, data: dict) -> bool:
@@ -454,15 +476,54 @@ def check_g22(report: str, data: dict) -> bool:
     return has_revenue and has_margin
 
 
+def check_g23(report: str, data: dict) -> bool:
+    """G23: PDF数据完整性（D2-D6覆盖率+质量标记）"""
+    quality = data.get("_quality_markers", {})
+
+    # D2 审计意见必须存在
+    if quality.get("D2_audit", {}).get("status") not in ("ok",):
+        return False
+
+    # D3/D4/D5 至少有 2 个成功
+    required_fields = ["D3_dividend", "D4_holders", "D5_biz_breakdown"]
+    ok_count = sum(1 for f in required_fields if quality.get(f, {}).get("status") == "ok")
+    if ok_count < 2:
+        # 检查是否有 LLM 兜底结果
+        llm_tasks = data.get("_llm_fallback_tasks", [])
+        if not llm_tasks:
+            return False
+
+    # D6 必须存在
+    if quality.get("D6_geo_revenue", {}).get("status") not in ("ok", "partial"):
+        return False
+
+    return True
+
+
+def check_g24(report: str, data: dict) -> bool:
+    """G24: 数据交叉验证（PDF vs API 一致性）"""
+    warnings = data.get("_cross_validation_warnings", [])
+    # 不允许有严重差异（>10%）
+    severe = []
+    for w in warnings:
+        if "差异=" in w:
+            try:
+                pct_str = w.split("差异=")[1].split("%")[0]
+                if float(pct_str) > 10:
+                    severe.append(w)
+            except (ValueError, IndexError):
+                pass
+    return len(severe) == 0
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
     "G5": check_g5, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G10": check_g10, "G11": check_g11, "G12": check_g12,
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
-    "G17": check_g17, "G18": check_g18, "G19": check_g19,     "G20": check_g20,
-    "G21": check_g21,
-    "G22": check_g22,
+    "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
+    "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
 }
 
 
