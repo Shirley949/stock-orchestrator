@@ -96,7 +96,7 @@ PHASE_STEPS = {
             {"id": "c01", "desc": "Skills 全部加载（orchestrator + routing + registry + quality + order-intelligence）"},
             {"id": "c02", "desc": "用户问题映射表已生成（见下方）"},
             {"id": "c03", "desc": "必须加载文件清单已确认"},
-            {"id": "c04", "desc": "运行 routing/runner.py A <stock_code> → 拉取全量数据 snapshot"},
+            {"id": "c04", "desc": "运行 routing/runner.py A <stock_code> → 拉取全量数据 snapshot（⚠️ 必须 > file 重定向，禁止 | head/tail pipe截断）"},
             {"id": "c05", "desc": "运行 order-intelligence/runner.py <stock_code> <stock_type> → 订单数据"},
             {"id": "c06", "desc": "检查 runner._warnings → 处理降级/失败项"},
         ],
@@ -299,7 +299,9 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         lines.append("```bash")
         if mode == "A":
             lines.append(f"# Step 1: 数据拉取（routing runner）")
-            lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A {sc}")
+            lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
+            lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A {sc} \\")
+            lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
             lines.append(f"")
             lines.append(f"# Step 2: 订单数据（order-intelligence runner）")
             lines.append(f"python ~/.hermes/skills/stock-analysis/order-intelligence/runner.py {sc} <stock_type>")
