@@ -56,15 +56,27 @@ GATE_WEIGHTS = {
 ALL_GATES = [f"G{i}" for i in range(1, 27)]
 
 # ============================================================
+# Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
+# ============================================================
+
+# Tier 1: Hard Gates — 数据完整性, Python 可验证, FAIL 阻塞输出
+HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", "G26"]
+
+# Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
+# 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
+SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22"]
+
+# ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
 # ============================================================
 
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全量Gate",
+        "description": "深度分析/整体分析/买不买/估值 → Hard Gates 阻塞 + Soft Gates auto_pass",
         "gates": ALL_GATES,
-        "auto_pass": [],
+        # Soft Gates auto_pass — 正则无法评估 LLM 分析质量, 由 LLM 自评代替
+        "auto_pass": SOFT_GATES,
         "fail_threshold": 3,
     },
     "profile_quick": {

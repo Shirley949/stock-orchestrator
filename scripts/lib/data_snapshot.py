@@ -24,6 +24,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+import pandas as pd
+
+# ★ quality_checks integration (PR: Data Quality Gate)
+from quality_checks import (
+    find_date_column, detect_ordering, find_latest_date,
+    compute_staleness, get_staleness_threshold, should_reject_cache,
+)
+
 # ============================================================
 # API 超时配置（来自 financial-data-routing/SKILL.md）
 # ============================================================
@@ -120,6 +128,9 @@ class DataSnapshot:
     每次 fetch 自动运行 3 项校验。
     """
 
+    # 类级别实例注册表（单例模式，跨 runner 共享，替代 monkey-patch）
+    _instances: dict = {}
+
     def __init__(self, stock_code: str):
         self.stock_code = stock_code
         self._today = datetime.now().strftime("%Y%m%d")
@@ -199,28 +210,22 @@ class DataSnapshot:
     # --------------------------------------------------------
 
     def _is_data_stale(self, api_name: str, result: dict) -> bool:
-        """检查时序数据是否过期（防止脏缓存被返回）"""
+        """检查时序数据是否过期（防止脏缓存被返回）。
+        ★ 使用 quality_checks 的两段式逻辑：保守缓存拒绝 + 主动告警。
+        """
         data_full = result.get("data_full", [])
         if not data_full:
             return False
 
-        # K线数据：检查最新日期是否在 30 天内
-        KLINE_APIS = {"stock_zh_a_daily", "stock_zh_a_hist", "curl_eastmoney_kline"}
-        if api_name in KLINE_APIS:
-            latest = data_full[-1].get("date", "")
-            if latest:
-                try:
-                    days_old = (datetime.now() - datetime.strptime(latest, "%Y-%m-%d")).days
-                    if days_old > 30:
-                        return True
-                except Exception:
-                    pass
+        date_col = result.get("_date_column")
+        if not date_col:
+            return False
 
-        # 财务数据：检查是否有足够行数
-        if "financial" in api_name and len(data_full) < 4:
-            return True
+        days_old, _ = compute_staleness(api_name, data_full, date_col)
+        if days_old is None:
+            return False
 
-        return False
+        return should_reject_cache(api_name, days_old, len(data_full))
 
     def fetch_or_cache(
         self,
@@ -536,20 +541,21 @@ class DataSnapshot:
                     # 如果仍然匹配不到，保留全量（降级行为）
 
             # 性能优化：全历史 API 自动截取最近 N 行
-            # 按日期排序方向决定 head 还是 tail：
-            #   - 最新在前（head=最新）→ head() 截取
-            #   - 最早在前（tail=最新）→ tail() 截取
-            OLDEST_FIRST_APIS = {"stock_zh_a_daily", "stock_zh_a_hist"}
+            # ★ 使用 quality_checks 自动检测排序方向
             if api_name in HISTORY_APIS:
                 max_rows = HISTORY_APIS[api_name]
                 if len(df) > max_rows:
-                    if api_name in OLDEST_FIRST_APIS:
+                    date_col = find_date_column(df)
+                    ordering = detect_ordering(df, date_col) if date_col else "unknown"
+                    if ordering == "oldest_first":
                         df = df.tail(max_rows).reset_index(drop=True)
                     else:
                         df = df.head(max_rows).reset_index(drop=True)
 
-            # data_preview：时序数据取最近 5 行，非时序取前 5 行
-            if "date" in df.columns and api_name in OLDEST_FIRST_APIS:
+            # ★ data_preview：使用 quality_checks 自动确定方向
+            date_col = find_date_column(df)
+            ordering = detect_ordering(df, date_col) if date_col else "unknown"
+            if ordering == "oldest_first":
                 data_preview = df.tail(5).to_dict(orient="records")
             else:
                 data_preview = df.head(5).to_dict(orient="records")
@@ -564,6 +570,8 @@ class DataSnapshot:
                 "data_full": df.to_dict(orient="records"),
                 "fetch_time": datetime.now().isoformat(),
                 "_grade": grade,
+                "_ordering": ordering,       # ★ new: auto-detected ordering
+                "_date_column": date_col,     # ★ new: auto-detected date column
                 "_warnings": [],
             }
 
@@ -625,11 +633,14 @@ class DataSnapshot:
     # --------------------------------------------------------
 
     def _auto_validations(self, api_name: str, result: dict) -> list:
-        """自动运行的校验（不需 cross_check 标志）"""
+        """自动运行的校验（不需 cross_check 标志）。
+        ★ 使用 quality_checks 的 API 特定阈值。
+        """
         warnings = []
 
-        # 1. 陈旧检查
-        stale_warn = self._check_staleness(result)
+        # 1. 陈旧检查 — 使用 API 特定的阈值
+        threshold = get_staleness_threshold(api_name)
+        stale_warn = self._check_staleness(result, max_age_days=threshold)
         if stale_warn:
             warnings.append(stale_warn)
 
@@ -678,8 +689,8 @@ class DataSnapshot:
     @staticmethod
     def _check_staleness(result: dict, max_age_days: int = 7) -> Optional[str]:
         """
-        陈旧检查：如果数据最新日期超过 max_age_days 天，发出告警。
-        从 data_full 或 data_preview 中提取日期字段。
+        陈旧检查：全量扫描 data_full，自动发现日期列。
+        ★ 使用 quality_checks 模块。
         """
         if result.get("status") != "ok":
             return None
@@ -688,30 +699,26 @@ class DataSnapshot:
         if not data or not isinstance(data, list):
             return None
 
-        # 尝试常见的日期字段名
-        date_fields = [
-            "日期", "报告日", "时间", "date", "Date",
-            "交易日", "报告期", "截止日", "公布日期",
-        ]
-
-        latest_date = None
-        for row in data[:10]:  # 只检查前 10 行
-            if not isinstance(row, dict):
-                continue
-            for field in date_fields:
-                val = row.get(field)
-                if val is None:
-                    continue
-                val_str = str(val)[:10]
-                for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y%m%d", "%Y年%m月%d日"):
-                    try:
-                        dt = datetime.strptime(val_str, fmt)
-                        if latest_date is None or dt > latest_date:
-                            latest_date = dt
+        # ★ 使用 quality_checks 自动发现日期列
+        date_col = result.get("_date_column")
+        if not date_col and data:
+            # 从 data_full 的列名推断
+            first_row = next((r for r in data if isinstance(r, dict)), None)
+            if first_row:
+                for col in first_row.keys():
+                    from quality_checks import _DATE_FIELDS, _DATE_KEYWORDS
+                    if col in _DATE_FIELDS:
+                        date_col = col
                         break
-                    except ValueError:
-                        continue
+                    if any(kw in col for kw in _DATE_KEYWORDS):
+                        date_col = col
+                        break
 
+        if not date_col:
+            return None
+
+        # ★ 全量扫描（不再只扫前10行）
+        latest_date = find_latest_date(data, date_col)
         if latest_date is None:
             return None
 
