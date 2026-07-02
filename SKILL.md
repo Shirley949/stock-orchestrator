@@ -117,6 +117,21 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ## Phase 2：数据拉取（按模式定制场景路径）
 
+### ⚠️ Runner 调用强制规范（P1-2 fix — 2026-06-30）
+
+```bash
+# ✅ 正确：使用 > file 重定向 stdout（输出完整 JSON）
+python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A <code> \
+  > /tmp/runner_snapshot_<code>.json 2>/tmp/runner_stderr_<code>.log
+
+# ❌ 错误：使用管道截断（会导致 BrokenPipeError，丢失 90% 数据）
+python runner.py A <code> | head -2000    # ← 禁止
+python runner.py A <code> | tail -100     # ← 禁止
+python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断）
+```
+
+**验证：** 5 股票实测，`> file` 重定向输出 460K-621K chars 完整 JSON；`| head -2000` 仅捕获 67K chars 并触发 BrokenPipeError。
+
 ### 模式 A 调用顺序（带并行标注）
 
 ```
