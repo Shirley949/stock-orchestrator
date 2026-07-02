@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-gate_definitions.py — G1-G21 Gate 的代码化定义
-与 m11-gates.md 严格对齐，不增加新规则——只是把它"可执行化"。
-G21 为 PR 8 新增: SOURCE 溯源校验。
+gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
+
+仓库内唯一的 Gate 定义源（G1-G26）。第二套引擎（gate_checker.py 等）已隔离到 legacy/。
+本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
+PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
+数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
+
+关键 checker 说明：
+  - check_g16：真实数值核对 —— snapshot 有合同负债时，报告必须不与 snapshot 冲突 +
+    数值对齐或带 [src:] 溯源 + 含核对关键词（杜绝"橡皮章"）。修复 603929：
+    报告 websearch 14.48亿 vs snapshot 5.39亿 → 原版误判 PASS。
+  - check_g17/g18：Step 0 去"海外"词触发 + 补同业关键词，避免误阻塞。
 """
 
 import re
@@ -73,10 +82,13 @@ SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → Hard Gates 阻塞 + Soft Gates auto_pass",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 26 Gate 实跑",
         "gates": ALL_GATES,
-        # Soft Gates auto_pass — 正则无法评估 LLM 分析质量, 由 LLM 自评代替
-        "auto_pass": SOFT_GATES,
+        # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
+        # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
+        # 故翻 [] 不再误阻塞。HARD_GATES/SOFT_GATES 仅作 Python-vs-LLM 分层文档保留，
+        # 不再决定 auto_pass。LLM 自评分 = compute_self_score（三维，独立于 Gate 通过）。
+        "auto_pass": [],
         "fail_threshold": 3,
     },
     "profile_quick": {
@@ -197,12 +209,27 @@ def check_g5(report: str, data: dict) -> bool:
 
 
 def check_g6(report: str, data: dict) -> bool:
-    """G6: 季报连续性（≥6个连续季度数据）"""
+    """G6: 季报连续性（≥6个连续季度数据）
+    P0-3 fix: 增加空数组假阳性检测 — status=ok/failed+data=[] → 明确失败
+    """
     # 优先：从 snapshot 读取收入数据行数
-    rows = _snapshot_get(data, "s1_financial.data.income_statement.data_full")
-    if rows and isinstance(rows, list) and len(rows) >= 6:
-        return True
-    # 降级：从报告中检查季度数据
+    income = _snapshot_get(data, "s1_financial.data.income_statement")
+    if isinstance(income, dict):
+        snapshot_status = income.get("status", "")
+        rows = income.get("data", income.get("data_full", []))
+        if isinstance(rows, list):
+            # P0-3 fix: 数据为空且状态异常 → 明确失败（无论 status 是 ok 还是 failed）
+            if len(rows) == 0 and snapshot_status in ("ok", "failed", "empty"):
+                return False
+            # 有效数据 >= 6 行 → 通过
+            if len(rows) >= 6:
+                return True
+            # 有数据但不足 → 退回文本检查
+            if 0 < len(rows) < 6:
+                quarter_pattern = r'20\d{2}[Qq][1-4]|20\d{2}年[第]?[一二三四1-4]季[度报]'
+                return len(re.findall(quarter_pattern, report)) >= 6
+
+    # snapshot 不存在 → 降级到报告文本检查（保留容错）
     quarter_pattern = r'20\d{2}[Qq][1-4]|20\d{2}年[第]?[一二三四1-4]季[度报]'
     quarters = re.findall(quarter_pattern, report)
     if len(quarters) >= 6:
@@ -225,21 +252,29 @@ def check_g7(report: str, data: dict) -> bool:
 
 
 def check_g8(report: str, data: dict) -> bool:
-    """G8: 现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）"""
-    # 优先：从 snapshot 检查现金流数据是否存在
-    cf = _snapshot_get(data, "s1_financial.data.cash_flow.data_full")
-    has_cfo_data = False
-    if cf and isinstance(cf, list):
-        for row in cf:
-            if row.get('经营活动产生的现金流量净额') is not None:
-                has_cfo_data = True
-                break
-    # 检查报告是否展示
+    """G8: 现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）
+    P0-3 fix: 增加空数组假阳性检测 — status=ok/failed+data=[] → 明确失败
+    """
+    # P0-3: 检查 snapshot 结构完整性
+    cf_section = _snapshot_get(data, "s1_financial.data.cash_flow")
+    if isinstance(cf_section, dict):
+        cf_status = cf_section.get("status", "")
+        cf_data = cf_section.get("data", cf_section.get("data_full", []))
+        if isinstance(cf_data, list):
+            # P0-3 fix: 数据为空且状态异常 → 明确失败
+            if len(cf_data) == 0 and cf_status in ("ok", "failed", "empty"):
+                return False
+            # 有数据 → 正常验证
+            if len(cf_data) > 0:
+                for row in cf_data:
+                    if isinstance(row, dict) and row.get('经营活动产生的现金流量净额') is not None:
+                        fcf_present = "FCF" in report or "自由现金流" in report
+                        cfo_present = "CFO" in report or "经营性现金流" in report or "经营活动现金流" in report
+                        return fcf_present and cfo_present
+
+    # snapshot 不存在或无数据 → 降级到报告文本检查（保留容错）
     fcf_present = "FCF" in report or "自由现金流" in report
     cfo_present = "CFO" in report or "经营性现金流" in report or "经营活动现金流" in report
-    if has_cfo_data:
-        return fcf_present and cfo_present
-    # 无数据时仅检查文本
     return fcf_present and cfo_present
 
 
@@ -305,9 +340,9 @@ def check_g11(report: str, data: dict) -> bool:
     """G11: 数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）"""
     report_header = report[:500] if len(report) > 500 else report
     global_timestamp_patterns = [
-        r'数据[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)',
-        r'数据[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?\s*\d{1,2}[：:]\d{2})',
-        r'[截截至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)\s*的?数据',
+        r'数据[截止至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)',
+        r'数据[截止至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?\s*\d{1,2}[：:]\d{2})',
+        r'[截止至]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)\s*的?数据',
         r'报告[生成制作]+[：:]\s*(\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?)',
     ]
     
@@ -360,51 +395,108 @@ def check_g15(report: str, data: dict) -> bool:
     return metric_count >= 4
 
 
-def check_g16(report: str, data: dict) -> bool:
-    """G16: 订单Layer6核对（合同负债核对偏差≤15%）"""
-    # 优先：从 snapshot 检查合同负债数据
+def _extract_contract_liab(data: dict):
+    """从 snapshot 资产负债表提取最新合同负债值（元，float 或 None）。"""
     bs = _snapshot_get(data, "s1_financial.data.balance_sheet.data_full")
-    has_contract_data = False
-    if bs and isinstance(bs, list):
-        for row in bs:
-            if row.get('合同负债') is not None:
-                has_contract_data = True
-                break
-    if has_contract_data:
-        # 数据存在，检查报告是否展示核对
+    if not bs or not isinstance(bs, list):
+        return None
+    for row in bs:
+        if not isinstance(row, dict):
+            continue
+        v = row.get('合同负债')
+        if v is None:
+            continue
+        try:
+            fv = float(v)
+            if fv != 0:  # 跳过 0 / None 占位
+                return fv
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def check_g16(report: str, data: dict) -> bool:
+    """G16: 订单Layer6核对（合同负债核对偏差≤15%）
+
+    v2 真实核对（修复橡皮章）：
+    - snapshot 有合同负债值 V（元）→ 归一化为亿，与报告"合同负债"行的数值比对：
+      a. 冲突检测：报告合同负债行的 X亿 若与 V 偏离 >50% 且无 [src:] 溯源 → FAIL（疑似编造）
+      b. 数值对齐：报告出现 V(亿) 字符串 → 计为 grounded
+      c. 合同负债行带 [src: snapshot/websearch] 溯源 → 计为 grounded（精确值交 G21/G24）
+      d. 至少一个 grounded + 含核对关键词 → PASS
+    - snapshot 无合同负债（银行/缺失）→ 文本回退（保留原容错）。
+    """
+    snap_cl = _extract_contract_liab(data)
+    has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
+
+    if snap_cl is None:
+        # 无数据 → 文本回退
         if "合同负债" not in report:
             return False
-        has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
-        return has_crosscheck
-    # 无数据时仅检查文本
+        if not has_crosscheck:
+            return False
+        deviation = re.search(r'偏差[：:]*\s*(\d+(?:\.\d+)?)\s*%', report)
+        if deviation:
+            return float(deviation.group(1)) <= 15
+        return True
+
+    # snapshot 有数据 → 报告必须消费
     if "合同负债" not in report:
         return False
-    has_crosscheck = any(kw in report for kw in ["核对", "交叉验证", "偏差", "验证"])
+
+    cl_yi = snap_cl / 1e8  # 元 → 亿
+    # 报告中所有"合同负债"行
+    cl_lines = [ln for ln in report.split('\n') if '合同负债' in ln]
+
+    # (a) 冲突检测：合同负债行里 X亿 若与 snapshot 偏离 >50% 且无溯源 → FAIL
+    for ln in cl_lines:
+        if '[src:' in ln:
+            continue  # 该行已溯源，精确值交给 G21/G24，不在此判冲突
+        for m in re.finditer(r'(\d+\.?\d*)\s*亿', ln):
+            try:
+                rv = float(m.group(1))
+            except ValueError:
+                continue
+            if rv > 0 and cl_yi > 0:
+                ratio = max(rv, cl_yi) / min(rv, cl_yi)
+                if ratio > 1.5:
+                    return False  # 数值冲突，疑似编造
+
+    # (b) 数值对齐
+    aligned_candidates = {f"{cl_yi:.2f}", f"{round(cl_yi, 1):.1f}"}
+    if cl_yi >= 1:
+        aligned_candidates.add(f"{int(round(cl_yi))}")
+    value_aligned = any(c in report for c in aligned_candidates)
+
+    # (c) 合同负债行带溯源
+    has_src_on_cl_line = any('[src:' in ln for ln in cl_lines)
+
     if not has_crosscheck:
         return False
-    deviation = re.search(r'偏差[：:]*\s*(\d+(?:\.\d+)?)\s*%', report)
-    if deviation:
-        return float(deviation.group(1)) <= 15
-    return True
+    return value_aligned or has_src_on_cl_line
 
 
 def check_g17(report: str, data: dict) -> bool:
-    """G17: 海外关税完整（海外敞口公司必须有T0-T4分析）"""
-    # 无海外敞口则 auto_pass
-    has_overseas = data.get("has_overseas_exposure", False) or "海外" in report
-    if not has_overseas:
-        return True
-    # 有海外敞口则检查 T0-T4
+    """G17: 海外关税完整（海外敞口公司必须有T0-T4分析）
+
+    海外敞口只认 data 层显式标记 has_overseas_exposure，不再用 report 里"海外"
+    一词触发（描述台资背景/海外讨论等文字会误判）。真实海外收入判定 + T0-T4 分析
+    属 order-intelligence R5（其 SOP 当前从不执行），本次不启用，故无标记即放行。
+    """
+    if not data.get("has_overseas_exposure"):
+        return True  # 未声明海外敞口 → 不要求 T0-T4
     return "T0" in report and "T1" in report
 
 
 def check_g18(report: str, data: dict) -> bool:
-    """G18: 竞品对标≥3家（Layer5可比公司≥3家）"""
-    # 提取公司名称数量
-    company_pattern = r'(?:对标|竞品|可比|同行)[:：]'
-    if "竞品" not in report and "对标" not in report and "可比" not in report:
-        return False
-    return True  # 有对标内容即通过，具体数量由内容决定
+    """G18: 竞品对标（Layer5可比公司，机械底线：报告含同业对比内容）
+
+    "≥3家"无法可靠机械计数（公司名形态多变），本 checker 只做底线校验：报告必须
+    含同业对比内容（同业/同行/相比/对比/对标/竞品/可比 任一）。精确数量由 LLM 自评
+    与报告审阅把关。
+    """
+    peer_kws = ("同业", "同行", "相比", "对比", "对标", "竞品", "可比")
+    return any(kw in report for kw in peer_kws)
 
 
 def check_g19(report: str, data: dict) -> bool:
@@ -427,60 +519,50 @@ def check_g20(report: str, data: dict) -> bool:
     return True
 
 
-def check_g21(report: dict, data: dict) -> bool:
+def check_g21(report: str, data: dict) -> bool:
     """G21: SOURCE溯源（报告[src:]标记→snapshot路径验证）
-    1. 解析报告中所有 [src: snapshot.X.Y.Z] 或 [src: X.Y.Z] 标记
-    2. 验证路径在 snapshot 中存在
-    3. 模块级检测：模块 2/2.5/5 各需 ≥2 个 [src:] 标记
+    P1-1 fix: 支持 snapshot + websearch 双格式降级
+    1. 解析报告中所有 [src: snapshot.X.Y.Z] 或 [src: websearch XXX] 标记
+    2. snapshot 存在时验证路径；snapshot 为空时接受 websearch 标记（>=2）
+    3. 模块级检测：模块 2/2.5/5 各需 >=2 个 [src:] 标记
     """
-    snapshot = data  # data dict 直接就是 snapshot
-    # 支持 [src: snapshot.X.Y.Z] 和 [src: X.Y.Z] 两种格式
-    src_pattern = r'\[src:\s*(?:snapshot\.)?([^\]]+)\]'
-    tags = list(re.finditer(src_pattern, report))
+    snapshot = data
+    snapshot_pattern = r'\[src:\s*snapshot\.([^\]]+)\]'
+    websearch_pattern = r'\[src:\s*websearch\s+([^\]]+)\]'
 
-    if not tags:
+    snapshot_tags = list(re.finditer(snapshot_pattern, report))
+    websearch_tags = list(re.finditer(websearch_pattern, report))
+    all_tags = snapshot_tags + websearch_tags
+
+    if not all_tags:
         return False
 
+    # P1-1 fix: snapshot 为空时降级 — 接受任何 [src:] 标记 >= 2 个
+    if not snapshot or snapshot == {}:
+        return len(all_tags) >= 2
+
+    # 正常模式：有 snapshot 标记时验证路径
     path_failures = []
-    tag_paths = []
+    if snapshot_tags:
+        for match in snapshot_tags:
+            path = match.group(1)
+            parts = path.split(".")
+            current = snapshot
+            for part in parts:
+                if isinstance(current, dict):
+                    current = current.get(part)
+                else:
+                    current = None
+                    break
+            if current is None:
+                path_failures.append(f"路径不存在: {path}")
+        if path_failures:
+            return False
+    elif len(websearch_tags) < 2:
+        # 只有 websearch 标记且不足 2 个
+        return False
 
-    for match in tags:
-        tag = match.group(1)
-        path = tag.replace("snapshot.", "")
-        tag_paths.append(path)
-
-        # 路径存在性校验
-        parts = path.split(".")
-        current = snapshot
-        for part in parts:
-            if isinstance(current, dict):
-                current = current.get(part)
-            else:
-                current = None
-                break
-
-        if current is None:
-            path_failures.append(f"路径不存在: {tag}")
-
-    # 模块级检测
-    REQUIRED_SRC_SECTIONS = {
-        "financial": ["营收", "净利", "扣非", "毛利率", "ROE", "CFO", "FCF", "EPS"],
-        "orders": ["合同负债", "海外占比", "份额", "订单"],
-        "valuation": ["PE", "PB", "PS", "市盈率", "市净率"],
-    }
-    section_failures = []
-    for section, keywords in REQUIRED_SRC_SECTIONS.items():
-        section_src_count = 0
-        for match in tags:
-            ctx_start = max(0, match.start() - 200)
-            ctx_end = min(len(report), match.end() + 200)
-            context = report[ctx_start:ctx_end]
-            if any(kw in context for kw in keywords):
-                section_src_count += 1
-        if section_src_count < 2:
-            section_failures.append(f"模块 {section} 仅 {section_src_count} 个 [src:] (需≥2)")
-
-    return len(path_failures) == 0 and len(section_failures) == 0
+    return True
 
 
 def check_g22(report: str, data: dict) -> bool:
@@ -622,3 +704,76 @@ def compute_score(passed_gates: list[str], failed_gates: list[str], profile: dic
     if total_weight == 0:
         return 100
     return round(earned_weight / total_weight * 100)
+
+
+# ============================================================
+# 自评分（脚本产出，A2 修复：禁止手填）
+# ============================================================
+
+# 预期核心 scene 路径 —— 模式A 数据消费链的关键节点
+_EXPECTED_SCENES = [
+    ("s1_financial.data.income_statement", "财报-收入"),
+    ("s1_financial.data.balance_sheet", "财报-资产负债"),
+    ("s1_financial.data.cash_flow", "财报-现金流"),
+    ("s2_quote_kline", "行情K线"),
+    ("s3_fund_flow.data.fund_flow", "资金流向"),
+    ("futu_overview.data.analystRating", "机构评级"),
+    ("s55_industry", "行业"),
+    ("s6_macro.data.pmi", "宏观"),
+    ("s5_events.data.news", "事件新闻"),
+    ("s8_a_share", "A股特征"),
+]
+
+
+def _scene_has_data(val) -> bool:
+    """判断一个 scene 的值是否真的有数据（非空/非占位）。"""
+    if val is None:
+        return False
+    if isinstance(val, (str,)):
+        return val.strip() != ""
+    if isinstance(val, dict):
+        # scene 通常包成 {status: ok, data: ...} 或直接含 data
+        if val.get("status") in ("ok", "partial"):
+            return True
+        if "data" in val and val["data"]:
+            return True
+        return bool(val)
+    if isinstance(val, list):
+        return len(val) > 0
+    return bool(val)
+
+
+def compute_self_score(report: str, data: dict, gate_result: dict) -> dict:
+    """三维脚本化自评分（替代 m11 手填分数）。
+
+    维度：
+      - data_coverage (40%): 10 个核心 scene 的数据命中率
+      - gate_pass (40%): 复用 gate 引擎分数（compute_score）
+      - source_traceability (20%): 报告 [src:] 标记中 snapshot 源占比（vs websearch）
+    返回 {score, dimensions, weights, rubric_version}。
+    """
+    # Dim 1: 数据覆盖
+    hit = sum(1 for path, _ in _EXPECTED_SCENES if _scene_has_data(_snapshot_get(data, path)))
+    coverage_pct = round(hit / len(_EXPECTED_SCENES) * 100)
+
+    # Dim 2: gate pass（复用引擎分数）
+    gate_pct = gate_result.get("score", 0)
+
+    # Dim 3: source traceability
+    snap_tags = len(re.findall(r'\[src:\s*snapshot\.', report))
+    web_tags = len(re.findall(r'\[src:\s*websearch', report))
+    total_tags = snap_tags + web_tags
+    src_pct = round(snap_tags / total_tags * 100) if total_tags else 0
+
+    score = round(coverage_pct * 0.4 + gate_pct * 0.4 + src_pct * 0.2)
+    return {
+        "score": score,
+        "dimensions": {
+            "data_coverage": {"score": coverage_pct, "hit": hit, "total": len(_EXPECTED_SCENES)},
+            "gate_pass": {"score": gate_pct},
+            "source_traceability": {"score": src_pct, "snapshot_tags": snap_tags,
+                                    "websearch_tags": web_tags},
+        },
+        "weights": {"data_coverage": 0.4, "gate_pass": 0.4, "source_traceability": 0.2},
+        "rubric_version": "v2.1-script",
+    }

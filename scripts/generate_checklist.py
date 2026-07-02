@@ -142,8 +142,7 @@ PHASE_STEPS = {
             {"id": "c68", "desc": "m8 局限性 ≥ 3 条"},
         ],
         "phase_4": [
-            {"id": "c70", "desc": "运行 verify_gates.py（机制 3）"},
-            {"id": "c71", "desc": "自评分 ≥ 80"},
+            {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）"},
         ],
         "phase_5": [
             {"id": "c80", "desc": "报告写入腾讯文档"},
@@ -171,7 +170,7 @@ PHASE_STEPS = {
             {"id": "c62", "desc": "m9 信号矩阵"},
         ],
         "phase_4": [
-            {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）"},
+            {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）产出 sidecar，用其路径打勾"},
         ],
         "phase_5": [
             {"id": "c80", "desc": "报告输出"},

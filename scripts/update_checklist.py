@@ -83,6 +83,38 @@ def validate_evidence(snapshot_path: str, evidence_path: str) -> tuple:
     return True, f"值存在: {type(current).__name__}"
 
 
+def validate_gate_result(sidecar_path: str) -> tuple:
+    """验证 verify_gates sidecar（c70 专用，单一出口契约）。
+
+    契约（与 verify_gates --check-pointer 一致）：
+      ① verdict == "PASS"
+      ② self_score.score >= 80
+      ③ 新鲜度：sidecar mtime >= 报告 mtime（<name>.verified.json ↔ <name>.md）
+
+    返回 (valid: bool, message: str)
+    """
+    try:
+        result = json.loads(Path(sidecar_path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        return False, f"sidecar 加载失败: {e}"
+
+    if result.get("verdict") != "PASS":
+        return False, f"verdict={result.get('verdict')}（需 PASS），失败 Gate：{result.get('failed_gates')}"
+
+    ss = result.get("self_score", {})
+    score = ss.get("score", 0)
+    if score < 80:
+        return False, f"self_score={score} < 80"
+
+    # 尽力而为的新鲜度：从 sidecar 名反推同名报告（verify_gates 的派生规则）
+    sidecar_p = Path(sidecar_path)
+    report_p = sidecar_p.parent / sidecar_p.name.replace(".verified.json", ".md")
+    if report_p.exists() and sidecar_p.stat().st_mtime < report_p.stat().st_mtime:
+        return False, "sidecar 比报告旧（报告已改动但未重新校验）"
+
+    return True, f"verdict=PASS self_score={score}"
+
+
 def update_checklist(
     file_path: str,
     check_ids: list[str],
@@ -109,15 +141,24 @@ def update_checklist(
     for cid in check_ids:
         # PR 7: evidence 校验
         if evidence_from:
-            ep = evidence_path or CHECKID_TO_SNAPSHOT_PATH.get(cid)
-            if ep:
-                valid, msg = validate_evidence(evidence_from, ep)
+            if cid == "c70":
+                # c70 特例: evidence-from 是 verify_gates sidecar（单一出口契约，
+                # 非 snapshot）。verdict==PASS + self_score>=80 + 新鲜度由代码强制。
+                valid, msg = validate_gate_result(evidence_from)
                 if not valid:
-                    print(f"❌ {cid}: evidence 校验失败 — {msg}")
-                    print(f"   路径: {ep}")
+                    print(f"❌ {cid}: Gate sidecar 校验失败 — {msg}")
                     sys.exit(1)
-                else:
-                    print(f"🔍 {cid}: evidence 校验通过 — {msg}")
+                print(f"🔍 {cid}: Gate sidecar 校验通过 — {msg}")
+            else:
+                ep = evidence_path or CHECKID_TO_SNAPSHOT_PATH.get(cid)
+                if ep:
+                    valid, msg = validate_evidence(evidence_from, ep)
+                    if not valid:
+                        print(f"❌ {cid}: evidence 校验失败 — {msg}")
+                        print(f"   路径: {ep}")
+                        sys.exit(1)
+                    else:
+                        print(f"🔍 {cid}: evidence 校验通过 — {msg}")
 
         pattern = rf'\[ \] <!--{re.escape(cid)}-->'
         replacement = f'[x] <!--{cid}-->'

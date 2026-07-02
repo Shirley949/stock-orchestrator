@@ -43,15 +43,19 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checkli
 Phase N 结束前 → 检查 Phase N 所有 `[ ]` 项是否打勾，**未打勾不许进入 Phase N+1**。
 → 原因：Phase 门控是质量保证的关键机制。如果允许跳过未完成的步骤，可能会导致数据缺失或分析错误，最终影响报告质量。
 
-### 约束 5：Gate 硬关卡
-报告写完后、输出前 → **必须**运行 `verify_gates.py`：
+### 约束 5：Gate 硬关卡（单一出口：sidecar + 指针行）
+报告写完后、输出前 → **必须**运行 `verify_gates.py`，它会**自动产出 sidecar**（分数唯一真相源）：
 ```bash
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
   --report /tmp/analysis_report.md \
-  --profile full
+  --data-snapshot /tmp/snapshot.json \
+  --profile full        # 或 quick
+# → 产出 /tmp/analysis_report.verified.json（sidecar）+ 退出码
 ```
-`sys.exit(1)` = 报告不能输出，必须补全。
-→ 原因：Gate 校验是最后一道质量关卡。如果不运行 Gate 校验，可能会输出不符合质量标准的报告，影响用户决策。
+- **m11 区只放指针行，禁止手填分数**：`[verified: self_score=N profile=full | see analysis_report.verified.json]`
+- **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
+- `verify_gates` 退出码 1 = `verdict==FAIL`，报告不能输出，必须补全失败的 Gate。
+→ 原因：Gate 校验是最后一道质量关卡。**分数、verdict、≥80 阈值全部由代码强制**（根治"三套分数 87/93/95"漂移：手填分数从不进报告，引擎产出无下游消费）。
 
 ### 约束 6：两段式问题映射
 清单中的"用户问题映射"表，映射表匹配的标记 `映射表`，未匹配的标记 `[LLM兜底]`。
@@ -153,18 +157,24 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ## Phase 4：输出 + Gate 校验（强制硬关卡）
 
-> **⚠️ 报告写完后、输出前，必须运行 `verify_gates.py`（见约束 5）。**
+> **⚠️ 报告写完后、输出前，必须运行 `verify_gates.py`（见约束 5）。单一出口 = sidecar + 指针行。**
 
 1. 将报告写入 `/tmp/analysis_report.md`
-2. 运行 Gate 校验脚本：
+2. 运行 Gate 校验脚本（**自动产出 sidecar**）：
    ```bash
    python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
      --report /tmp/analysis_report.md \
-      --profile full  # 或 quick
+     --data-snapshot /tmp/snapshot.json \
+     --profile full      # 或 quick
+   # → 产出 /tmp/analysis_report.verified.json（含 verdict / self_score / failed_gates）
    ```
-3. 脚本输出每个 Gate 的通过/失败状态 + 自评分
-4. **如果 `sys.exit(1)`** → 报告不能输出，必须按脚本提示补全失败的 Gate
-5. 自评分 ≥ 80 分方可输出
+3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
+4. 在报告 m11 区放指针行（**禁止手填分数**）：
+   ```
+   [verified: self_score=<sidecar中的值> profile=full | see analysis_report.verified.json]
+   ```
+5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report.verified.json`
+   —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
 
 ### Gate Profile 对应关系
 | 模式 | Profile | 失败阈值 |
