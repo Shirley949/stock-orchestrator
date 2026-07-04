@@ -3,7 +3,7 @@
 verify_gates.py — Gate 硬关卡校验脚本（单一引擎，单一报告出口）
 
 仓库内唯一的 Gate 引擎（+ lib/gate_definitions.py，G1-G27）。第二套引擎（gate_checker.py
-等）已隔离到 legacy/。本脚本既是校验器，也是分数的唯一生产者：默认产出 sidecar
+等）已删除（归档于父仓库 git 历史）。本脚本既是校验器，也是分数的唯一生产者：默认产出 sidecar
 （<report>.verified.json），m11 区放指针行引用它，禁止手填分数。
 
 核心能力：
