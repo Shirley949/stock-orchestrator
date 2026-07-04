@@ -3,7 +3,7 @@
 data_snapshot.py — 共享数据快照库（PR 1.5 of v3 execution discipline）
 
 消除重复 API 调用，内置交叉验证。
-所有 runner（financial-data-routing、order-intelligence）统一使用本库。
+financial-data-routing/runner.py 统一使用本库。
 
 核心接口:
   ds = DataSnapshot("002130")
@@ -113,7 +113,8 @@ FULL_MARKET_APIS_BLACKLIST = {
 # 已知全历史 API：自动截取最近 N 行（下游只需近期数据）
 HISTORY_APIS = {
     "stock_financial_report_sina": 12,    # 最近 12 期（3年季度）
-    "stock_financial_abstract": 12,       # 最近 12 期
+    # stock_financial_abstract 不在此列：它是 wide 格式(行=指标 80 个)，HISTORY_APIS 的"行=期数"截断
+    # 会误删第 13-14 行的毛利率/销售净利率。改由 runner._extract_financial_abstract 过滤目标指标 + 取最近 N 期。
     "stock_zh_a_daily": 750,              # 全历史，需 tail(N) 截断（无日期参数，返回从上市日起，不保证"最近"）
     "stock_zh_a_hist": 750,               # 全历史，需 tail(N) 截断
     "macro_china_pmi": 12,                # 最近 12 期
@@ -144,6 +145,8 @@ class DataSnapshot:
         self._warnings: list[str] = []
         # 已 fetch 记录（用于 summary）
         self._fetch_log: list[dict] = []
+        # 失败记忆（仅运行期，不落盘）：避免同一限流 API 在一次 run 内被多调用点重打
+        self._fail_cache: dict[str, dict] = {}
 
         # 从磁盘加载已有缓存
         self._load_disk_cache()
@@ -259,7 +262,7 @@ class DataSnapshot:
         """
         key = self._cache_key(api_name, params)
 
-        # 1. 缓存命中（含时效性二次检查）
+        # 1a. 成功缓存命中（含时效性二次检查；仅 ok 落盘，逻辑不变）
         if key in self._mem_cache:
             cached = self._mem_cache[key].copy()
             if self._is_data_stale(api_name, cached):
@@ -269,7 +272,14 @@ class DataSnapshot:
                 cached["_warnings"] = []
                 return cached
 
-        # 2. 调用 API
+        # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_akshare 内耗尽，
+        #     同一 run 内同 key 不再重打限流 API（"调用都要存 snapshot"）
+        if key in self._fail_cache:
+            cached = self._fail_cache[key].copy()
+            cached["_warnings"] = []
+            return cached
+
+        # 2. 调用 API（_call_akshare 内含退火重试 [1,3,6]）
         result = self._call_akshare(api_name, params)
 
         # 3. 交叉验证
@@ -299,6 +309,8 @@ class DataSnapshot:
                 "time": datetime.now().isoformat(),
             })
         else:
+            # 失败也记忆（运行期，不落盘）—— 退火重试已在 _call_akshare 内耗尽
+            self._fail_cache[key] = result.copy()
             self._fetch_log.append({
                 "api": api_name,
                 "params": params,
@@ -474,7 +486,10 @@ class DataSnapshot:
     # ============================================================
 
     def _call_akshare(self, api_name: str, params: dict) -> dict:
-        """调用 akshare API，返回标准化结果"""
+        """调用 akshare API（含退火重试）。
+        预检失败（未安装/不存在/黑名单/D级=永久性）不重试；
+        取数失败（空数据/异常/限流=瞬态）按 [1,3,6] 退火重试，最多 3 次。"""
+        import time
         try:
             import akshare as ak
         except ImportError:
@@ -488,20 +503,38 @@ class DataSnapshot:
             self._warnings.append(msg)
             return {"status": "failed", "error": msg}
 
-        # 检查是否在全量接口黑名单中
+        # 预检：黑名单（永久失败，不重试）
         if api_name in FULL_MARKET_APIS_BLACKLIST:
             reason = FULL_MARKET_APIS_BLACKLIST[api_name]
             msg = f"[akshare] {api_name} 在黑名单中，禁止使用: {reason}"
             self._warnings.append(msg)
             return {"status": "failed", "error": msg}
 
-        # 检查是否已知失效
+        # 预检：已知失效 D 级（永久失败，不重试）
         grade = SOURCE_GRADE.get(api_name, "B")
         if grade == "D":
             msg = f"[akshare] {api_name} 已知失效(D级)，跳过"
             self._warnings.append(msg)
             return {"status": "failed", "error": msg}
 
+        # 退火重试：取数失败按 [1,3,6] 退避重试（健康调用首试即 ok，零开销）
+        delays = [1, 3, 6]
+        result = None
+        for attempt in range(len(delays) + 1):
+            result = self._invoke_akshare(func, api_name, params, grade)
+            if result.get("status") == "ok":
+                return result
+            if attempt < len(delays):
+                wait = delays[attempt]
+                self._warnings.append(
+                    f"[anneal] {api_name} 第{attempt + 1}次失败，{wait}s 后重试: "
+                    f"{result.get('error', '')[:80]}"
+                )
+                time.sleep(wait)
+        return result
+
+    def _invoke_akshare(self, func, api_name: str, params: dict, grade: str) -> dict:
+        """单次 akshare 取数 + 标准化（退火重试的单次单元 = 原 _call_akshare 取数块）。"""
         try:
             df = func(**params)
 

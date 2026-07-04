@@ -2,7 +2,7 @@
 """
 gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
 
-仓库内唯一的 Gate 定义源（G1-G26）。第二套引擎（gate_checker.py 等）已隔离到 legacy/。
+仓库内唯一的 Gate 定义源（G1-G27）。第二套引擎（gate_checker.py 等）已隔离到 legacy/。
 本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
 PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
 数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
@@ -47,6 +47,7 @@ GATE_DESCS = {
     "G24": "数据交叉验证（PDF vs API 一致性）",
     "G25": "新闻分析流程完整性验证",
     "G26": "资金流向完整性（四档资金分布数据可用+报告已消费）",
+    "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
 }
 
 GATE_WEIGHTS = {
@@ -60,9 +61,10 @@ GATE_WEIGHTS = {
     "G24": 2,  # 数据交叉验证
     "G25": 2,  # 新闻分析流程完整性
     "G26": 2,  # 资金流向完整性
+    "G27": 1,  # 财务指标+同比预计算一致性（Soft，单独不阻塞）
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 27)]
+ALL_GATES = [f"G{i}" for i in range(1, 28)]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -73,7 +75,7 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22"]
+SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -82,7 +84,7 @@ SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全部 26 Gate 实跑",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 27 Gate 实跑",
         "gates": ALL_GATES,
         # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
         # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
@@ -96,7 +98,7 @@ PROFILES = {
         "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
         "gates": ["G1", "G3", "G4", "G11", "G13"],
         "auto_pass": ["G2", "G5", "G6", "G7", "G8", "G9", "G10", "G12",
-                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26"],
+                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26", "G27"],
         "fail_threshold": 2,
     },
 }
@@ -480,8 +482,8 @@ def check_g17(report: str, data: dict) -> bool:
     """G17: 海外关税完整（海外敞口公司必须有T0-T4分析）
 
     海外敞口只认 data 层显式标记 has_overseas_exposure，不再用 report 里"海外"
-    一词触发（描述台资背景/海外讨论等文字会误判）。真实海外收入判定 + T0-T4 分析
-    属 order-intelligence R5（其 SOP 当前从不执行），本次不启用，故无标记即放行。
+    一词触发（描述台资背景/海外讨论等文字会误判）。T0-T4 关税分析为 LLM+websearch
+    手动项（数据层不生产），未声明海外敞口即放行。
     """
     if not data.get("has_overseas_exposure"):
         return True  # 未声明海外敞口 → 不要求 T0-T4
@@ -670,6 +672,43 @@ def check_g26(report: str, data: dict) -> bool:
     return has_fund_data
 
 
+def check_g27(report: str, data: dict) -> bool:
+    """G27: 财务指标 + 同比预计算一致性（Soft tier，weight 1，单独不阻塞阈值 3）。
+
+    校验 Section 3 新增数据确实落进 snapshot 且非空，防止「拉了数据但 snapshot 空 / LLM 无键可读」
+    的隐性浪费（红线①同类）。与 m2 §2.12 / §2.1-2.9 同一 snapshot 路径，单一真相源。
+    ① financial_indicators.data_full 最新期含加权ROE 或 摊薄ROE（非 None）；
+    ② income_statement 最新期行含至少一个 *_同比% 键且非 None。
+    金融股天然豁免：不校验总资产周转率（数据语义 N/A），ROE/BVPS/EPS 金融股全有。
+    """
+    fi = _snapshot_get(data, "s1_financial.data.financial_indicators")
+    fi_rows = fi.get("data_full") if isinstance(fi, dict) else None
+
+    def _latest(name):
+        if not isinstance(fi_rows, list):
+            return None
+        for r in fi_rows:
+            if isinstance(r, dict) and str(r.get("指标", "")).startswith(name):
+                for k, v in r.items():  # 首个非「指标」键 = 最新期（periods 新在前）
+                    if k != "指标":
+                        return v
+        return None
+
+    # ① 最新期含加权ROE 或 摊薄ROE
+    if not any(_latest(n) not in (None, "", "nan") for n in ("加权净资产收益率", "净资产收益率")):
+        return False
+
+    # ② income 最新期行含至少一个预计算同比键且非 None
+    inc = _snapshot_get(data, "s1_financial.data.income_statement")
+    inc_rows = None
+    if isinstance(inc, dict):
+        inc_rows = inc.get("data", inc.get("data_full"))
+    if not isinstance(inc_rows, list) or not inc_rows:
+        return False
+    latest = inc_rows[0] or {}
+    return any(latest.get(k) is not None for k in latest if str(k).endswith("_同比%"))
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
@@ -678,7 +717,7 @@ GATE_CHECKERS = {
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
     "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
     "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
-    "G25": check_g25, "G26": check_g26,
+    "G25": check_g25, "G26": check_g26, "G27": check_g27,
 }
 
 

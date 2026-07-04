@@ -93,11 +93,11 @@ def extract_stock_codes(user_prompt: str) -> list[str]:
 PHASE_STEPS = {
     "A": {
         "phase_0": [
-            {"id": "c01", "desc": "Skills 全部加载（orchestrator + routing + registry + quality + order-intelligence）"},
+            {"id": "c01", "desc": "Skills 全部加载（orchestrator + routing + registry + quality）"},
             {"id": "c02", "desc": "用户问题映射表已生成（见下方）"},
             {"id": "c03", "desc": "必须加载文件清单已确认"},
             {"id": "c04", "desc": "运行 routing/runner.py A <stock_code> → 拉取全量数据 snapshot（⚠️ 必须 > file 重定向，禁止 | head/tail pipe截断）"},
-            {"id": "c05", "desc": "运行 order-intelligence/runner.py <stock_code> <stock_type> → 订单数据"},
+            {"id": "c05", "desc": "订单数据：snapshot 已含合同负债(balance_sheet)+分地区(segment_composition)+中标事件(s5 contract)，见 m25"},
             {"id": "c06", "desc": "检查 runner._warnings → 处理降级/失败项"},
         ],
         "phase_1": [
@@ -130,7 +130,7 @@ PHASE_STEPS = {
             {"id": "c61", "desc": "m2 财务（含扣非诊断 + 利润归因 + 现金流三件套）"},
             {"id": "c_d2_safety", "desc": "m2.10 资产安全检查（货币资金 vs 有息负债 + 商誉）"},
             {"id": "c_d3_growth", "desc": "m2.11 行业位置与成长性（行业景气度 + 市场份额 + 研发）"},
-            {"id": "c62", "desc": "m25 订单诊断（来自 order-intelligence runner）"},
+            {"id": "c62", "desc": "m25 订单诊断（引用 snapshot 合同负债+segment_composition+中标事件）"},
             {"id": "c63", "desc": "m3 技术（TD 4 步 + 多指标交叉）"},
             {"id": "c64", "desc": "m4.1.1 事件扫描结果"},
             {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比 + 机构一致预期）"},
@@ -301,9 +301,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
             lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A {sc} \\")
             lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
-            lines.append(f"")
-            lines.append(f"# Step 2: 订单数据（order-intelligence runner）")
-            lines.append(f"python ~/.hermes/skills/stock-analysis/order-intelligence/runner.py {sc} <stock_type>")
+            lines.append(f"# 订单数据已并入主 snapshot（合同负债+分地区+中标事件），无需独立 runner")
         elif mode == "B":
             lines.append(f"# 数据拉取（routing runner）")
             lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc}")

@@ -2,7 +2,7 @@
 name: stock-orchestrator
 description: >
   股票分析的入口与主控——当用户消息涉及股票分析（股票代码、股票名称、或"分析/看看/买不买/估值/风险/事件"等动词）时，必须最先加载本 Skill。
-  本 Skill 是 stock-analysis-quality / financial-data-routing / data-source-registry / order-intelligence 的统一入口，禁止跳过。
+  本 Skill 是 stock-analysis-quality / financial-data-routing / data-source-registry 的统一入口，禁止跳过。
 ---
 
 # Stock Orchestrator（主控 Skill，永远全量加载）
@@ -109,7 +109,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
    - K线: 新浪K线API (curl, datalen=60)
    - 机构EPS: AkShare stock_profit_forecast_ths
    - 技术指标: 自算(新浪K线+Python)
-   - **富途数据**: futu_client.py（分析师评级/目标价/资金分布/财报预测/主营构成/三大表）
+   - **富途数据**: futu_client.py（分析师评级/目标价/资金分布/财报预测）；⚠️ 三大表/主营构成已于 2026-07-03 移出 s1 流程（改同花顺三表+sina补全+zygc_em），futu_client 库仍保留这些端点能力
    - API模板: `financial-data-routing/references/api-templates/`
 3. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发
 

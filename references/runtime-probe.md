@@ -5,21 +5,21 @@
 
 ---
 
-## 8 个关键 API 清单
+## 7 个关键 API 清单
 
 | 序号 | API 名称 | 用途 | 状态 |
 |------|---------|------|------|
-| 1 | `stock_hsgt_fund_flow_summary_em` | 北向资金汇总级 | ⚫ 已废弃(返回0.0) |
-| 2 | `stock_zh_a_spot_em` | 实时行情（东财源） | ⚠️ 频繁断连 |
-| 3 | `stock_zh_a_daily` | K线首选源（新浪源） | ✅ 稳定 |
-| 4 | `stock_financial_report_sina` | 三表数据 | ✅ 稳定 |
-| 5 | `stock_comment_detail_zlkp_jgcyd_em` | 机构参与度（评级 fallback） | ✅ 稳定 |
-| 6 | `stock_news_em` | 个股新闻 | ✅ 稳定 |
-| 7 | `stock_yjyg_em` | 业绩预告 | ✅ 季度更新 |
-| 8 | `curl hq.sinajs.cn` | 新浪行情降级源 | ✅ shell级 |
+| 1 | `stock_zh_a_spot_em` | 实时行情（东财源） | ⚠️ 频繁断连 |
+| 2 | `stock_zh_a_daily` | K线首选源（新浪源） | ✅ 稳定 |
+| 3 | `stock_financial_report_sina` | 三表数据 | ✅ 稳定 |
+| 4 | `stock_comment_detail_zlkp_jgcyd_em` | 机构参与度（评级 fallback） | ✅ 稳定 |
+| 5 | `stock_news_em` | 个股新闻 | ✅ 稳定 |
+| 6 | `stock_yjyg_em` | 业绩预告 | ✅ 季度更新 |
+| 7 | `curl hq.sinajs.cn` | 新浪行情降级源 | ✅ shell级 |
 
 > **已移除的 API：**
 > - `stock_gdfx_free_holding_detail_em`（股东持仓）：API 返回 None，已失效
+> - `stock_hsgt_*`（北向资金全系列）：个股级停更 + 沪深港通实时持股 2024-08 起停止披露
 
 ---
 

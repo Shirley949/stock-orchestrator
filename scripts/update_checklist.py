@@ -20,7 +20,7 @@ from pathlib import Path
 # 清单项 → snapshot 路径的映射表
 CHECKID_TO_SNAPSHOT_PATH = {
     "c04": "_top_level",  # 检查 _critical_failure 不存在
-    "c05": "order_intelligence.layer0_caliber",
+    "c05": "s1_financial.data.balance_sheet.合同负债",
     "c10": "s2_quote_kline.data.realtime_quote",
     "c11": "s3_fund_flow.data.fund_flow",
     "c12": "_top_level",  # 检查 _warnings

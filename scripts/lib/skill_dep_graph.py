@@ -17,7 +17,6 @@ SKILL_PATHS = {
     "data-source-registry": SKILL_ROOT / "data-source-registry" / "SKILL.md",
     "financial-data-routing": SKILL_ROOT / "financial-data-routing" / "SKILL.md",
     "stock-analysis-quality": SKILL_ROOT / "stock-analysis-quality" / "SKILL.md",
-    "order-intelligence": SKILL_ROOT / "order-intelligence" / "SKILL.md",
 }
 
 # 模式 → 强制加载的 Skill 列表
@@ -27,7 +26,6 @@ MODE_FORCED_SKILLS = {
         "data-source-registry",
         "financial-data-routing",
         "stock-analysis-quality",
-        "order-intelligence",  # 模式 A 强制
     ],
     "B": [
         "stock-orchestrator",
@@ -44,20 +42,13 @@ KEYWORD_TO_FILES = {
     "铝价": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
     "LME": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
     "周期": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
-    "订单": ["order-intelligence/references/layers/L0-caliber.md",
-             "order-intelligence/references/layers/L1-disclosure.md",
-             "order-intelligence/references/layers/L2-proxies.md",
-             "order-intelligence/references/layers/L3-geographic.md"],
-    "在手": ["order-intelligence/references/layers/L0-caliber.md",
-             "order-intelligence/references/layers/L1-disclosure.md"],
-    "饱和": ["order-intelligence/references/layers/L0-caliber.md",
-             "order-intelligence/references/layers/L1-disclosure.md"],
-    "合同负债": ["order-intelligence/references/layers/L0-caliber.md",
-                 "order-intelligence/references/layers/L1-disclosure.md"],
-    "出海": ["order-intelligence/references/layers/L3-geographic.md"],
-    "海外": ["order-intelligence/references/layers/L3-geographic.md",
-             "order-intelligence/references/layers/L4B-overseas.md"],
-    "关税": ["order-intelligence/references/layers/L4B-overseas.md"],
+    "订单": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "在手": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "饱和": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "合同负债": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "出海": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "海外": ["stock-analysis-quality/references/modules/m25-orders.md"],
+    "关税": ["stock-analysis-quality/references/modules/m25-orders.md"],
     "事件": ["financial-data-routing/references/scenarios/s5-events-18.md"],
     "风险": ["financial-data-routing/references/scenarios/s5-events-18.md"],
     "公告": ["financial-data-routing/references/scenarios/s5-events-18.md"],
@@ -68,7 +59,7 @@ KEYWORD_TO_FILES = {
     "主力": ["financial-data-routing/references/scenarios/s3-fund-flow.md"],
     "评级": ["financial-data-routing/references/scenarios/s4-rating.md"],
     "目标价": ["financial-data-routing/references/scenarios/s4-rating.md"],
-    "北向": ["financial-data-routing/references/scenarios/s8-a-share.md"],
+    "北向": ["financial-data-routing/references/scenarios/s3-fund-flow.md"],
     "融资融券": ["financial-data-routing/references/scenarios/s8-a-share.md"],
 }
 

@@ -7,443 +7,1091 @@
   },
   "rules": [
     {
-      "keywords": ["期货", "商品价格", "铜价", "铝价", "钢材价格", "大宗商品", "LME", "成本影响"],
+      "keywords": [
+        "期货",
+        "商品价格",
+        "铜价",
+        "铝价",
+        "钢材价格",
+        "大宗商品",
+        "LME",
+        "成本影响"
+      ],
       "data_needs": "沪铜/沪铝主力合约价格 + LME库存 + 产业链成本结构",
-      "api_sources": ["futures_main_sina(CU0/AL0)", "macro_euro_lme_stock"],
-      "related_skills": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
-      "modules": ["m35"],
+      "api_sources": [
+        "futures_main_sina(CU0/AL0)",
+        "macro_euro_lme_stock"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s7-cyclical.md"
+      ],
+      "modules": [
+        "m35"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["订单", "在手", "饱和", "订单量", "订单充足", "排产", "产能利用率"],
+      "keywords": [
+        "订单",
+        "在手",
+        "饱和",
+        "订单量",
+        "订单充足",
+        "排产",
+        "产能利用率"
+      ],
       "data_needs": "合同负债趋势 + 中标公告 + 互动易管理层表述",
-      "api_sources": ["stock_financial_report_sina(资产负债表)", "order-intelligence Layer 1-2"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)",
+        "stock-analysis-quality/references/modules/m25-orders.md（合同负债/在手订单，来自 balance_sheet）"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["新增产能", "扩产", "在建工程", "资本开支", "产能扩张", "投产"],
+      "keywords": [
+        "新增产能",
+        "扩产",
+        "在建工程",
+        "资本开支",
+        "产能扩张",
+        "投产"
+      ],
       "data_needs": "在建工程趋势 + 资本开支/折旧比 + 固定资产增速",
-      "api_sources": ["stock_financial_report_sina(资产负债表)", "stock_financial_report_sina(现金流量表)"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)",
+        "stock_financial_report_sina(现金流量表)"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["客户集中度", "大客户", "客户依赖", "前五大客户", "客户结构"],
+      "keywords": [
+        "客户集中度",
+        "大客户",
+        "客户依赖",
+        "前五大客户",
+        "客户结构"
+      ],
       "data_needs": "年报主要客户章节 + Top5/Top10客户营收占比",
-      "api_sources": ["web_search site:cninfo.com.cn(年报)", "stock_financial_abstract"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn(年报)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2", "m7"],
+      "modules": [
+        "m2",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["应收账款", "应收周转", "回款", "账龄", "坏账"],
+      "keywords": [
+        "应收账款",
+        "应收周转",
+        "回款",
+        "账龄",
+        "坏账"
+      ],
       "data_needs": "应收账款余额 + 应收周转天数 + 账龄分布",
-      "api_sources": ["stock_financial_report_sina(资产负债表)", "stock_financial_abstract"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["毛利率", "毛利", "盈利能力", "利润率"],
+      "keywords": [
+        "毛利率",
+        "毛利",
+        "盈利能力",
+        "利润率"
+      ],
       "data_needs": "毛利率趋势(≥6季) + 同业对比 + 成本结构拆分",
-      "api_sources": ["stock_financial_report_sina(利润表)", "stock_financial_abstract"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m2", "m5"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "stock_financial_abstract"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m2",
+        "m5"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["现金流", "自由现金流", "FCF", "经营性现金流", "现金"],
+      "keywords": [
+        "现金流",
+        "自由现金流",
+        "FCF",
+        "经营性现金流",
+        "现金"
+      ],
       "data_needs": "CFO/CFI/CFF + FCF + FCF/净利润比",
-      "api_sources": ["stock_financial_report_sina(现金流量表)"],
+      "api_sources": [
+        "stock_financial_report_sina(现金流量表)"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["扣非", "扣非净利润", "非经常性损益", "经常性利润"],
+      "keywords": [
+        "扣非",
+        "扣非净利润",
+        "非经常性损益",
+        "经常性利润"
+      ],
       "data_needs": "净利润 vs 扣非净利润 + 差额来源分析",
-      "api_sources": ["stock_financial_report_sina(利润表)", "stock_financial_abstract"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["估值", "PE", "PB", "贵不贵", "值不值", "便宜", "高估", "低估"],
+      "keywords": [
+        "估值",
+        "PE",
+        "PB",
+        "贵不贵",
+        "值不值",
+        "便宜",
+        "高估",
+        "低估"
+      ],
       "data_needs": "当前PE/PB + 历史分位 + 同业对比 + 情景估值",
-      "api_sources": ["stock_zh_a_spot_em", "stock_financial_abstract", "peer comparison"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m5"],
+      "api_sources": [
+        "stock_zh_a_spot_em",
+        "stock_financial_abstract",
+        "peer comparison"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m5"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["技术分析", "K线", "MACD", "KDJ", "RSI", "TD", "均线", "趋势"],
+      "keywords": [
+        "技术分析",
+        "K线",
+        "MACD",
+        "KDJ",
+        "RSI",
+        "TD",
+        "均线",
+        "趋势"
+      ],
       "data_needs": "近60-120交易日日K线 + 技术指标自算",
-      "api_sources": ["stock_zh_a_daily", "自算MACD/KDJ/RSI/TD"],
+      "api_sources": [
+        "stock_zh_a_daily",
+        "自算MACD/KDJ/RSI/TD"
+      ],
       "related_skills": [],
-      "modules": ["m3"],
+      "modules": [
+        "m3"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["资金流向", "主力", "散户", "北向", "外资", "资金流入"],
-      "data_needs": "个股资金流向 + 北向资金持仓变化",
-      "api_sources": ["stock_fund_flow_individual", "stock_hsgt_fund_flow_summary_em"],
-      "related_skills": ["financial-data-routing/references/scenarios/s3-fund-flow.md"],
-      "modules": ["m4"],
+      "keywords": [
+        "资金流向",
+        "主力",
+        "散户",
+        "外资",
+        "资金流入"
+      ],
+      "data_needs": "个股资金流向（大单/小单/特大单净流入，同花顺源）",
+      "api_sources": [
+        "stock_fund_flow_individual"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s3-fund-flow.md"
+      ],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["风险", "风险点", "有什么风险", "风险因素"],
+      "keywords": [
+        "风险",
+        "风险点",
+        "有什么风险",
+        "风险因素"
+      ],
       "data_needs": "事件扫描(18类) + 财务风险指标 + 行业风险",
-      "api_sources": ["stock_news_em", "event_scan_18", "stock_financial_abstract"],
-      "related_skills": ["financial-data-routing/references/scenarios/s5-events-18.md"],
-      "modules": ["m4", "m7"],
+      "api_sources": [
+        "stock_news_em",
+        "event_scan_18",
+        "stock_financial_abstract"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s5-events-18.md"
+      ],
+      "modules": [
+        "m4",
+        "m7"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["事件", "公告", "有没有雷", "利空", "利多", "黑天鹅"],
+      "keywords": [
+        "事件",
+        "公告",
+        "有没有雷",
+        "利空",
+        "利多",
+        "黑天鹅"
+      ],
       "data_needs": "18类事件扫描(高优8类+低优10类)",
-      "api_sources": ["stock_news_em", "web_search site:cninfo.com.cn"],
-      "related_skills": ["financial-data-routing/references/scenarios/s5-events-18.md"],
-      "modules": ["m4"],
+      "api_sources": [
+        "stock_news_em",
+        "web_search site:cninfo.com.cn"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s5-events-18.md"
+      ],
+      "modules": [
+        "m4"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["同业对比", "同行", "竞争对手", "可比公司", "vs", "对比"],
+      "keywords": [
+        "同业对比",
+        "同行",
+        "竞争对手",
+        "可比公司",
+        "vs",
+        "对比"
+      ],
       "data_needs": "≥2家可比公司 + ≥4指标(营收增速/净利增速/毛利率/PE)",
-      "api_sources": ["stock_financial_abstract(peer)", "peer selection from routing"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m5"],
+      "api_sources": [
+        "stock_financial_abstract(peer)",
+        "peer selection from routing"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m5"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["股东户数", "筹码", "散户化", "集中度", "持股"],
+      "keywords": [
+        "股东户数",
+        "筹码",
+        "散户化",
+        "集中度",
+        "持股"
+      ],
       "data_needs": "股东户数变化趋势 + 户均持股",
-      "api_sources": ["stock_zh_a_gdhs", "stock_hold_num_cninfo"],
+      "api_sources": [
+        "stock_zh_a_gdhs",
+        "stock_hold_num_cninfo"
+      ],
       "related_skills": [],
-      "modules": ["m4"],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["机构评级", "目标价", "研报", "分析师", "卖方", "买入评级"],
+      "keywords": [
+        "机构评级",
+        "目标价",
+        "研报",
+        "分析师",
+        "卖方",
+        "买入评级"
+      ],
       "data_needs": "机构评级汇总 + 目标价 + 盈利预测",
-      "api_sources": ["stock_rank_forecast_cninfo", "stock_profit_forecast_ths"],
-      "related_skills": ["financial-data-routing/references/scenarios/s4-rating.md"],
-      "modules": ["m5"],
+      "api_sources": [
+        "stock_rank_forecast_cninfo",
+        "stock_profit_forecast_ths"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s4-rating.md"
+      ],
+      "modules": [
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["分红", "股息", "派息", "分红率", "股息率"],
+      "keywords": [
+        "分红",
+        "股息",
+        "派息",
+        "分红率",
+        "股息率"
+      ],
       "data_needs": "历史分红记录 + 股息率 + 分红率",
-      "api_sources": ["web_search site:cninfo.com.cn", "stock_financial_abstract"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2", "m5"],
+      "modules": [
+        "m2",
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["ROE", "净资产收益率", "股东回报"],
+      "keywords": [
+        "ROE",
+        "净资产收益率",
+        "股东回报"
+      ],
       "data_needs": "ROE趋势(杜邦拆解) + 同业对比",
-      "api_sources": ["stock_financial_abstract", "stock_financial_report_sina"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m2", "m5"],
+      "api_sources": [
+        "stock_financial_abstract",
+        "stock_financial_report_sina"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m2",
+        "m5"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["营收增速", "收入增长", "增长", "成长性"],
+      "keywords": [
+        "营收增速",
+        "收入增长",
+        "增长",
+        "成长性"
+      ],
       "data_needs": "营收增速趋势(≥6季) + 同业对比 + 增长驱动力拆分",
-      "api_sources": ["stock_financial_report_sina(利润表)", "stock_financial_abstract"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m2", "m5"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "stock_financial_abstract"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m2",
+        "m5"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["净利润增速", "利润增长", "业绩增长", "盈利增长"],
+      "keywords": [
+        "净利润增速",
+        "利润增长",
+        "业绩增长",
+        "盈利增长"
+      ],
       "data_needs": "净利润增速趋势 + 扣非净利润增速 + 利润归因",
-      "api_sources": ["stock_financial_report_sina(利润表)", "stock_financial_abstract"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["负债率", "资产负债率", "杠杆", "偿债", "债务"],
+      "keywords": [
+        "负债率",
+        "资产负债率",
+        "杠杆",
+        "偿债",
+        "债务"
+      ],
       "data_needs": "资产负债率趋势 + 有息负债/净资产 + 利息覆盖倍数",
-      "api_sources": ["stock_financial_report_sina(资产负债表)", "stock_financial_abstract"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m2", "m7"],
+      "modules": [
+        "m2",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["存货", "存货周转", "库存", "去库存", "补库存"],
+      "keywords": [
+        "存货",
+        "存货周转",
+        "库存",
+        "去库存",
+        "补库存"
+      ],
       "data_needs": "存货余额趋势 + 存货周转天数 + 存货/营收比",
-      "api_sources": ["stock_financial_report_sina(资产负债表)"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["商誉", "商誉减值", "并购"],
+      "keywords": [
+        "商誉",
+        "商誉减值",
+        "并购"
+      ],
       "data_needs": "商誉余额 + 减值测试 + 并购标的业绩承诺",
-      "api_sources": ["stock_financial_report_sina(资产负债表)", "web_search site:cninfo.com.cn"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)",
+        "web_search site:cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m2", "m7"],
+      "modules": [
+        "m2",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["海外", "出口", "关税", "贸易战", "出海", "国际化"],
+      "keywords": [
+        "海外",
+        "出口",
+        "关税",
+        "贸易战",
+        "出海",
+        "国际化"
+      ],
       "data_needs": "分地区收入 + 海外占比 + 关税影响(T0-T4)",
-      "api_sources": ["stock_financial_report_sina(利润表-分地区)", "order-intelligence Layer 3-4B"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25", "m7"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表-分地区)",
+        "stock-analysis-quality/references/modules/m25-orders.md（分地区/关税，来自 segment_composition）"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["管理层", "高管", "减持", "增持", "回购"],
+      "keywords": [
+        "管理层",
+        "高管",
+        "减持",
+        "增持",
+        "回购"
+      ],
       "data_needs": "高管增减持记录 + 回购计划 + 管理层表述",
-      "api_sources": ["stock_news_em", "web_search site:irm.cninfo.com.cn"],
+      "api_sources": [
+        "stock_news_em",
+        "web_search site:irm.cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m4"],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["行业景气", "景气度", "行业周期", "周期"],
+      "keywords": [
+        "行业景气",
+        "景气度",
+        "行业周期",
+        "周期"
+      ],
       "data_needs": "行业供需格局 + 产能利用率 + 价格趋势",
-      "api_sources": ["futures_main_sina", "web_search(行业数据)", "macro_china_*"],
-      "related_skills": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
-      "modules": ["m35", "m5"],
+      "api_sources": [
+        "futures_main_sina",
+        "web_search(行业数据)",
+        "macro_china_*"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s7-cyclical.md"
+      ],
+      "modules": [
+        "m35",
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["股息率", "分红率", "派息比", "现金回报"],
+      "keywords": [
+        "股息率",
+        "分红率",
+        "派息比",
+        "现金回报"
+      ],
       "data_needs": "历史分红 + 股息率计算 + 派息比",
-      "api_sources": ["stock_financial_abstract", "web_search site:cninfo.com.cn"],
+      "api_sources": [
+        "stock_financial_abstract",
+        "web_search site:cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m5"],
+      "modules": [
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["融资", "定增", "增发", "可转债"],
+      "keywords": [
+        "融资",
+        "定增",
+        "增发",
+        "可转债"
+      ],
       "data_needs": "融资历史 + 定增方案 + 可转债转股价",
-      "api_sources": ["web_search site:cninfo.com.cn", "stock_news_em"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn",
+        "stock_news_em"
+      ],
       "related_skills": [],
-      "modules": ["m4", "m7"],
+      "modules": [
+        "m4",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["解禁", "限售", "大股东减持"],
+      "keywords": [
+        "解禁",
+        "限售",
+        "大股东减持"
+      ],
       "data_needs": "解禁时间表 + 限售股比例 + 大股东减持计划",
-      "api_sources": ["web_search site:cninfo.com.cn", "stock_news_em"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn",
+        "stock_news_em"
+      ],
       "related_skills": [],
-      "modules": ["m4", "m7"],
+      "modules": [
+        "m4",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["竞争格局", "市占率", "市场份额", "龙头"],
+      "keywords": [
+        "竞争格局",
+        "市占率",
+        "市场份额",
+        "龙头"
+      ],
       "data_needs": "行业排名 + 市占率趋势 + 竞争壁垒分析",
-      "api_sources": ["web_search(行业报告)", "peer comparison"],
-      "related_skills": ["financial-data-routing/references/scenarios/s11-peer.md"],
-      "modules": ["m1", "m5"],
+      "api_sources": [
+        "web_search(行业报告)",
+        "peer comparison"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s11-peer.md"
+      ],
+      "modules": [
+        "m1",
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["合同负债", "预收", "预收款"],
+      "keywords": [
+        "合同负债",
+        "预收",
+        "预收款"
+      ],
       "data_needs": "合同负债趋势(≥8季) + 预收账款 + 合同负债/营收比",
-      "api_sources": ["stock_financial_report_sina(资产负债表)"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25"],
+      "api_sources": [
+        "stock_financial_report_sina(资产负债表)"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["研发", "研发投入", "研发费用", "技术壁垒"],
+      "keywords": [
+        "研发",
+        "研发投入",
+        "研发费用",
+        "技术壁垒"
+      ],
       "data_needs": "研发费用/营收比 + 研发资本化率 + 专利数量",
-      "api_sources": ["stock_financial_report_sina(利润表)", "web_search site:cninfo.com.cn"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "web_search site:cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["产能", "产量", "销量", "产销率"],
+      "keywords": [
+        "产能",
+        "产量",
+        "销量",
+        "产销率"
+      ],
       "data_needs": "产能数据 + 产量/销量 + 产销率趋势",
-      "api_sources": ["web_search(年报/公告)", "order-intelligence Layer 1"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25"],
+      "api_sources": [
+        "web_search(年报/公告)",
+        "stock-analysis-quality/references/modules/m25-orders.md（产能/产量/销量，来自年报）"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["毛利率下降", "毛利下滑", "成本上升", "成本压力"],
+      "keywords": [
+        "毛利率下降",
+        "毛利下滑",
+        "成本上升",
+        "成本压力"
+      ],
       "data_needs": "毛利率季度趋势 + 成本结构拆分 + 原材料价格",
-      "api_sources": ["stock_financial_report_sina(利润表)", "futures_main_sina(原材料)"],
-      "related_skills": ["financial-data-routing/references/scenarios/s7-cyclical.md"],
-      "modules": ["m2", "m35"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "futures_main_sina(原材料)"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s7-cyclical.md"
+      ],
+      "modules": [
+        "m2",
+        "m35"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["补贴", "政府补助", "税收优惠"],
+      "keywords": [
+        "补贴",
+        "政府补助",
+        "税收优惠"
+      ],
       "data_needs": "政府补助明细 + 所得税率 + 非经常性损益构成",
-      "api_sources": ["stock_financial_report_sina(利润表)", "web_search site:cninfo.com.cn"],
+      "api_sources": [
+        "stock_financial_report_sina(利润表)",
+        "web_search site:cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m2"],
+      "modules": [
+        "m2"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["股权激励", "员工持股", "期权"],
+      "keywords": [
+        "股权激励",
+        "员工持股",
+        "期权"
+      ],
       "data_needs": "股权激励方案 + 行权条件 + 摊销费用",
-      "api_sources": ["web_search site:cninfo.com.cn", "stock_news_em"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn",
+        "stock_news_em"
+      ],
       "related_skills": [],
-      "modules": ["m4"],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["诉讼", "仲裁", "违规", "处罚", "立案"],
+      "keywords": [
+        "诉讼",
+        "仲裁",
+        "违规",
+        "处罚",
+        "立案"
+      ],
       "data_needs": "诉讼/仲裁记录 + 监管处罚 + 风险敞口",
-      "api_sources": ["stock_news_em", "web_search site:cninfo.com.cn"],
-      "related_skills": ["financial-data-routing/references/scenarios/s5-events-18.md"],
-      "modules": ["m4", "m7"],
+      "api_sources": [
+        "stock_news_em",
+        "web_search site:cninfo.com.cn"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s5-events-18.md"
+      ],
+      "modules": [
+        "m4",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["实控人", "实际控制人", "控股股东", "股权结构"],
+      "keywords": [
+        "实控人",
+        "实际控制人",
+        "控股股东",
+        "股权结构"
+      ],
       "data_needs": "实控人背景 + 股权结构 + 关联交易",
-      "api_sources": ["web_search site:cninfo.com.cn(年报)", "stock_financial_abstract"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn(年报)",
+        "stock_financial_abstract"
+      ],
       "related_skills": [],
-      "modules": ["m1"],
+      "modules": [
+        "m1"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["主营业务", "业务结构", "收入构成", "业务拆分"],
+      "keywords": [
+        "主营业务",
+        "业务结构",
+        "收入构成",
+        "业务拆分"
+      ],
       "data_needs": "分业务收入占比 + 各业务增速 + 毛利率",
-      "api_sources": ["F10 API(RPT_F10_FN_MAINOP)", "stock_financial_report_sina"],
+      "api_sources": [
+        "F10 API(RPT_F10_FN_MAINOP)",
+        "stock_financial_report_sina"
+      ],
       "related_skills": [],
-      "modules": ["m1", "m2"],
+      "modules": [
+        "m1",
+        "m2"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["行业政策", "政策利好", "政策风险", "监管"],
+      "keywords": [
+        "行业政策",
+        "政策利好",
+        "政策风险",
+        "监管"
+      ],
       "data_needs": "行业政策梳理 + 政策影响评估",
-      "api_sources": ["web_search(政策)", "stock_news_em"],
-      "related_skills": ["financial-data-routing/references/scenarios/s5-events-18.md"],
-      "modules": ["m4", "m7"],
+      "api_sources": [
+        "web_search(政策)",
+        "stock_news_em"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s5-events-18.md"
+      ],
+      "modules": [
+        "m4",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["股价", "行情", "涨跌", "走势"],
+      "keywords": [
+        "股价",
+        "行情",
+        "涨跌",
+        "走势"
+      ],
       "data_needs": "实时行情 + 近期涨跌幅 + 成交量",
-      "api_sources": ["stock_zh_a_spot_em", "stock_zh_a_daily"],
-      "related_skills": ["financial-data-routing/references/scenarios/s2-quote-kline.md"],
-      "modules": ["m3"],
+      "api_sources": [
+        "stock_zh_a_spot_em",
+        "stock_zh_a_daily"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s2-quote-kline.md"
+      ],
+      "modules": [
+        "m3"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["盘口", "分时", "委托", "买卖盘"],
+      "keywords": [
+        "盘口",
+        "分时",
+        "委托",
+        "买卖盘"
+      ],
       "data_needs": "分时数据 + 五档盘口 + 量价关系",
-      "api_sources": ["stock_zh_a_hist_min_em", "stock_zh_a_spot_em"],
+      "api_sources": [
+        "stock_zh_a_hist_min_em",
+        "stock_zh_a_spot_em"
+      ],
       "related_skills": [],
-      "modules": ["m3"],
+      "modules": [
+        "m3"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["龙虎榜", "游资", "机构席位"],
+      "keywords": [
+        "龙虎榜",
+        "游资",
+        "机构席位"
+      ],
       "data_needs": "龙虎榜数据 + 机构/游资席位分析",
-      "api_sources": ["stock_lhb_detail_em"],
+      "api_sources": [
+        "stock_lhb_detail_em"
+      ],
       "related_skills": [],
-      "modules": ["m4"],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["融资融券", "两融", "融券余额"],
+      "keywords": [
+        "融资融券",
+        "两融",
+        "融券余额"
+      ],
       "data_needs": "融资余额趋势 + 融券余额 + 融资买入额",
-      "api_sources": ["stock_margin_detail_szse", "stock_margin_detail_sse"],
+      "api_sources": [
+        "stock_margin_detail_szse",
+        "stock_margin_detail_sse"
+      ],
       "related_skills": [],
-      "modules": ["m4"],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["新股", "次新", "IPO"],
+      "keywords": [
+        "新股",
+        "次新",
+        "IPO"
+      ],
       "data_needs": "IPO信息 + 限售股解禁 + 次新特征分析",
-      "api_sources": ["web_search site:cninfo.com.cn"],
+      "api_sources": [
+        "web_search site:cninfo.com.cn"
+      ],
       "related_skills": [],
-      "modules": ["m1", "m7"],
+      "modules": [
+        "m1",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["ST", "退市", "风险警示"],
+      "keywords": [
+        "ST",
+        "退市",
+        "风险警示"
+      ],
       "data_needs": "ST条件排查 + 退市风险指标",
-      "api_sources": ["stock_financial_abstract", "stock_news_em"],
+      "api_sources": [
+        "stock_financial_abstract",
+        "stock_news_em"
+      ],
       "related_skills": [],
-      "modules": ["m7"],
+      "modules": [
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["换手率", "成交量", "量能", "放量", "缩量"],
+      "keywords": [
+        "换手率",
+        "成交量",
+        "量能",
+        "放量",
+        "缩量"
+      ],
       "data_needs": "换手率趋势 + 成交量分析 + 量价配合",
-      "api_sources": ["stock_zh_a_daily", "stock_zh_a_spot_em"],
+      "api_sources": [
+        "stock_zh_a_daily",
+        "stock_zh_a_spot_em"
+      ],
       "related_skills": [],
-      "modules": ["m3"],
+      "modules": [
+        "m3"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["板块", "概念", "题材", "热点"],
+      "keywords": [
+        "板块",
+        "概念",
+        "题材",
+        "热点"
+      ],
       "data_needs": "所属板块 + 概念题材 + 板块涨跌",
-      "api_sources": ["stock_board_concept_name_em", "stock_board_industry_name_em"],
+      "api_sources": [
+        "stock_board_concept_name_em",
+        "stock_board_industry_name_em"
+      ],
       "related_skills": [],
-      "modules": ["m1", "m4"],
+      "modules": [
+        "m1",
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["盈利预测", "业绩预期", "未来业绩", "明年业绩"],
+      "keywords": [
+        "盈利预测",
+        "业绩预期",
+        "未来业绩",
+        "明年业绩"
+      ],
       "data_needs": "机构盈利预测 + 业绩指引 + 一致性预期",
-      "api_sources": ["stock_profit_forecast_ths", "stock_rank_forecast_cninfo"],
-      "related_skills": ["financial-data-routing/references/scenarios/s4-rating.md"],
-      "modules": ["m5"],
+      "api_sources": [
+        "stock_profit_forecast_ths",
+        "stock_rank_forecast_cninfo"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s4-rating.md"
+      ],
+      "modules": [
+        "m5"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["分地区收入", "地区结构", "区域分布"],
+      "keywords": [
+        "分地区收入",
+        "地区结构",
+        "区域分布"
+      ],
       "data_needs": "分地区收入(境内/境外) + 各地区增速",
-      "api_sources": ["F10 API(RPT_F10_FN_MAINOP type=3)", "stock_financial_report_sina"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m2", "m25"],
+      "api_sources": [
+        "F10 API(RPT_F10_FN_MAINOP type=3)",
+        "stock_financial_report_sina"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m2",
+        "m25"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["间接出海", "终端需求", "整机厂"],
+      "keywords": [
+        "间接出海",
+        "终端需求",
+        "整机厂"
+      ],
       "data_needs": "间接出海识别 + 终端海外需求占比",
-      "api_sources": ["order-intelligence Layer 3(间接出海识别)"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25"],
+      "api_sources": [
+        "stock-analysis-quality/references/modules/m25-orders.md（间接出海识别）"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["中标", "中标公告", "重大合同", "签约"],
+      "keywords": [
+        "中标",
+        "中标公告",
+        "重大合同",
+        "签约"
+      ],
       "data_needs": "近12个月中标公告 + 合同金额汇总",
-      "api_sources": ["np-anotice-stock.eastmoney.com", "web_search site:cninfo.com.cn"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25"],
+      "api_sources": [
+        "np-anotice-stock.eastmoney.com",
+        "web_search site:cninfo.com.cn"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25"
+      ],
       "priority": "P0"
     },
     {
-      "keywords": ["关税", "双反", "反倾销", "反补贴", "制裁"],
+      "keywords": [
+        "关税",
+        "双反",
+        "反倾销",
+        "反补贴",
+        "制裁"
+      ],
       "data_needs": "关税政策(T0-T4) + 双反调查 + 准入过滤",
-      "api_sources": ["Federal Register API", "USTR/EU gazette/WTO"],
-      "related_skills": ["order-intelligence/SKILL.md"],
-      "modules": ["m25", "m7"],
+      "api_sources": [
+        "Federal Register API",
+        "USTR/EU gazette/WTO"
+      ],
+      "related_skills": [
+        "stock-analysis-quality/references/modules/m25-orders.md"
+      ],
+      "modules": [
+        "m25",
+        "m7"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["利率", "LPR", "货币政策", "降息", "加息"],
+      "keywords": [
+        "利率",
+        "LPR",
+        "货币政策",
+        "降息",
+        "加息"
+      ],
       "data_needs": "LPR走势 + 货币政策方向 + 对公司影响",
-      "api_sources": ["macro_china_lpr", "macro_china_money_supply"],
-      "related_skills": ["financial-data-routing/references/scenarios/s6-macro.md"],
-      "modules": ["m4"],
+      "api_sources": [
+        "macro_china_lpr",
+        "macro_china_money_supply"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s6-macro.md"
+      ],
+      "modules": [
+        "m4"
+      ],
       "priority": "P1"
     },
     {
-      "keywords": ["汇率", "人民币", "美元", "汇兑损益"],
+      "keywords": [
+        "汇率",
+        "人民币",
+        "美元",
+        "汇兑损益"
+      ],
       "data_needs": "汇率走势 + 外币资产/负债 + 汇兑损益",
-      "api_sources": ["macro_china_rmb", "stock_financial_report_sina(利润表)"],
-      "related_skills": ["financial-data-routing/references/scenarios/s6-macro.md"],
-      "modules": ["m2", "m7"],
+      "api_sources": [
+        "macro_china_rmb",
+        "stock_financial_report_sina(利润表)"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/s6-macro.md"
+      ],
+      "modules": [
+        "m2",
+        "m7"
+      ],
       "priority": "P1"
     }
   ]
