@@ -156,7 +156,17 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
 
     # 判定
     fail_count = len(failed) + len(errors)
-    verdict = "PASS" if fail_count <= profile["fail_threshold"] else "FAIL"
+    
+    # P0 fix: weight≥3 gates 硬阻断（不受 fail_threshold 影响）
+    # GATE_WEIGHTS 用模块级 import（line 36-39），勿在此函数内再 import——
+    # 函数内 `from .gate_definitions import GATE_WEIGHTS` 会让该名变局部变量，
+    # 遮蔽模块级绑定，导致上方 line 98 `GATE_WEIGHTS.get(...)` UnboundLocalError。
+    critical_failures = [g for g in failed + errors if GATE_WEIGHTS.get(g, 0) >= 3]
+    
+    if critical_failures:
+        verdict = "FAIL"
+    else:
+        verdict = "PASS" if fail_count <= profile["fail_threshold"] else "FAIL"
 
     base_result = {
         "profile": profile_name,

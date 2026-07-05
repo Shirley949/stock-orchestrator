@@ -112,7 +112,7 @@ PHASE_STEPS = {
             {"id": "c_analyst_forecast", "desc": "机构盈利预测已提取并展示（EPS/PE/评级分布）", "agent": 2},
             {"id": "c16", "desc": "runner 返回的新闻 → Claude 执行 18 类事件语义分类", "agent": 3},
             {"id": "c17", "desc": "runner 返回的公告标题 → Claude 筛选中标/重大合同", "agent": 3},
-            {"id": "c18", "desc": "runner Layer 0-3 数据确认 + Claude 判断间接出海", "agent": 4},
+            {"id": "c18", "desc": "snapshot 海外派生（D6_geo_revenue + segment_composition.geo）确认 + Claude 判断间接出海", "agent": 4},
             {"id": "c19", "desc": "Claude 选择可比公司（runner 返回候选池）", "agent": 4},
             {"id": "c19b", "desc": "Claude 判断期货品种（如用户提到期货）", "agent": 4},
         ],
@@ -210,7 +210,7 @@ def generate_agent_steps(mode: str, question_result: dict) -> list[str]:
         extra_items.append("Claude 判断期货品种 → futures_main_sina(CU0)")
         extra_items.append("Claude 解读 LME 库存数据")
     if has_orders:
-        extra_items.append("Claude 判断间接出海（runner 返回 reported_overseas_pct）")
+        extra_items.append("Claude 判断间接出海（主 runner 返回 reported_overseas_pct，D6 派生）")
         extra_items.append("Claude 筛选中标公告（runner 返回标题列表）")
 
     lines = [
@@ -227,7 +227,7 @@ def generate_agent_steps(mode: str, question_result: dict) -> list[str]:
         "  - runner 返回公告标题 → Claude 筛选中标/重大合同",
         "",
         "### Agent 4: 订单 + 期货 + 同业（runner 返回数据，Claude 判断）",
-        "  - runner Layer 0-3 数据 → Claude 判断间接出海 + 供需轴",
+        "  - snapshot 海外派生数据（D6_geo_revenue）→ Claude 判断间接出海 + 供需轴",
         "  - Claude 选择可比公司（runner 返回候选池）",
     ]
     for item in extra_items:

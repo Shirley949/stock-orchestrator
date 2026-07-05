@@ -512,10 +512,15 @@ def check_g19(report: str, data: dict) -> bool:
 
 
 def check_g20(report: str, data: dict) -> bool:
-    """G20: 口径一致（Layer0口径=Layer8输出）"""
-    # 金融股不得输出"在手订单"
+    """G20: 口径一致（Layer0口径=Layer8输出）
+
+    子串匹配：分类器统一输出 "X股" 格式（金融股/银行股...），旧 list `in` 精确
+    匹配永不命中"金融股"。改子串匹配兼容 "银行"/"金融" 等出现在 stock_type
+    任意位置，未来加"医药股"等新类不影响本 gate。
+    """
+    # 金融股不得输出"在手订单"（在手订单是订单型公司口径，金融股无此概念）
     stock_type = data.get("stock_type", "")
-    if stock_type in ["金融", "银行", "保险", "券商"]:
+    if any(kw in stock_type for kw in ("金融", "银行", "保险", "券商")):
         if "在手订单" in report or "订单饱和" in report:
             return False
     return True
@@ -539,9 +544,12 @@ def check_g21(report: str, data: dict) -> bool:
     if not all_tags:
         return False
 
-    # P1-1 fix: snapshot 为空时降级 — 接受任何 [src:] 标记 >= 2 个
+    # P1-1 fix: snapshot 为空时降级 — 只接受 websearch 标记 >= 2 个
+    # Gap-3 fix: 不接受 snapshot 标记（snapshot 为空时无法验证路径）
     if not snapshot or snapshot == {}:
-        return len(all_tags) >= 2
+        # 只接受 websearch 标记，不接受 snapshot 标记
+        websearch_only = [t for t in all_tags if t not in snapshot_tags]
+        return len(websearch_only) >= 2
 
     # 正常模式：有 snapshot 标记时验证路径
     path_failures = []
@@ -765,18 +773,47 @@ _EXPECTED_SCENES = [
 
 
 def _scene_has_data(val) -> bool:
-    """判断一个 scene 的值是否真的有数据（非空/非占位）。"""
+    """判断一个 scene 的值是否真的有数据（非空/非占位）。
+
+    修复 Gap-1：递归检查 data 字段内部的 status，
+    避免 scene envelope 在场但 data.status=failed 时误判为有数据。
+
+    两种 scene 结构：
+    1. 深路径（leaf node）: {status: "ok"/"failed", data: [...]}  → 直接检查 status
+    2. 浅路径（envelope）: {scene: "s2", data: {status: "failed"}} → 需递归检查 data.status
+    """
     if val is None:
         return False
     if isinstance(val, (str,)):
         return val.strip() != ""
     if isinstance(val, dict):
-        # scene 通常包成 {status: ok, data: ...} 或直接含 data
-        if val.get("status") in ("ok", "partial"):
+        envelope_status = val.get("status", "")
+        if envelope_status in ("failed", "error", "throttled"):
+            return False
+
+        data = val.get("data", val.get("data_full"))
+
+        if isinstance(data, dict):
+            # Gap-1 fix: recursively check status inside data dict
+            data_status = data.get("status", "")
+            if data_status in ("failed", "error", "throttled"):
+                return False
+            return bool(data)
+
+        if isinstance(data, list):
+            return len(data) > 0
+
+        # No data field or empty data: rely on envelope status
+        if envelope_status in ("ok", "partial"):
             return True
-        if "data" in val and val["data"]:
-            return True
+
+        # Gap-1 fix: 裸 error 信封（无 status/data，仅含 error 键）→ 视为无数据
+        # 例：futu_overview.data.analystRating = {"error":"Expecting value..."}
+        if "error" in val and "status" not in val and "data" not in val:
+            return False
+
         return bool(val)
+
     if isinstance(val, list):
         return len(val) > 0
     return bool(val)
