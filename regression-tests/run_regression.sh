@@ -7,7 +7,7 @@
 #        · test_data_contracts.py    CI 健全性 + 真实注册表零 error + 已知暴露面锁定
 #   ② 运行时层（gate-audit 工作区存在时跑）：runner/futu_client/gate 的离线回归
 #        · test_futu_call_api / test_futu_fetchers_regression / test_gate_throttled
-#        · gate_fixture_test  27-gate 漏报=0 总闸
+#        · gate_fixture_test  28-gate 漏报=0 总闸
 #
 # ▶ 何时跑：改了 stock-analysis 任何 .py（runner/futu_client/gate_definitions/
 #   data_contracts/verify_data_contracts/各 fetcher）之后。CLAUDE.md / AGENTS.md
@@ -37,7 +37,7 @@ if [ -d "$GATE_FIXTURES" ]; then
   python3 -m unittest fixtures.test_futu_fetchers_regression 2>&1 | tail -2
   echo "  · test_gate_throttled"
   python3 -m unittest fixtures.test_gate_throttled 2>&1 | tail -2
-  echo "  · gate_fixture_test (27-gate 漏报=0)"
+  echo "  · gate_fixture_test (28-gate 漏报=0)"
   python3 fixtures/gate_fixture_test.py 2>&1 | grep -E "漏报.*共" | tail -1
 else
   echo

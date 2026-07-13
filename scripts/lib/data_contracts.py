@@ -31,7 +31,7 @@ P0, P1, P2 = "P0", "P1", "P2"                                  # 优先级
 CONFIRMED, ASSUMED, UNVERIFIED = "confirmed", "assumed", "unverified"  # 置信度
 
 # ============================================================
-# Scene 契约（Mode A 全量 20 个 + Mode B 占位）
+# Scene 契约（Mode A 全量 + Mode B 占位 + 日内低吸引擎派生）
 # ============================================================
 
 SCENES = {
@@ -48,6 +48,7 @@ SCENES = {
             {"path": "data.financial_abstract",  "confidence": CONFIRMED},
             {"path": "data.financial_indicators","confidence": CONFIRMED},
             {"path": "data.segment_composition", "confidence": CONFIRMED},
+            {"path": "data.dupont",             "confidence": CONFIRMED},
         ],
         "consumers": {
             "data.income_statement":     ["m2", "m25:67", "G6", "G9", "G27", "computed_metrics"],
@@ -56,6 +57,7 @@ SCENES = {
             "data.financial_abstract":   ["m2", "G7"],
             "data.financial_indicators": ["m2", "G27"],
             "data.segment_composition":  ["m2", "m25:13"],
+            "data.dupont":               ["m2:291", "G28"],
         },
         "priority": P0,   # G6/G7/G8/G9/G16/G27 均读它
         "cost": {"calls": 12, "calls_worst": 33, "latency": "medium"},
@@ -128,6 +130,67 @@ SCENES = {
             "data.realtime_quote": "curl_sina_hq → _derive_quote_from_daily",
         },
         "cacheable": True,
+    },
+
+    # ───────────── P1：日内低吸定位器（stock-intraday-t-analyzer）核心输入 ─────────────
+    "intraday_kline_5min": {
+        "fetcher": "fetch_kline_sina",          # lib/data_sources.py
+        "mode": ["A", "B"],
+        "produces": [
+            {"path": "data.kline_5min", "confidence": CONFIRMED,
+             "note": "Sina getKLineData 分钟 OHLCV；stock-intraday-t-analyzer 引擎核心输入（纯函数派生低吸信号）"},
+        ],
+        "consumers": {
+            "data.kline_5min": ["computed_metrics", "intraday_technical_derived"],   # 引擎：派生 MA55/ATR/MACD/VWAP/背离 + h60/m5 均线
+        },
+        "priority": P1,
+        "cost": {"calls": 1, "latency": "fast"},
+        "depends_on": [],
+        "fallback": ["curl_sina_kline → all_failed"],
+        "cacheable": True,
+    },
+
+    "intraday_daily_ohlcv": {
+        "fetcher": "fetch_daily_akshare",        # lib/data_sources.py（保守双源：数值走 akshare qfq）
+        "mode": ["A", "B"],
+        "produces": [
+            {"path": "data.daily", "confidence": CONFIRMED,
+             "note": "akshare stock_zh_a_daily qfq 完整日线 OHLCV+amount+turnover+outstanding_share；"
+                     "供日内引擎 ma_series/levels/weekly/gaps/daily_last 计算"},
+        ],
+        "consumers": {
+            "data.daily": ["intraday_technical_derived"],
+        },
+        "priority": P1,
+        "cost": {"calls": 1, "latency": "fast", "throttle_prone": True},   # akshare 重依赖，单股单次低频
+        "depends_on": [],
+        "fallback": ["fetch_kline_sina(scale=240) → all_failed"],   # 降级 OHLCV-only，缺 amount/turnover
+        "cacheable": True,
+    },
+
+    "intraday_technical_derived": {
+        "fetcher": None,   # engine 纯函数派生：compute_ma_series / _detect_gaps / compute_levels / compute_weekly / build_daily_last
+        "mode": ["A", "B"],
+        "produces": [
+            {"path": "result.ma_series",  "confidence": CONFIRMED},
+            {"path": "result.levels",     "confidence": CONFIRMED},
+            {"path": "result.weekly",     "confidence": CONFIRMED},
+            {"path": "result.gaps",       "confidence": CONFIRMED},
+            {"path": "result.daily_last", "confidence": CONFIRMED},
+        ],
+        "consumers": {
+            "result.ma_series":  ["format_text", "SKILL.md 输出白名单"],
+            "result.levels":     ["format_text", "SKILL.md 输出白名单"],
+            "result.weekly":     ["format_text", "SKILL.md 输出白名单"],
+            "result.gaps":       ["format_text", "SKILL.md 输出白名单"],
+            "result.daily_last": ["format_text", "SKILL.md 输出白名单"],
+        },
+        "priority": P1,
+        "cost": {"calls": 0, "latency": "low"},
+        "depends_on": ["intraday_kline_5min", "intraday_daily_ohlcv"],   # ★顺序敏感：5min(h60/m5) + 日线(daily)
+        "fallback": {},
+        "cacheable": False,
+        "derived": True,
     },
 
     "futu_overview": {

@@ -61,6 +61,13 @@ KEYWORD_TO_FILES = {
     "目标价": ["financial-data-routing/references/scenarios/s4-rating.md"],
     "北向": ["financial-data-routing/references/scenarios/s3-fund-flow.md"],
     "融资融券": ["financial-data-routing/references/scenarios/s8-a-share.md"],
+    # ── 日内低吸定位器（stock-intraday-t-analyzer）：纯技术面日内，独立 skill ──
+    "走势": ["stock-intraday-t-analyzer/SKILL.md"],
+    "分时": ["stock-intraday-t-analyzer/SKILL.md"],
+    "日内": ["stock-intraday-t-analyzer/SKILL.md"],
+    "低吸": ["stock-intraday-t-analyzer/SKILL.md"],
+    "做T": ["stock-intraday-t-analyzer/SKILL.md"],
+    "做t": ["stock-intraday-t-analyzer/SKILL.md"],
 }
 
 # 模式 → 需要加载的场景子文件

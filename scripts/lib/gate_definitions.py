@@ -48,6 +48,7 @@ GATE_DESCS = {
     "G25": "新闻分析流程完整性验证",
     "G26": "资金流向完整性（四档资金分布数据可用+报告已消费）",
     "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
+    "G28": "杜邦数据存在+三因子闭合（dupont.status=ok + 残差<0.25pp；金融股豁免；硬校验）",
 }
 
 GATE_WEIGHTS = {
@@ -62,9 +63,10 @@ GATE_WEIGHTS = {
     "G25": 2,  # 新闻分析流程完整性
     "G26": 2,  # 资金流向完整性
     "G27": 1,  # 财务指标+同比预计算一致性（Soft，单独不阻塞）
+    "G28": 1,  # 杜邦三因子闭合（Soft，单独不阻塞；硬校验失败=真FAIL）
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 28)]
+ALL_GATES = [f"G{i}" for i in range(1, 29)]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -75,7 +77,7 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27"]
+SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -84,7 +86,7 @@ SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全部 27 Gate 实跑",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 28 Gate 实跑",
         "gates": ALL_GATES,
         # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
         # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
@@ -98,7 +100,7 @@ PROFILES = {
         "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
         "gates": ["G1", "G3", "G4", "G11", "G13"],
         "auto_pass": ["G2", "G5", "G6", "G7", "G8", "G9", "G10", "G12",
-                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26", "G27"],
+                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26", "G27", "G28"],
         "fail_threshold": 2,
     },
 }
@@ -717,6 +719,29 @@ def check_g27(report: str, data: dict) -> bool:
     return any(latest.get(k) is not None for k in latest if str(k).endswith("_同比%"))
 
 
+def check_g28(report: str, data: dict) -> bool:
+    """G28: 杜邦数据存在 + 三因子闭合（Soft tier，weight 1，硬校验：失败=真 FAIL）。
+
+    新浪杜邦 vFD_DupontAnalysis 经 runner._fetch_sina_dupont 总拉入 snapshot，源端统一平均口径，
+    残差<0.25pp。闭合判定在 fetcher 的 _dupont_check_closure 算好（绝对值反算
+    归母净利润/平均归母权益×100 vs 实测 ROE），gate 只读结果。
+    ① dupont.status == "ok"（拉取成功，否则硬 FAIL，真实反映数据缺失）；
+    ② _closure_check.applicable=False 放行（金融股无总资产周转率，三因子不适用）；
+    ③ applicable=True 时要求 closed=True 且残差<0.25pp。
+    新 snapshot 经 runner 升级后自然含 dupont；历史旧 snapshot 无该字段则 FAIL（weight=1 不硬阻断）。
+    """
+    dupont = _snapshot_get(data, "s1_financial.data.dupont")
+    if not isinstance(dupont, dict) or dupont.get("status") != "ok":
+        return False
+    cc = (dupont.get("data") or {}).get("_closure_check") or {}
+    if not cc.get("applicable", True):  # 金融股（无总资产周转率）→ 放行
+        return True
+    try:
+        return bool(cc.get("closed", False)) and float(cc.get("residual_pp", 99)) < 0.25
+    except (TypeError, ValueError):
+        return False
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
@@ -725,7 +750,7 @@ GATE_CHECKERS = {
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
     "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
     "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
-    "G25": check_g25, "G26": check_g26, "G27": check_g27,
+    "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
 }
 
 
