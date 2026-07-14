@@ -286,9 +286,11 @@ def check_g8(report: str, data: dict) -> bool:
 
 def check_g9(report: str, data: dict) -> bool:
     """G9: 利润归因闭合（ΔNetProfit四项分解闭合）"""
-    # 优先：从 snapshot 检查收入数据（需要≥2期）
-    rows = _snapshot_get(data, "s1_financial.data.income_statement.data_full")
-    if rows and isinstance(rows, list) and len(rows) >= 2:
+    # 优先：从 snapshot 检查收入数据（需要≥2期）。读路径范式：data 优先 + data_full 兜底
+    # （三表因源不同填不同键：THS/EM 主路径只填 .data，Sina 只填 .data_full；单读 data_full → 永不命中）。
+    inc = _snapshot_get(data, "s1_financial.data.income_statement")
+    rows = inc.get("data", inc.get("data_full", [])) if isinstance(inc, dict) else []
+    if isinstance(rows, list) and len(rows) >= 2:
         return "利润归因" in report or ("归因" in report and "净利润" in report)
     # 降级：纯文本匹配
     return "利润归因" in report or ("归因" in report and "净利润" in report)
@@ -756,20 +758,32 @@ def check_g28(report: str, data: dict) -> bool:
 
 
 def check_g29(report: str, data: dict) -> bool:
-    """G29: 资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）。
+    """G29: 资产安全完整性 + 危险 surface（computed_metrics.asset_safety）。
 
-    范式同 G26：snapshot 有 asset_safety(status=ok) → 报告必须消费关键数值/比率；
-    snapshot 缺失(status=degraded) → 报告可跳过但不许编造具体数值。
-    三路径：正确数据+消费=PASS；缺失+不编造=PASS；有数据漏写=FAIL；无数据编造数值=FAIL。
-    weight 2, SOFT, auto_pass（quick 模式跳过）。
+    双层校验：
+    (1) 完整性：snapshot 有 asset_safety(status=ok) → 报告必须消费关键数值/比率；
+        snapshot 缺失(status=degraded) → 报告可跳过但不许编造具体数值。
+    (2) 实质：level==🚨（cash_to_debt<0.5 / goodwill 占比超阈值）→ 报告必须 surface 危险词，
+        否则 FAIL（补商誉爆雷/资金链断裂的机器兜底——全代码库唯一）。
+    五路径：🚨+surface=PASS；🚨+未surface=FAIL；有数据漏写字段=FAIL；degraded+编造数值=FAIL；
+    degraded+不编造=PASS；其余=PASS。weight 2, SOFT, auto_pass（quick 模式跳过）。
     """
     am = _snapshot_get(data, "computed_metrics.asset_safety")
     has_data = isinstance(am, dict) and am.get("status") == "ok"
-    consumes = bool(re.search(r"(货币资金|有息负债|商誉占比?|cash_to_debt|资产负债率|资产负债结构)", report))
-    if has_data and not consumes:
-        return False
-    # 无数据却编造具体数值（货币资金/有息负债：XX亿）→ FAIL
-    if not has_data and re.search(r"(货币资金|有息负债)\s*[：:]\s*[\d.]+\s*亿", report):
+    level = am.get("level") if isinstance(am, dict) else None
+
+    if has_data:
+        if level == "🚨":
+            # 实质：危险判定已下沉，报告必须 surface 危险词（任一即满足；危险词天然覆盖资金链/商誉两端）
+            if not re.search(r"(🚨|危险|紧张|风险|爆雷|减值|资金链)", report):
+                return False
+        else:
+            # 消费：非危险档，报告须提具体字段词（去掉漏判词 资产负债率/资产负债结构，商誉占比?→商誉）
+            if not re.search(r"(货币资金|有息负债|商誉|cash_to_debt)", report):
+                return False
+
+    # 无数据不许编造具体数值（拓宽正则：为|约|达|： + 数字+亿）
+    if not has_data and re.search(r"(货币资金|有息负债)\s*(?:为|约|达|[：:])\s*[\d.]+\s*亿", report):
         return False
     return True
 
