@@ -193,8 +193,8 @@ SCENES = {
         "derived": True,
     },
 
-    "futu_overview": {
-        "fetcher": "fetch_futu_overview",        # runner.py:1794
+    "valuation_snapshot": {
+        "fetcher": "fetch_valuation_snapshot",        # runner.py（westock 腾讯源 + akshare baidu）
         "mode": ["A"],
         "produces": [
             {"path": "data.quote.price",          "confidence": CONFIRMED},
@@ -202,19 +202,15 @@ SCENES = {
             {"path": "data.quote.peLyr",          "confidence": CONFIRMED},
             {"path": "data.quote.pbRatio",        "confidence": CONFIRMED},
             {"path": "data.quote.epsTtm",         "confidence": CONFIRMED},
+            {"path": "data.quote.epsLyr",         "confidence": CONFIRMED},
+            {"path": "data.quote.totalMarketCap", "confidence": CONFIRMED},
             {"path": "data.quote.dividendRatio",  "confidence": CONFIRMED},
+            {"path": "data.quote.changeRatio",    "confidence": CONFIRMED},
             {"path": "data.analystRating",        "confidence": CONFIRMED},
             {"path": "data.targetPrice",          "confidence": CONFIRMED},
-            # ★断链#1：runner 不 reshape，子路径依赖富途 API 原字段名 targetInfo
-            {"path": "data.targetPrice.targetInfo.average", "confidence": UNVERIFIED,
-             "note": "runner.py:1828 直接透传 API data，未产出 targetInfo 子键；m4:113 引用，依赖 API 原字段名"},
-            {"path": "data.targetPrice.targetInfo.highest", "confidence": UNVERIFIED},
-            {"path": "data.targetPrice.targetInfo.lowest",  "confidence": UNVERIFIED},
-            # 无消费者候选砍除（log.md:696）
-            {"path": "data.quote.priceHighest_52week", "confidence": CONFIRMED, "consumed": False,
-             "note": "无消费者（log.md:696 标可砍），候选 S5 移除；consumed=False 显式豁免孤儿校验"},
-            {"path": "data.quote.priceLowest_52week",  "confidence": CONFIRMED, "consumed": False,
-             "note": "无消费者，候选 S5 移除；consumed=False 显式豁免孤儿校验"},
+            {"path": "data.targetPrice.average",  "confidence": CONFIRMED},
+            {"path": "data.targetPrice.highest",  "confidence": CONFIRMED},
+            {"path": "data.targetPrice.lowest",   "confidence": CONFIRMED},
         ],
         "consumers": {
             "data.quote.price":          ["computed_metrics"],
@@ -222,39 +218,51 @@ SCENES = {
             "data.quote.peLyr":          ["m5:14", "m6:79"],
             "data.quote.pbRatio":        ["m5:15", "m6:79", "computed_metrics"],
             "data.quote.epsTtm":         ["m5:16", "m6:81", "m10:10"],
+            "data.quote.epsLyr":         ["m5"],
+            "data.quote.totalMarketCap": ["m5", "computed_metrics"],
             "data.quote.dividendRatio":  ["m5:17"],
+            "data.quote.changeRatio":    ["m5", "m6"],
             "data.analystRating":        ["m10:10A.1", "s4_rating_backfill", "_EXPECTED_SCENES"],
             "data.targetPrice":          ["m4:113", "m6:83", "m10:55"],
-            "data.targetPrice.targetInfo.average": ["m4:113"],
-            "data.targetPrice.targetInfo.highest": ["m4:114"],
-            "data.targetPrice.targetInfo.lowest":  ["m4:114"],
+            "data.targetPrice.average":  ["m4:113"],
+            "data.targetPrice.highest":  ["m4:114"],
+            "data.targetPrice.lowest":   ["m4:114"],
         },
         "priority": P1,
-        "cost": {"calls": 3, "calls_worst": 9, "latency": "high", "throttle_prone": True},
+        # westock(腾讯源)无限流；baidu stock_zh_valuation_baidu 稳定（PE-TTM/市净率/总市值）。
+        # calls≈baidu 4 指标 + westock(fund_flow/rating/consensus 与他场景复用，当日缓存)。
+        "cost": {"calls": 4, "calls_worst": 7, "latency": "medium", "throttle_prone": False},
         "depends_on": [],
-        "fallback": {},   # Futu 独家，限流→status:throttled 标注
+        "fallback": {"data.quote.peTtm": "westock:finance", "data.quote.pbRatio": "westock:finance"},
         "cacheable": True,
     },
 
-    "futu_forecast": {
-        "fetcher": "fetch_futu_forecast",        # runner.py:1848
+    "consensus_forecast": {
+        "fetcher": "fetch_consensus_forecast",        # runner.py（westock consensus 年度 + finance 实际值）
         "mode": ["A"],
         "produces": [
-            {"path": "data.eps",       "confidence": CONFIRMED},
-            {"path": "data.revenue",   "confidence": CONFIRMED},   # S0 m10 显式化
-            {"path": "data.netProfit", "confidence": CONFIRMED},
-            {"path": "data.ebit",      "confidence": CONFIRMED},
+            {"path": "data.eps",            "confidence": CONFIRMED},   # list[dict]，年度 reshape 供 computed_metrics PEG
+            {"path": "data.revenue",        "confidence": CONFIRMED},
+            {"path": "data.netProfit",      "confidence": CONFIRMED},
+            {"path": "data.ebit",           "confidence": CONFIRMED},
+            {"path": "data.annual",         "confidence": CONFIRMED},   # 年度富表 2026/27/28（eps/营收/净利/pe/pb/ps/yoy）
+            {"path": "data.last_actual",    "confidence": CONFIRMED},   # 最新期实际值（含 EBIT）
+            {"path": "data.paid_in_capital","confidence": CONFIRMED},   # 总股本（市值交叉校验）
         ],
         "consumers": {
             "data.eps":       ["m10:10A.3", "m6:81", "m5:35", "computed_metrics:eps_fy_consensus", "s73_forecast_backfill"],
             "data.revenue":   ["m10:10A.3"],
             "data.netProfit": ["m10:10A.3"],
             "data.ebit":      ["m10:10A.3"],
+            "data.annual":    ["m10:10A.3"],
+            "data.last_actual": ["m10:10A.3"],
+            "data.paid_in_capital": ["m5"],   # 总股本×收盘价 与 baidu 总市值交叉校验
         },
         "priority": P1,
-        "cost": {"calls": 4, "calls_worst": 12, "latency": "high", "throttle_prone": True},
+        # westock consensus + finance 各 1 次 npx（腾讯源无限流）。
+        "cost": {"calls": 2, "calls_worst": 3, "latency": "medium", "throttle_prone": False},
         "depends_on": [],
-        "fallback": {"data.eps": "akshare:stock_profit_forecast_ths"},   # revenue/ebit/netProfit 富途独家无替代
+        "fallback": {"data.eps": "s35:eps_consensus", "data.last_actual.revenue": "s1_financial:income_statement"},
         "cacheable": True,
     },
 
@@ -384,7 +392,7 @@ SCENES = {
         "consumers": {"data.rating": ["m4", "m6"]},
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["s35_research_reports", "futu_overview"],   # ★顺序敏感
+        "depends_on": ["s35_research_reports", "valuation_snapshot"],   # ★顺序敏感
         "fallback": {},
         "cacheable": False,
         "derived": True,
@@ -397,7 +405,7 @@ SCENES = {
         "consumers": {"data": ["m10"]},
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["futu_forecast"],   # ★顺序敏感
+        "depends_on": ["consensus_forecast"],   # ★顺序敏感
         "fallback": {},
         "cacheable": False,
         "derived": True,
@@ -438,6 +446,7 @@ SCENES = {
             {"path": "data.gross_margin_calc","confidence": CONFIRMED},
             {"path": "data.has_overseas_exposure",  "confidence": CONFIRMED},   # G17 标记（D6 派生）
             {"path": "data.reported_overseas_pct", "confidence": CONFIRMED},   # m25 关税影响引用
+            {"path": "data.asset_safety",           "confidence": CONFIRMED},   # m2 §2.10 防雷（balance_sheet 派生）；G29 校验
         ],
         "consumers": {
             "data.pe_ttm": ["m5"], "data.pb": ["m5"],
@@ -445,10 +454,11 @@ SCENES = {
             "data.gross_margin_calc": ["m2"],
             "data.has_overseas_exposure": ["G17"],
             "data.reported_overseas_pct": ["m25"],
+            "data.asset_safety": ["m2:246", "G29"],
         },
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["s1_financial", "futu_overview", "futu_forecast", "s36_annual_analysis"],   # ★顺序敏感（s36=D6 源）
+        "depends_on": ["s1_financial", "valuation_snapshot", "consensus_forecast", "s36_annual_analysis"],   # ★顺序敏感（s36=D6 源）
         "fallback": {},
         "cacheable": False,
         "derived": True,

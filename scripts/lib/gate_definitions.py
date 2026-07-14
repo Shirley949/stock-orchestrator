@@ -49,6 +49,7 @@ GATE_DESCS = {
     "G26": "资金流向完整性（四档资金分布数据可用+报告已消费）",
     "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
     "G28": "杜邦数据存在+三因子闭合（dupont.status=ok + 残差<0.25pp；金融股豁免；硬校验）",
+    "G29": "资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）",
 }
 
 GATE_WEIGHTS = {
@@ -64,9 +65,10 @@ GATE_WEIGHTS = {
     "G26": 2,  # 资金流向完整性
     "G27": 1,  # 财务指标+同比预计算一致性（Soft，单独不阻塞）
     "G28": 1,  # 杜邦三因子闭合（Soft，单独不阻塞；硬校验失败=真FAIL）
+    "G29": 2,  # 资产安全完整性（Soft，单独不阻塞；有数据漏写/无数据编造=FAIL）
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 29)]
+ALL_GATES = [f"G{i}" for i in range(1, 30)]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -77,7 +79,7 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28"]
+SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -86,7 +88,7 @@ SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全部 28 Gate 实跑",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 29 Gate 实跑",
         "gates": ALL_GATES,
         # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
         # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
@@ -401,7 +403,9 @@ def check_g15(report: str, data: dict) -> bool:
 
 def _extract_contract_liab(data: dict):
     """从 snapshot 资产负债表提取最新合同负债值（元，float 或 None）。"""
-    bs = _snapshot_get(data, "s1_financial.data.balance_sheet.data_full")
+    # data 优先 + data_full 兜底（对齐 G6/G8 范式；修正只读 data_full 导致 G16 从不命中）
+    bs = (_snapshot_get(data, "s1_financial.data.balance_sheet.data")
+          or _snapshot_get(data, "s1_financial.data.balance_sheet.data_full"))
     if not bs or not isinstance(bs, list):
         return None
     for row in bs:
@@ -538,10 +542,13 @@ def check_g21(report: str, data: dict) -> bool:
     snapshot = data
     snapshot_pattern = r'\[src:\s*snapshot\.([^\]]+)\]'
     websearch_pattern = r'\[src:\s*websearch\s+([^\]]+)\]'
+    # 容错：无 snapshot. 前缀但匹配合法 scene 命名的 [src:]（旧文档/作者笔误），计入不报错
+    bare_scene_pattern = r'\[src:\s*((?:s\d+_\w+|valuation_\w+|consensus_forecast|computed_metrics|s36_\w+|s55_\w+)\.[^\]]+)\]'
 
     snapshot_tags = list(re.finditer(snapshot_pattern, report))
     websearch_tags = list(re.finditer(websearch_pattern, report))
-    all_tags = snapshot_tags + websearch_tags
+    bare_tags = list(re.finditer(bare_scene_pattern, report))
+    all_tags = snapshot_tags + websearch_tags + bare_tags
 
     if not all_tags:
         return False
@@ -549,14 +556,15 @@ def check_g21(report: str, data: dict) -> bool:
     # P1-1 fix: snapshot 为空时降级 — 只接受 websearch 标记 >= 2 个
     # Gap-3 fix: 不接受 snapshot 标记（snapshot 为空时无法验证路径）
     if not snapshot or snapshot == {}:
-        # 只接受 websearch 标记，不接受 snapshot 标记
-        websearch_only = [t for t in all_tags if t not in snapshot_tags]
+        # 只接受 websearch 标记，不接受 snapshot/bare 标记
+        websearch_only = [t for t in all_tags if t not in snapshot_tags and t not in bare_tags]
         return len(websearch_only) >= 2
 
-    # 正常模式：有 snapshot 标记时验证路径
+    # 正常模式：snapshot. 标记 + bare scene 标记都按 snapshot 子路径验证
     path_failures = []
-    if snapshot_tags:
-        for match in snapshot_tags:
+    verified_snapshot_like = snapshot_tags + bare_tags
+    if verified_snapshot_like:
+        for match in verified_snapshot_like:
             path = match.group(1)
             parts = path.split(".")
             current = snapshot
@@ -653,7 +661,12 @@ def check_g25(report: str, data: dict) -> bool:
 
 def check_g26(report: str, data: dict) -> bool:
     """G26: 资金流向完整性（四档资金分布数据可用+报告已消费）
-    
+
+    数据源：westock fund flow（腾讯源）。westock 给每档净额，runner 按正负拆分 in/out，
+    故 items 4 档 + status=ok 自动满足（不再因外部限流而 FAIL）。
+    富字段（trend_5d/10d/20d、rank_market/rank_industry、circ_rate）由 m10 报告消费，
+    但**不计入本 gate**——缺富字段不阻断（避免新源偶发缺字段致 G26 更脆）。
+
     验证点：
     1. snapshot 中 s3_fund_flow.data.fund_flow.status == "ok"
     2. fund_flow.items 包含 4 档数据（特大单/大单/中单/小单）
@@ -742,6 +755,25 @@ def check_g28(report: str, data: dict) -> bool:
         return False
 
 
+def check_g29(report: str, data: dict) -> bool:
+    """G29: 资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）。
+
+    范式同 G26：snapshot 有 asset_safety(status=ok) → 报告必须消费关键数值/比率；
+    snapshot 缺失(status=degraded) → 报告可跳过但不许编造具体数值。
+    三路径：正确数据+消费=PASS；缺失+不编造=PASS；有数据漏写=FAIL；无数据编造数值=FAIL。
+    weight 2, SOFT, auto_pass（quick 模式跳过）。
+    """
+    am = _snapshot_get(data, "computed_metrics.asset_safety")
+    has_data = isinstance(am, dict) and am.get("status") == "ok"
+    consumes = bool(re.search(r"(货币资金|有息负债|商誉占比?|cash_to_debt|资产负债率|资产负债结构)", report))
+    if has_data and not consumes:
+        return False
+    # 无数据却编造具体数值（货币资金/有息负债：XX亿）→ FAIL
+    if not has_data and re.search(r"(货币资金|有息负债)\s*[：:]\s*[\d.]+\s*亿", report):
+        return False
+    return True
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
@@ -751,6 +783,7 @@ GATE_CHECKERS = {
     "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
     "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
     "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
+    "G29": check_g29,
 }
 
 
@@ -789,7 +822,7 @@ _EXPECTED_SCENES = [
     ("s1_financial.data.cash_flow", "财报-现金流"),
     ("s2_quote_kline", "行情K线"),
     ("s3_fund_flow.data.fund_flow", "资金流向"),
-    ("futu_overview.data.analystRating", "机构评级"),
+    ("valuation_snapshot.data.analystRating", "机构评级"),
     ("s55_industry", "行业"),
     ("s6_macro.data.pmi", "宏观"),
     ("s5_events.data.news", "事件新闻"),
@@ -833,7 +866,7 @@ def _scene_has_data(val) -> bool:
             return True
 
         # Gap-1 fix: 裸 error 信封（无 status/data，仅含 error 键）→ 视为无数据
-        # 例：futu_overview.data.analystRating = {"error":"Expecting value..."}
+        # 例：valuation_snapshot.data.analystRating = {"error":"Expecting value..."}
         if "error" in val and "status" not in val and "data" not in val:
             return False
 
@@ -860,11 +893,12 @@ def compute_self_score(report: str, data: dict, gate_result: dict) -> dict:
     # Dim 2: gate pass（复用引擎分数）
     gate_pct = gate_result.get("score", 0)
 
-    # Dim 3: source traceability
+    # Dim 3: source traceability（snapshot. 严匹配 + bare scene 容错均计入分子）
     snap_tags = len(re.findall(r'\[src:\s*snapshot\.', report))
+    bare_tags = len(re.findall(r'\[src:\s*(?:s\d+_\w+|valuation_\w+|consensus_forecast|computed_metrics|s36_\w+|s55_\w+)\.', report))
     web_tags = len(re.findall(r'\[src:\s*websearch', report))
-    total_tags = snap_tags + web_tags
-    src_pct = round(snap_tags / total_tags * 100) if total_tags else 0
+    total_tags = snap_tags + bare_tags + web_tags
+    src_pct = round((snap_tags + bare_tags) / total_tags * 100) if total_tags else 0
 
     score = round(coverage_pct * 0.4 + gate_pct * 0.4 + src_pct * 0.2)
     return {
@@ -873,7 +907,7 @@ def compute_self_score(report: str, data: dict, gate_result: dict) -> dict:
             "data_coverage": {"score": coverage_pct, "hit": hit, "total": len(_EXPECTED_SCENES)},
             "gate_pass": {"score": gate_pct},
             "source_traceability": {"score": src_pct, "snapshot_tags": snap_tags,
-                                    "websearch_tags": web_tags},
+                                    "bare_scene_tags": bare_tags, "websearch_tags": web_tags},
         },
         "weights": {"data_coverage": 0.4, "gate_pass": 0.4, "source_traceability": 0.2},
         "rubric_version": "v2.1-script",

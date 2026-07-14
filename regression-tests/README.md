@@ -20,8 +20,8 @@ bash run_regression.sh
 两道防线：
 1. **契约 CI** 跑真实注册表 → 必须 0 error（orphan/brokenConsumer 是 hard）。
 2. **反例测试** 证明 CI 自身能抓违例（伪注册表注入 orphan/broken/coverage_only…），
-   且锁定已知 warn 暴露面（s55 coverage_only、priceHighest_52week consumed=False、
-   7 项 non_confirmed 断链候选）——防 regression 把该暴露的问题静默吞掉。
+   且锁定已知 warn 暴露面（s55 coverage_only、s3_fund_flow items name、
+   s5_events/s35 non_confirmed 断链候选）——防 regression 把该暴露的问题静默吞掉。
 
 ## 何时跑
 
@@ -31,12 +31,12 @@ bash run_regression.sh
 
 ## 边界（这套 pact 不管）
 
-运行时回归在 `gate-audit-20260704/fixtures/`，改 runner/gate/futu_client 后另跑：
+westock_client + fetcher reshape 形状回归在 `financial-data-routing/test_westock_integration.py`
+（已纳入 run_regression.sh 契约层）。运行时 gate 回归在 `gate-audit-20260704/fixtures/`
+（gate-audit 工作区在线时跑）：
 
 | 那套 fixture | 管什么 |
 |---|---|
-| `test_futu_call_api.py` | futu_client 限流嗅探 / 缓存 / 熔断（离线） |
-| `test_futu_fetchers_regression.py` | fetch_futu_overview/forecast 形状 + throttled 降级 |
 | `test_gate_throttled.py` | 10 份冻结 snapshot self_score delta |
 | `gate_fixture_test.py` | 27-gate verdict 0 漏报总闸 |
 

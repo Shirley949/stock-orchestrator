@@ -141,9 +141,6 @@ class RealRegistry(unittest.TestCase):
         keys = {(f.check, f.scene, f.path) for f in self.warns}
         must = [
             ("orphan_produces", "s55_industry", "data"),
-            ("orphan_produces", "futu_overview", "data.quote.priceHighest_52week"),
-            ("orphan_produces", "futu_overview", "data.quote.priceLowest_52week"),
-            ("non_confirmed", "futu_overview", "data.targetPrice.targetInfo.average"),
             ("non_confirmed", "s3_fund_flow", "data.fund_flow.items[].name"),
             ("non_confirmed", "s5_events", "data.news.data_full[].新闻内容"),
             ("non_confirmed", "s35_research_reports", "data.layer1.eps_consensus.current.mean"),
@@ -154,7 +151,7 @@ class RealRegistry(unittest.TestCase):
     def test_consumed_scenes_excludes_s55(self):
         """get_consumed_scenes() 排除 consumers={} 的 scene（S5 '消费才覆盖' 前置语义）。"""
         consumed = dc.get_consumed_scenes()
-        self.assertIn("futu_forecast", consumed)
+        self.assertIn("consensus_forecast", consumed)
         self.assertNotIn("s55_industry", consumed, "s55 无消费者，不应计入 consumed")
 
 

@@ -109,7 +109,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
    - K线: 新浪K线API (curl, datalen=60)
    - 机构EPS: AkShare stock_profit_forecast_ths
    - 技术指标: 自算(新浪K线+Python)
-   - **富途数据**: futu_client.py（分析师评级/目标价/资金分布/财报预测）；⚠️ 三大表/主营构成已于 2026-07-03 移出 s1 流程（改同花顺三表+sina补全+zygc_em），futu_client 库仍保留这些端点能力
+   - **westock 数据**: westock_client.py（分析师评级/目标价/资金流/年度预测/EBIT 实际值，腾讯源 npx CLI，无限流）；估值 PE/PB/总市值用 akshare baidu（scene：`valuation_snapshot` / `consensus_forecast`）
    - API模板: `financial-data-routing/references/api-templates/`
 3. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发
 
