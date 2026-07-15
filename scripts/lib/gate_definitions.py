@@ -2,7 +2,7 @@
 """
 gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
 
-仓库内唯一的 Gate 定义源（G1, G6–G29, G30，共 26）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
+仓库内唯一的 Gate 定义源（G1, G6–G29, G30, G31，共 27）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
 本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
 PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
 数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
