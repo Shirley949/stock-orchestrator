@@ -70,7 +70,7 @@ verify_gates.py 返回 failed_gates → 分类处理
 | G14 | 重拉 s2_quote_kline | 补写 m3 |
 | G15, G18 | 重拉 s11_peer | 补写 m5 |
 | G16, G17, G19 | 重拉 s12_orders | 补写 m25 |
-| G1~G5, G11~G13, G20, G21 | **不重拉数据** | 补写对应模块 |
+| G1, G30, G11~G13, G20, G21 | **不重拉数据** | 补写 m6 capstone / 对应模块 |
 
 ### 重做执行步骤
 

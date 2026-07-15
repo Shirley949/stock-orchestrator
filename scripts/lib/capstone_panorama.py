@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""
+capstone_panorama.py — 综合研判 capstone 的「证据全景」helper（LLM 写作期工具）
+
+设计哲学（lucky-petting-rabbit.md C）：LLM 负责权衡+裁决，结构负责完整+诚实。
+本 helper 只做两件事，绝不替 LLM 算答案：
+  1. panorama(snapshot) —— 从 snapshot 抽各量化维度的【值】+ 适用性 flag + gap 标注，
+     渲染成"证据全景"草稿表，供 LLM 写 Layer1。只抽值，不打分、不映射概率、不预填方向。
+  2. panorama_advisory(report, snapshot) —— #7 软一致性提示：自列证据明显倾向 X、
+     裁决却 Y → 标记"请明示理由"。不计入 gate verdict（engine 无 warning 通道，故为写作期）。
+
+自包含（自带 _snapshot_get / _scene_has_data），不依赖 gate_definitions，避免循环 import。
+读三表/derived 双兜底（CLAUDE.md 硬规则）。
+
+CLI:
+  python capstone_panorama.py --snapshot S.json                # 输出证据全景草稿
+  python capstone_panorama.py --snapshot S.json --report R.md  # 草稿 + #7 软提示
+"""
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+
+# ============================================================
+# 自包含 snapshot 读取（与 gate_definitions 同语义，避免循环 import）
+# ============================================================
+
+def _snapshot_get(data: dict, path: str):
+    parts = path.split(".")
+    cur = data
+    for p in parts:
+        if isinstance(cur, dict):
+            cur = cur.get(p)
+        elif isinstance(cur, list) and p.isdigit():
+            cur = cur[int(p)] if int(p) < len(cur) else None
+        else:
+            return None
+    return cur
+
+
+def _scene_has_data(val) -> bool:
+    """判断 scene 值是否真有数据（envelope status / data·data_full / 空数组）。与 gate_definitions 同语义。"""
+    if val is None:
+        return False
+    if isinstance(val, str):
+        return val.strip() != ""
+    if isinstance(val, dict):
+        if val.get("status") in ("failed", "error", "throttled"):
+            return False
+        dd = val.get("data", val.get("data_full"))
+        if isinstance(dd, dict):
+            if dd.get("status") in ("failed", "error", "throttled"):
+                return False
+            return bool(dd)
+        if isinstance(dd, list):
+            return len(dd) > 0
+        if val.get("status") in ("ok", "partial"):
+            return True
+        if "error" in val and "status" not in val and "data" not in val:
+            return False
+        return bool(val)
+    if isinstance(val, list):
+        return len(val) > 0
+    return bool(val)
+
+
+def _rows(section):
+    """三表/derived 双兜底取行（CLAUDE.md 硬规则）。"""
+    if not isinstance(section, dict):
+        return []
+    return section.get("data", section.get("data_full", [])) or []
+
+
+# ============================================================
+# 维度注册表（plan Layer1）—— 单一真相源：量化维度→snapshot 路径 + 报告关键词
+# ⚠️ gate_definitions.check_g30 的 CAPSTONE_DIM_PATHS 须与本表路径保持一致
+# ============================================================
+
+QUANT_THEMES = [
+    ("财务质量", ["s1_financial.data.financial_indicators", "s1_financial.data.dupont"],
+     ["ROE", "净资产收益率", "净利率", "毛利率", "杜邦", "周转率", "权益乘数", "扣非", "盈利能力"]),
+    ("成长性", ["s1_financial.data.income_statement", "s1_financial.data.balance_sheet"],
+     ["营收", "收入", "扣非", "合同负债", "增速", "增长", "拐点", "同比"]),
+    ("估值", ["valuation_snapshot.data.quote", "valuation_snapshot.data.targetPrice",
+            "valuation_snapshot.data.analystRating"],
+     ["PE", "PB", "估值", "分位", "目标价", "贵", "便宜", "市盈", "市净"]),
+    ("资产安全", ["computed_metrics.asset_safety"],
+     ["货币资金", "有息负债", "商誉", "负债率", "资产负债", "cash_to_debt", "资金链", "现金"]),
+    ("技术资金筹码", ["s3_fund_flow.data.fund_flow", "s2_quote_kline", "s8_a_share"],
+     ["信号", "资金流", "资金", "筹码", "股东户数", "K线", "均线", "支撑", "阻力", "换手"]),
+    ("前瞻预期", ["consensus_forecast", "valuation_snapshot.data.analystRating",
+                "s55_industry", "s6_macro.data.pmi"],
+     ["一致预期", "评级", "催化", "景气", "预期", "预测", "研报", "目标", "展望"]),
+]
+
+QUAL_THEMES = [
+    ("护城河", ["护城河", "壁垒", "龙头", "垄断", "品牌", "网络效应", "转换成本",
+              "规模优势", "技术优势", "市占率", "定价权", "专利", "客户粘性"]),
+    ("治理战略", ["治理", "管理层", "股权", "战略", "激励", "质押", "控股",
+                "执行力", "国企", "民企", "股东结构", "董监高"]),
+    ("前瞻催化", ["前瞻", "预期", "催化", "景气", "趋势", "展望", "未来",
+                "成长空间", "渗透率", "国产替代", "新产品", "扩产"]),
+]
+
+QUANT_KW = {t: kw for t, _, kw in QUANT_THEMES}
+QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
+
+
+# ============================================================
+# panorama —— 抽值（不打分）+ gap + 适用性 flag
+# ============================================================
+
+def _yi(v):
+    try:
+        return f"{float(v) / 1e8:.2f}亿"
+    except (TypeError, ValueError):
+        return None
+
+
+def panorama(data: dict) -> dict:
+    """读 snapshot → 证据全景结构（只抽值，不映射概率/方向）。"""
+    out = {
+        "present_quant": [], "gap_quant": [],
+        "qual_required": [t for t, _ in QUAL_THEMES],
+        "values": {}, "interpretation_flags": [], "draft_lines": [],
+        "stock_type": _snapshot_get(data, "classification.primary_type") or _snapshot_get(data, "stock_type"),
+    }
+
+    for theme, paths, _ in QUANT_THEMES:
+        present = any(_scene_has_data(_snapshot_get(data, p)) for p in paths)
+        (out["present_quant"] if present else out["gap_quant"]).append(theme)
+
+    # ---- 抽关键值 + 适用性/解读 flag（供 LLM 正确解读，非打分）----
+    inc = _snapshot_get(data, "s1_financial.data.income_statement")
+    r0 = (_rows(inc)[0] if _rows(inc) else {}) or {}
+    if r0:
+        out["values"]["income"] = {
+            "报告期": r0.get("报告日"),
+            "营业总收入": _yi(r0.get("营业总收入")),
+            "归母净利润": _yi(r0.get("归属于母公司所有者的净利润")),
+            "扣非净利润": _yi(r0.get("扣非净利润")),
+        }
+
+    fi = _snapshot_get(data, "s1_financial.data.financial_indicators")
+    fi_rows = _rows(fi)
+    roe_row = next((r for r in fi_rows if "净资产收益率" in str(r.get("指标", ""))), None)
+    if roe_row:
+        cols = [k for k in roe_row.keys() if k != "指标"]
+        latest = cols[0] if cols else None
+        out["values"]["ROE"] = {"period": latest, "value": roe_row.get(latest)}
+        # 期间 flag：单季 ROE 勿直接当全年盈利能力
+        if latest and str(latest).endswith("0331"):
+            try:
+                if float(roe_row.get(latest)) < 5:
+                    out["interpretation_flags"].append(
+                        f"ROE={roe_row.get(latest)}% 取自 {latest}（疑似单季非年化，解读时勿直接当全年盈利能力低）")
+            except (TypeError, ValueError):
+                pass
+
+    am = _snapshot_get(data, "computed_metrics.asset_safety")
+    if isinstance(am, dict) and am.get("status") == "ok":
+        out["values"]["asset_safety"] = {
+            "level": am.get("level"), "cash_to_debt": am.get("cash_to_debt"),
+            "applicable": am.get("cash_to_debt_applicable"),
+            "equity_multiplier": am.get("equity_multiplier"),
+            "flags": am.get("flags"),
+        }
+        # 类型解读 flag：高杠杆须按 stock_type 解读（金融股常态，非利空）
+        try:
+            if am.get("equity_multiplier") and float(am["equity_multiplier"]) > 6:
+                out["interpretation_flags"].append(
+                    f"权益乘数={am.get('equity_multiplier')} 偏高，须按 stock_type 解读"
+                    f"（金融股高杠杆为常态，非利空）")
+        except (TypeError, ValueError):
+            pass
+
+    vs = _snapshot_get(data, "valuation_snapshot.data") or {}
+    if isinstance(vs, dict):
+        tp = vs.get("targetPrice")
+        ar = vs.get("analystRating")
+        if isinstance(tp, dict) and tp.get("average"):
+            out["values"]["targetPrice"] = tp.get("average")
+        if isinstance(ar, dict) and ar.get("institutionCnt"):
+            out["values"]["analystRating"] = f"买入{ar.get('buy_ratio', 0):.0f}%/机构{ar.get('institutionCnt')}家"
+
+    # ---- 渲染证据全景草稿表（Layer1）----
+    _render_draft(out, data)
+    return out
+
+
+def _render_draft(out: dict, data: dict) -> None:
+    """生成 Layer1 证据全景草稿 markdown 行（LLM 在此基础上补定性 + 自己判断方向）。"""
+    L = out["draft_lines"]
+    L.append("#### 证据全景（helper 抽值草稿——只列值与 gap，方向/权重由你判断）")
+    v = out["values"]
+    if v.get("income"):
+        L.append(f"- 财务质量/成长性：{v['income'].get('报告期','')} 营收 {v['income'].get('营业总收入')}，"
+                 f"归母 {v['income'].get('归母净利润')}，扣非 {v['income'].get('扣非净利润')}；"
+                 f"ROE {v.get('ROE',{}).get('value')}%（{v.get('ROE',{}).get('period','')}）。")
+    if v.get("asset_safety"):
+        a = v["asset_safety"]
+        L.append(f"- 资产安全：cash_to_debt {a.get('cash_to_debt')}（{a.get('level')}，"
+                 f"applicable={a.get('applicable')}）权益乘数 {a.get('equity_multiplier')}。")
+    if v.get("targetPrice") or v.get("analystRating"):
+        L.append(f"- 估值/前瞻：目标价 {v.get('targetPrice','—')}，评级 {v.get('analystRating','—')}。")
+    if out["gap_quant"]:
+        L.append(f"- ⚠️ 数据 gap（m8 须披露；反片面 gate 豁免）：{out['gap_quant']} 无 snapshot 数据。")
+    L.append("- 定性（你须从 m1–m9 叙事提炼，机械模型丢失的关键）：护城河 / 治理战略 / 前瞻催化。")
+    for f in out["interpretation_flags"]:
+        L.append(f"- 🔎 解读提示：{f}")
+
+
+# ============================================================
+# #7 软一致性提示（写作期，不计入 gate verdict）
+# ============================================================
+
+def panorama_advisory(report: str, data: dict) -> list:
+    """#7：自列证据明显倾向 X、裁决却 Y → 仅标记请复核。engine 无 warning 通道，故为写作期建议。"""
+    adv = []
+    if not report:
+        return adv
+    # 定位综合研判章节
+    cap = _find_capstone(report)
+    bull = sum(cap.count(w) for w in ["拐点", "增长", "突破", "景气", "放量", "超预期", "龙头", "壁垒"])
+    bear = sum(cap.count(w) for w in ["下滑", "下降", "萎缩", "亏损", "紧张", "高估", "跌破", "疲软"])
+    top = _top_scenario(cap)
+    if top:
+        top_label, top_p = top
+        if bull - bear >= 6 and "悲观" in top_label:
+            adv.append(f"#7[软] 证据明显偏多(看多词{bull}>>看空词{bear}) 但最高概率情景={top_label}({top_p}%)，"
+                       f"请明示偏谨慎裁决的理由（如估值已贵/前瞻催化不确定）。")
+        elif bear - bull >= 6 and "乐观" in top_label:
+            adv.append(f"#7[软] 证据明显偏空(看空词{bear}>>看多词{bull}) 但最高概率情景={top_label}({top_p}%)，"
+                       f"请明示偏乐观裁决的理由。")
+    return adv
+
+
+def _find_capstone(report: str) -> str:
+    m = re.search(r"^#{1,4}\s.*(?:综合研判|情景|三档|概率|研判)", report, re.MULTILINE)
+    if not m:
+        return report
+    return report[m.start():]
+
+
+def _top_scenario(cap: str):
+    """最高概率情景 (label, prob)，锚定行首情景声明。"""
+    hdrs = list(re.finditer(
+        r"^[ \t]*[#*|\-]*[ \t]*(乐观|基准|中性|悲观)[^%\n]{0,15}?(\d+(?:\.\d+)?)\s*%", cap, re.MULTILINE))
+    if not hdrs:
+        return None
+    return max(((m.group(1), float(m.group(2))) for m in hdrs), key=lambda x: x[1])
+
+
+# ============================================================
+# CLI
+# ============================================================
+
+def main():
+    ap = argparse.ArgumentParser(description="综合研判 capstone 证据全景 helper（写作期工具）")
+    ap.add_argument("--snapshot", required=True, help="snapshot.json 路径")
+    ap.add_argument("--report", help="报告 .md（提供则额外给 #7 软提示）")
+    args = ap.parse_args()
+
+    data = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+    pan = panorama(data)
+    print("\n".join(pan["draft_lines"]))
+    print(f"\n[present 维度须全覆盖: {pan['present_quant']}; gap 已豁免: {pan['gap_quant']}; "
+          f"定性须覆盖: {pan['qual_required']}]")
+    if args.report:
+        rpt = Path(args.report).read_text(encoding="utf-8")
+        adv = panorama_advisory(rpt, data)
+        print("\n--- #7 软一致性提示（不计入 gate，仅请复核）---")
+        print("\n".join(adv) if adv else "（无）")
+
+
+if __name__ == "__main__":
+    main()
