@@ -2,7 +2,7 @@
 """
 gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
 
-仓库内唯一的 Gate 定义源（G1-G27）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
+仓库内唯一的 Gate 定义源（G1, G6–G29, G30，共 26）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
 本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
 PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
 数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
@@ -16,16 +16,16 @@ PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_
 
 import re
 
+from capstone_panorama import panorama as _cap_panorama  # noqa: E402
+from capstone_panorama import QUAL_KW as _CAP_QUAL_KW  # noqa: E402
+from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
+
 # ============================================================
 # Gate 定义
 # ============================================================
 
 GATE_DESCS = {
     "G1": "信号矩阵完整性（≥8行×3列：短/中/长）",
-    "G2": "情景概率闭合（三档概率=100%，允许±1%）",
-    "G3": "决策树结构（≥3分支+1默认，每分支带触发条件+仓位+止损位）",
-    "G4": "决策↔信号一致（信号矛盾→决策树默认'不操作'）",
-    "G5": "决策↔情景一致（主分支≥20%→乐观+基准≥60%）",
     "G6": "季报连续性（≥6个连续季度数据）",
     "G7": "扣非对比（净利润/扣非/差额%三列已展示）",
     "G8": "现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）",
@@ -33,7 +33,7 @@ GATE_DESCS = {
     "G10": "事件扫描完成（高优8类+低优10类，每类有状态标记）",
     "G11": "数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）",
     "G12": "局限性披露（≥3条具体局限）",
-    "G13": "持仓↔决策一致（若用户提供持仓信息，决策树应考虑持仓语境）",
+    "G13": "持仓↔决策一致（若用户提供持仓信息，操作建议应考虑持仓语境）",
     "G14": "TD逐根展示（TD计数表≥9行+结论）",
     "G15": "同业对比（≥2家可比公司+≥4指标）",
     "G16": "订单Layer6核对（合同负债核对偏差≤15%；销量/海外收入核对已跳过）",
@@ -50,10 +50,12 @@ GATE_DESCS = {
     "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
     "G28": "杜邦数据存在+三因子闭合（dupont.status=ok + 残差<0.25pp；金融股豁免；硬校验）",
     "G29": "资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）",
+    "G30": "综合研判完整性（证据全景全维+反方诚实+概率闭合+情景-动作一致）",
+    "G31": "估值数据有效性（quote.peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计'有数据'）",
 }
 
 GATE_WEIGHTS = {
-    "G1": 2, "G2": 2, "G3": 2, "G4": 2, "G5": 2,
+    "G1": 2,
     "G6": 2, "G7": 2, "G8": 2, "G9": 2, "G10": 2,
     "G11": 1, "G12": 2, "G13": 2, "G14": 2, "G15": 2,
     "G16": 2, "G17": 3, "G18": 2, "G19": 3,     "G20": 2,
@@ -66,20 +68,23 @@ GATE_WEIGHTS = {
     "G27": 1,  # 财务指标+同比预计算一致性（Soft，单独不阻塞）
     "G28": 1,  # 杜邦三因子闭合（Soft，单独不阻塞；硬校验失败=真FAIL）
     "G29": 2,  # 资产安全完整性（Soft，单独不阻塞；有数据漏写/无数据编造=FAIL）
+    "G30": 4,  # 综合研判完整性（capstone 硬关卡，weight≥3 → FAIL 阻塞输出）
+    "G31": 1,  # 估值数据有效性（Soft，单独不阻塞；覆盖率<2/3 仅扣 gate_pass 分）
 }
 
-ALL_GATES = [f"G{i}" for i in range(1, 30)]
+# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31（共 27）
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
 # ============================================================
 
 # Tier 1: Hard Gates — 数据完整性, Python 可验证, FAIL 阻塞输出
-HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", "G26"]
+HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", "G26", "G30"]
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29"]
+SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29", "G31"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -88,7 +93,7 @@ SOFT_GATES = ["G1", "G2", "G3", "G4", "G5", "G10", "G12", "G13", "G14", "G15", "
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全部 29 Gate 实跑",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 27 Gate 实跑",
         "gates": ALL_GATES,
         # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
         # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
@@ -100,8 +105,8 @@ PROFILES = {
     "profile_quick": {
         "name": "quick",
         "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
-        "gates": ["G1", "G3", "G4", "G11", "G13"],
-        "auto_pass": ["G2", "G5", "G6", "G7", "G8", "G9", "G10", "G12",
+        "gates": ["G1", "G30", "G11", "G13"],
+        "auto_pass": ["G6", "G7", "G8", "G9", "G10", "G12",
                       "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26", "G27", "G28"],
         "fail_threshold": 2,
     },
@@ -150,68 +155,6 @@ def check_g1(report: str, data: dict) -> bool:
     matrix_rows = _count_pattern(report, r'[│|].*[│|].*[│|]')  # 表格行
     table_rows = _count_pattern(report, r'^\s*\|.*\|.*\|', )  # markdown 表格行
     return matrix_rows >= 8 or table_rows >= 8
-
-
-def check_g2(report: str, data: dict) -> bool:
-    """G2: 情景概率闭合（三档概率=100%，允许±1%）"""
-    if "情景" not in report and "概率" not in report:
-        return False
-    has_scenarios = any(kw in report for kw in ["乐观", "悲观", "中性", "基准", "悲观情景", "乐观情景"])
-    if not has_scenarios:
-        return False
-    # 只在"情景"章节内取百分比，避免后续章节的百分比污染
-    # 找最后一个"情景"出现位置（跳过"模块九：情景概率"标题，取实际表格）
-    idx = report.rfind('情景')
-    remaining = report[idx:]
-    lines = remaining.split('\n')
-    section_lines = []
-    for i, line in enumerate(lines):
-        if i > 0 and (line.startswith('### ') or line.strip() == '---'):
-            break
-        section_lines.append(line)
-    section = '\n'.join(section_lines)
-    percentages = re.findall(r'(\d+(?:\.\d+)?)\s*%', section)
-    if len(percentages) >= 3:
-        # 取前3个百分比（乐观/基准/悲观），而不是最后3个
-        first_three = [float(p) for p in percentages[:3]]
-        total = sum(first_three)
-        if 99 <= total <= 101:
-            return True
-        return False
-    return len(percentages) >= 2
-
-
-def check_g3(report: str, data: dict) -> bool:
-    """G3: 决策树结构（≥3分支+1默认，每分支带触发条件+仓位+止损位）"""
-    if "决策" not in report:
-        return False
-    # 放宽正则：支持多种决策树格式
-    branch_patterns = [
-        r'分支\s*\d', r'方案\s*\d', r'若触发', r'若回踩', r'若发生',
-        r'├─\s*若', r'情景\s*\d', r'Branch\s*\d',
-    ]
-    branches = sum(_count_pattern(report, p) for p in branch_patterns)
-    has_position = "仓位" in report or "持仓" in report
-    has_stop = "止损" in report
-    return branches >= 3 and has_position and has_stop
-
-
-def check_g4(report: str, data: dict) -> bool:
-    """G4: 决策↔信号一致（信号矛盾→决策树默认'不操作'）"""
-    if "决策" not in report or "信号" not in report:
-        return False
-    # 如果有"信号矛盾"关键词，检查是否有"不操作"或"观望"
-    if "矛盾" in report or "冲突" in report:
-        return "不操作" in report or "观望" in report or "持有" in report
-    return True  # 无矛盾信号则通过
-
-
-def check_g5(report: str, data: dict) -> bool:
-    """G5: 决策↔情景一致（主分支≥20%→乐观+基准≥60%）"""
-    if "情景" not in report or "决策" not in report:
-        return False
-    # 检查是否有乐观+基准概率
-    return "乐观" in report and ("基准" in report or "中性" in report)
 
 
 def check_g6(report: str, data: dict) -> bool:
@@ -374,7 +317,7 @@ def check_g12(report: str, data: dict) -> bool:
 
 
 def check_g13(report: str, data: dict) -> bool:
-    """G13: 持仓↔决策一致（若用户提供持仓信息，决策树应考虑持仓语境）"""
+    """G13: 持仓↔决策一致（若用户提供持仓信息，操作建议应考虑持仓语境）"""
     # 无持仓信息时 auto_pass
     if data.get("holding_status") is None:
         return True
@@ -788,16 +731,342 @@ def check_g29(report: str, data: dict) -> bool:
     return True
 
 
+# ============================================================
+# G30 综合研判 capstone（lucky-petting-rabbit.md C/D）
+# 设计哲学：LLM 负责权衡+裁决；结构只强制【完整+诚实】，绝不替 LLM 算答案。
+# #1–6 硬检查；#7 软一致性提示下沉为 capstone_panorama 写作期建议（engine 无 warning 通道）。
+# 证据全景维度/关键词以 capstone_panorama 为单一真相源（_cap_panorama / _CAP_*_KW）。
+# 章节定位锚定结构（行首情景标签+概率），不锚裸词——防散文污染（情景词出现在非情景上下文）。
+# ============================================================
+
+_G30_CAPSTONE_HEAD_RE = re.compile(r"^#{1,4}\s.*(?:综合研判|情景|三档|概率|研判)", re.MULTILINE)
+# 行首情景标签 + %（防"主情景(基准)概率40%"/"基准偏乐观"等散文污染）
+_G30_SCENARIO_HEADER_RE = re.compile(
+    r"^[ \t]*[#*|\-]*[ \t]*(乐观|基准|中性|悲观)[^%\n]{0,15}?(\d+(?:\.\d+)?)\s*%",
+    re.MULTILINE)
+# 表格行回退（Layer3 矩阵：| 乐观 | ... |，概率取行内首个 %）
+_G30_SCENARIO_TABLE_RE = re.compile(r"^[ \t]*\|\s*(乐观|基准|中性|悲观)\s*\|[^\n]*", re.MULTILINE)
+# 反方证据标记（#2 诚实硬要求）—— 覆盖真实研报常见表述
+_G30_COUNTER_MARKERS = ["须克服", "反方", "相反", "利空", "不利", "风险", "然而", "但是",
+                        "尽管", "不过", "隐患", "压制", "拖累", "担忧", "脆弱", "质疑",
+                        "逆风", "承压", "挑战", "压力", "不足", "偏弱", "受限", "掣肘"]
+_G30_ACTION_VERBS = ["加仓", "增持", "买入", "建仓", "减仓", "减持", "卖出", "清仓",
+                     "止损", "止盈", "持有", "观望", "不操作", "波段", "趋势持有", "空仓"]
+_G30_HOLD_VERBS = ["持有", "观望", "不操作", "波段", "趋势持有"]
+_G30_BEARISH_VERBS = ["减仓", "减持", "卖出", "清仓", "止损", "空仓"]
+_G30_BULLISH_VERBS = ["加仓", "增持", "买入", "建仓"]
+_G30_CONDITION_MARKERS = ["成立条件", "前提", "若", "触发", "假设", "一旦", "假如", "条件", "需满足"]
+
+
+def _g30_find_capstone(report: str) -> str:
+    """定位综合研判章节：从匹配标题到下一个同级/更高级标题/分隔符。找不到回退全文。"""
+    m = _G30_CAPSTONE_HEAD_RE.search(report)
+    if not m:
+        return report
+    start = m.start()
+    head_match = re.match(r"^(#+)", report[m.start():m.end()])
+    head_level = len(head_match.group(1)) if head_match else 4
+    rest = report[m.end():]
+    stop = len(rest)
+    for hm in re.finditer(r"^(#{1,4})\s+\S", rest, re.MULTILINE):
+        if len(hm.group(1)) <= head_level:
+            stop = hm.start()
+            break
+    dm = re.search(r"\n---\s*\n", rest[:stop])
+    if dm:
+        stop = min(stop, dm.start())
+    return report[start:m.end() + stop]
+
+
+def _g30_next_section_end(capstone: str, start: int) -> int:
+    """从 start 找下一个同级/更高级标题或硬分隔作为块尾（情景块不被后续章节污染）。"""
+    rest = capstone[start:]
+    m = re.search(r"\n#{1,4}\s|\n---\s*\n", rest)
+    return start + m.start() if m else len(capstone)
+
+
+def _g30_find_scenarios(capstone: str) -> list:
+    """结构化情景声明 → [(label, prob, block_text), ...]。优先行首情景标签，回退表格行。"""
+    hdrs = list(_G30_SCENARIO_HEADER_RE.finditer(capstone))
+    out = []
+    for i, m in enumerate(hdrs):
+        start = m.start()
+        end = hdrs[i + 1].start() if i + 1 < len(hdrs) else _g30_next_section_end(capstone, start)
+        out.append((m.group(1), float(m.group(2)), capstone[start:end]))
+    if out:
+        return out
+    for m in _G30_SCENARIO_TABLE_RE.finditer(capstone):
+        pm = re.search(r"(\d+(?:\.\d+)?)\s*%", m.group(0))
+        prob = float(pm.group(1)) if pm else 0.0
+        out.append((m.group(1), prob, m.group(0)))
+    return out
+
+
+def _g30_split_scenarios(capstone: str) -> list:
+    return [(lbl, blk) for lbl, _, blk in _g30_find_scenarios(capstone)]
+
+
+def _g30_scenario_probs(capstone: str) -> list:
+    return [p for _, p, _ in _g30_find_scenarios(capstone)]
+
+
+def _g30_theme_covered(text: str, kws: list) -> bool:
+    return any(k in text for k in kws)
+
+
+def _g30_first_action(scope: str):
+    """按文本位置取首个动作动词（非按列表序）——修"持有/逢低加仓"误取加仓。"""
+    found = [(scope.index(v), v) for v in _G30_ACTION_VERBS if v in scope]
+    return min(found)[1] if found else None
+
+
+def _g30_parse_matrix_table(capstone: str):
+    """情景矩阵表 → (rows, col_idx)；否则 None。列感知：标签在表头、内容在单元格。"""
+    lines = [l for l in capstone.splitlines() if l.strip().startswith("|")]
+    if len(lines) < 4:  # 表头 + 分隔 + ≥3 数据行
+        return None
+
+    def cells(l):
+        return [c.strip() for c in l.strip().strip("|").split("|")]
+
+    header = cells(lines[0])
+    col_idx = {}
+    for i, h in enumerate(header):
+        if any(k in h for k in ["情景", "方案"]) and "scenario" not in col_idx:
+            col_idx["scenario"] = i
+        elif any(k in h for k in ["成立条件", "前提"]) and "condition" not in col_idx:
+            col_idx["condition"] = i
+        elif "概率" in h and "prob" not in col_idx:
+            col_idx["prob"] = i
+        elif any(k in h for k in ["目标价", "价位"]) and "price" not in col_idx:
+            col_idx["price"] = i
+        elif any(k in h for k in ["应对", "动作", "操作"]) and "action" not in col_idx:
+            col_idx["action"] = i
+        elif any(k in h for k in ["反方", "风险", "须克服", "对立", "反驳", "利空", "隐忧", "逆风"]) and "counter" not in col_idx:
+            col_idx["counter"] = i
+    if "scenario" not in col_idx:
+        col_idx["scenario"] = 0
+
+    rows = []
+    for l in lines[2:]:  # 跳表头 + |---| 分隔行
+        c = cells(l)
+        if not c or all(not x for x in c):
+            continue
+        si = col_idx["scenario"]
+        label = c[si] if si < len(c) else c[0]
+        lab = next((x for x in ("乐观", "基准", "中性", "悲观") if x in label), None)
+        if not lab:
+            continue
+        row = {"_label": lab}
+        for key, i in col_idx.items():
+            if key == "scenario":
+                continue
+            row[key] = c[i].strip() if i < len(c) else ""
+        rows.append(row)
+    return (rows, col_idx) if len(rows) >= 3 else None
+
+
+def _g30_panorama_section(capstone: str) -> str:
+    """#1 覆盖判定范围：'证据全景'小节；找不到回退全文。
+    限定到该小节，避免情景块里'cash_to_debt'等顺带提及被误判为'已全景覆盖'。"""
+    m = re.search(r"^#{1,4}\s.*(?:证据全景|证据盘点|全景)", capstone, re.MULTILINE)
+    if not m:
+        return capstone
+    rest = capstone[m.end():]
+    nxt = re.search(r"^#{1,4}\s", rest, re.MULTILINE)
+    return capstone[m.start():m.end() + (nxt.start() if nxt else len(rest))]
+
+
+def _g30_action_class(v):
+    if v in _G30_BULLISH_VERBS:
+        return "bull"
+    if v in _G30_BEARISH_VERBS:
+        return "bear"
+    if v in _G30_HOLD_VERBS:
+        return "hold"
+    return None
+
+
+def _g30_extract_main_rec_action(capstone: str):
+    """从'投资建议/主推荐'行首句抽动作（隔离'评级 买入(N家)'等噪声）。"""
+    for line in capstone.splitlines():
+        if re.search(r"投资建议|主推荐|综合建议|操作建议|结论", line):
+            a = _g30_first_action(line.split("。")[0])
+            if a:
+                return a
+    return None
+
+
+def _g30_extract_top_scenario_action(capstone: str):
+    """最高概率情景的应对动作（主情景=最高概率情景）。表格从 action 列；散文从'应对'句。"""
+    tbl = _g30_parse_matrix_table(capstone)
+    scens = _g30_find_scenarios(capstone)
+    if not scens:
+        return None
+    top_label = max(scens, key=lambda x: x[1])[0]
+    if tbl:
+        rows, col_idx = tbl
+        if "action" in col_idx:
+            for r in rows:
+                if r["_label"] == top_label and r.get("action"):
+                    return _g30_first_action(r["action"]) or None
+        return None
+    top = next((b for lbl, _, b in scens if lbl == top_label), None)
+    if not top:
+        return None
+    m = re.search(r"应对[:：][^。]*", top)
+    return _g30_first_action(m.group(0) if m else top)
+
+
+def _g30_run(report: str, data: dict) -> dict:
+    """G30 内核：#1–6 硬检查，富返回 {passed, failed, reasons}。check_g30 取 passed(bool)。"""
+    failed = []
+    reasons = []
+    pan = _cap_panorama(data)
+    cap = _g30_find_capstone(report)
+
+    # ---- #1 完整性（反片面核心）—— 覆盖判定限定在'证据全景'小节 ----
+    cov = _g30_panorama_section(cap)
+    miss_quant = [t for t in pan["present_quant"]
+                  if not _g30_theme_covered(cov, _CAP_QUANT_KW[t])]
+    miss_qual = [t for t in pan["qual_required"]
+                 if not _g30_theme_covered(cov, _CAP_QUAL_KW[t])]
+    if miss_quant or miss_qual:
+        failed.append(1)
+        parts = []
+        if miss_quant:
+            parts.append(f"有数据未纳入(真片面): {miss_quant}")
+        if miss_qual:
+            parts.append(f"定性主题未覆盖: {miss_qual}")
+        reasons.append("#1 完整性 FAIL — " + "; ".join(parts)
+                       + (f"  [已豁免 gap 维度: {pan['gap_quant']}]" if pan["gap_quant"] else ""))
+
+    # ---- #2 诚实性（每情景须列反方证据）----
+    tbl = _g30_parse_matrix_table(cap)
+    blocks = _g30_split_scenarios(cap)
+    if tbl:  # 表格：列感知（查 counter 列存在 + 单元格非空）
+        rows_t, col_idx_t = tbl
+        if "counter" not in col_idx_t:
+            failed.append(2)
+            reasons.append("#2 诚实性 FAIL — 矩阵表缺'反方证据/风险'列")
+        else:
+            lacking = [r["_label"] for r in rows_t if not r.get("counter", "").strip()]
+            if lacking:
+                failed.append(2)
+                reasons.append(f"#2 诚实性 FAIL — 反方证据列单元格为空: {lacking}")
+    else:  # 散文：每情景块须含反方标记词
+        if len(blocks) < 3:
+            failed.append(2)
+            reasons.append(f"#2 诚实性 FAIL — 情景块不足 3 个（{len(blocks)}），无法逐情景校验")
+        else:
+            lacking = [lbl for lbl, blk in blocks
+                       if not any(m in blk for m in _G30_COUNTER_MARKERS)]
+            if lacking:
+                failed.append(2)
+                reasons.append(f"#2 诚实性 FAIL — 以下情景缺'须克服的反方证据': {lacking}")
+
+    # ---- #3 概率闭合（结构化情景概率，非 section 前 3 个 %）----
+    probs = _g30_scenario_probs(cap)
+    if len(probs) < 3:
+        failed.append(3)
+        reasons.append(f"#3 概率闭合 FAIL — 概率数不足 3 个（{probs}）")
+    else:
+        total = sum(probs[:3])
+        if not (99 <= total <= 101):
+            failed.append(3)
+            reasons.append(f"#3 概率闭合 FAIL — 前 3 概率和={total}（{probs[:3]}），不在 99–101")
+
+    # ---- #4 矩阵结构（每情景: 目标价+动作+成立条件; capstone≥2 证据引用）----
+    struct_fail = []
+    field_name = {"price": "目标价", "action": "应对动作", "condition": "成立条件"}
+    if tbl:
+        rows_t, col_idx_t = tbl
+        for r in rows_t:
+            miss = [field_name[k] for k in ("price", "action", "condition")
+                    if k not in col_idx_t or not r.get(k, "").strip()]
+            if miss:
+                struct_fail.append(f"{r['_label']}缺({'+'.join(miss)})")
+    else:
+        if len(blocks) < 3:
+            struct_fail.append("情景块不足3")
+        else:
+            for lbl, blk in blocks:
+                has_price = bool(re.search(r"(\d+(?:\.\d+)?)\s*(?:元|块|万亿|亿|千万|%|倍)", blk))
+                has_action = any(v in blk for v in _G30_ACTION_VERBS)
+                has_cond = any(c in blk for c in _G30_CONDITION_MARKERS)
+                miss = []
+                if not has_price:
+                    miss.append("目标价/数值")
+                if not has_action:
+                    miss.append("应对动作")
+                if not has_cond:
+                    miss.append("成立条件")
+                if miss:
+                    struct_fail.append(f"{lbl}缺({'+'.join(miss)})")
+    refs = len(re.findall(r"\[src:", cap)) + len(
+        re.findall(r"见\s*模块|见\s*m\d|前述|上述|如前所述|参见", cap))
+    if refs < 2:
+        struct_fail.append(f"证据引用不足2(仅{refs})")
+    if struct_fail:
+        failed.append(4)
+        reasons.append("#4 矩阵结构 FAIL — " + "; ".join(struct_fail))
+
+    # ---- #5 主情景(最高概率情景)动作 = 报告主推荐（动作分类须一致）----
+    main_action = _g30_extract_main_rec_action(cap)
+    top_action = _g30_extract_top_scenario_action(cap)
+    mc, tc = _g30_action_class(main_action), _g30_action_class(top_action)
+    if mc and tc and mc != tc:
+        failed.append(5)
+        reasons.append(f"#5 主情景一致 FAIL — 主推荐='{main_action}'({mc}) 与 "
+                       f"最高概率情景='{top_action}'({tc}) 动作分类不一致")
+
+    # ---- #6 信号矛盾 → 主推荐动作 = 持有/观望类 ----
+    if re.search(r"信号.{0,4}(矛盾|冲突)|(矛盾|冲突).{0,4}信号", cap) or "信号矛盾" in cap:
+        if mc != "hold":
+            failed.append(6)
+            reasons.append(f"#6 矛盾观望 FAIL — 报告称信号矛盾，但主推荐='{main_action}'({mc})"
+                           f" 非'持有/观望'类")
+
+    return {"passed": len(failed) == 0, "failed": failed, "reasons": reasons}
+
+
+def check_g30(report: str, data: dict) -> bool:
+    """G30: 综合研判 capstone 完整性+诚实性。
+    #1–6 硬检查（完整/诚实/概率闭合/矩阵结构/主情景一致/矛盾观望）。
+    #7 软一致性提示由 capstone_panorama 写作期给出，不计入 verdict。
+    返回 bool（engine verify_gates 以 `if ok:` 判定——返回非空 dict 会被当 truthy 永远 PASS）。"""
+    return _g30_run(report, data)["passed"]
+
+
+def check_g31(report: str, data: dict) -> bool:
+    """G31: 估值数据有效性（valuation_snapshot.data.quote 关键 L1 字段覆盖率）。
+
+    SOFT gate（weight 1，不在 HARD_GATES / 不进 fail_threshold 硬门）：失败仅拉低 gate_pass 分
+    （= self_score 扣分），不阻塞输出。与 P1 runner 层 `_validate_quote` 双闸——runner 在入 snapshot
+    前挡脏数据（第一道最有效闸），本 gate 在报告侧复核"数据有没有"，防御 cached/旧 snapshot 绕过自检。
+
+    检查 peTtm/pbRatio/totalMarketCap 三项关键 L1 字段非 None 覆盖率 ≥ 2/3。
+    ⚠️ 负值是有效信号非脏数据：亏损股负 PE（pe_is_loss）/破净 PB<1/资不抵债 PB<0 均 `_validate_quote`
+       保留原值，故 non-None 即计"有数据"——覆盖率衡量"拉到数据没"，不是"公司盈不盈利"。
+    valuation_snapshot 整体缺失或 quote 非 dict → FAIL（数据层硬缺失，非报告问题，但仍扣分提示重拉）。
+    """
+    quote = _snapshot_get(data, "valuation_snapshot.data.quote")
+    if not isinstance(quote, dict):
+        return False
+    fields = ["peTtm", "pbRatio", "totalMarketCap"]
+    present = sum(1 for f in fields if quote.get(f) is not None)
+    return present >= 2   # ≥ 2/3
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
-    "G1": check_g1, "G2": check_g2, "G3": check_g3, "G4": check_g4,
-    "G5": check_g5, "G6": check_g6, "G7": check_g7, "G8": check_g8,
+    "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G10": check_g10, "G11": check_g11, "G12": check_g12,
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
     "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
     "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
     "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
-    "G29": check_g29,
+    "G29": check_g29, "G30": check_g30, "G31": check_g31,
 }
 
 

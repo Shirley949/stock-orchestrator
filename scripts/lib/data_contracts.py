@@ -117,10 +117,14 @@ SCENES = {
         "produces": [
             {"path": "data.daily_kline",    "confidence": CONFIRMED},
             {"path": "data.realtime_quote", "confidence": CONFIRMED},
+            {"path": "data.realtime_quote.turnover",   "confidence": CONFIRMED},  # 换手率%，腾讯 qt.gtimg.cn data[38]（sina/kline 无此字段，单开腾讯调用）
+            {"path": "data.realtime_quote.change_pct", "confidence": CONFIRMED},  # 涨跌幅%，腾讯 data[32]，跨 scene 注入 valuation_snapshot.quote.changeRatio
         ],
         "consumers": {
             "data.daily_kline":   ["m3-technical", "computed_metrics", "R6_holder_distribution", "G14", "_EXPECTED_SCENES"],
             "data.realtime_quote": ["m3-technical", "computed_metrics"],
+            "data.realtime_quote.turnover":   ["m3-technical"],   # m3 量比/换手率行（15% 权重）
+            "data.realtime_quote.change_pct": ["valuation_snapshot.quote.changeRatio"],  # 跨 scene 单向注入
         },
         "priority": P1,
         "cost": {"calls": 2, "calls_worst": 9, "latency": "medium"},
@@ -199,13 +203,18 @@ SCENES = {
         "produces": [
             {"path": "data.quote.price",          "confidence": CONFIRMED},
             {"path": "data.quote.peTtm",          "confidence": CONFIRMED},
-            {"path": "data.quote.peLyr",          "confidence": CONFIRMED},
+            {"path": "data.quote.peLyr",          "confidence": CONFIRMED},   # baidu 市盈率(静)，指标名须精确"静"
             {"path": "data.quote.pbRatio",        "confidence": CONFIRMED},
+            {"path": "data.quote.pcfRatio",       "confidence": CONFIRMED},   # baidu 市现率（新增）
             {"path": "data.quote.epsTtm",         "confidence": CONFIRMED},
-            {"path": "data.quote.epsLyr",         "confidence": CONFIRMED},
+            {"path": "data.quote.epsLyr",         "confidence": CONFIRMED},   # westock finance_periods 取年报(12-31)行
             {"path": "data.quote.totalMarketCap", "confidence": CONFIRMED},
-            {"path": "data.quote.dividendRatio",  "confidence": CONFIRMED},
-            {"path": "data.quote.changeRatio",    "confidence": CONFIRMED},
+            {"path": "data.quote.dividend_history","confidence": CONFIRMED},  # 原始分红方案序列（主，LLM 推理）
+            {"path": "data.quote.dividend_ratio", "confidence": CONFIRMED},   # 派生股息率%（辅，cashDiviRMB÷10÷price）
+            {"path": "data.quote.dividend_year",  "confidence": CONFIRMED},
+            {"path": "data.quote.changeRatio",    "confidence": CONFIRMED},   # 跨 scene 注入：fetch_for_mode 从 s2.realtime_quote.change_pct（腾讯 qt.gtimg.cn data[32]）写入
+            {"path": "data.quote.pe_is_loss",     "confidence": CONFIRMED},   # 亏损标记（负 PE 保留）
+            {"path": "data.quote.pb_insolvent",   "confidence": CONFIRMED},   # 资不抵债标记（PB<0 保留）
             {"path": "data.analystRating",        "confidence": CONFIRMED},
             {"path": "data.targetPrice",          "confidence": CONFIRMED},
             {"path": "data.targetPrice.average",  "confidence": CONFIRMED},
@@ -217,11 +226,16 @@ SCENES = {
             "data.quote.peTtm":          ["m5:13", "m6:79", "computed_metrics"],
             "data.quote.peLyr":          ["m5:14", "m6:79"],
             "data.quote.pbRatio":        ["m5:15", "m6:79", "computed_metrics"],
+            "data.quote.pcfRatio":       ["m5"],                # 市现率（新增，m5 估值表）
             "data.quote.epsTtm":         ["m5:16", "m6:81", "m10:10"],
             "data.quote.epsLyr":         ["m5"],
             "data.quote.totalMarketCap": ["m5", "computed_metrics"],
-            "data.quote.dividendRatio":  ["m5:17"],
+            "data.quote.dividend_history":["m5"],               # 原始方案（主）
+            "data.quote.dividend_ratio": ["m5:17"],             # 派生股息率（辅）
+            "data.quote.dividend_year":  ["m5"],
             "data.quote.changeRatio":    ["m5", "m6"],
+            "data.quote.pe_is_loss":     ["m5"],                # 负值语义标注
+            "data.quote.pb_insolvent":   ["m5"],
             "data.analystRating":        ["m10:10A.1", "s4_rating_backfill", "_EXPECTED_SCENES"],
             "data.targetPrice":          ["m4:113", "m6:83", "m10:55"],
             "data.targetPrice.average":  ["m4:113"],
@@ -443,6 +457,7 @@ SCENES = {
             {"path": "data.pe_ttm",          "confidence": CONFIRMED},
             {"path": "data.pb",              "confidence": CONFIRMED},
             {"path": "data.eps_fy_consensus","confidence": CONFIRMED},
+            {"path": "data.peg_forward",     "confidence": CONFIRMED},   # consensus 同源 forward PE÷netProfitYoy（四档适用性）
             {"path": "data.gross_margin_calc","confidence": CONFIRMED},
             {"path": "data.has_overseas_exposure",  "confidence": CONFIRMED},   # G17 标记（D6 派生）
             {"path": "data.reported_overseas_pct", "confidence": CONFIRMED},   # m25 关税影响引用
@@ -451,6 +466,7 @@ SCENES = {
         "consumers": {
             "data.pe_ttm": ["m5"], "data.pb": ["m5"],
             "data.eps_fy_consensus": ["m5", "m6"],
+            "data.peg_forward": ["m5"],        # m5 估值表 PEG 行（读 value/applicability）
             "data.gross_margin_calc": ["m2"],
             "data.has_overseas_exposure": ["G17"],
             "data.reported_overseas_pct": ["m25"],
