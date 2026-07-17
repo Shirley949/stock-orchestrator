@@ -140,6 +140,9 @@ def get_staleness_threshold(api_name: str) -> int:
     KLINE_APIS = {"stock_zh_a_daily", "stock_zh_a_hist", "curl_eastmoney_kline",
                   "stock_zh_a_hist_min_em"}
     DAILY_APIS = {"stock_comment_detail_zlkp_jgcyd_em"}
+    # 龙虎榜历史榜单：距上次上榜天数本身就是信号（非热门=有效结论），不套新鲜度告警。
+    if api_name in {"stock_lhb_stock_detail_date_em", "stock_lhb_stock_detail_em"}:
+        return 10_000  # 永不告警（与 should_reject_cache 豁免一致）
     if api_name in KLINE_APIS or api_name in DAILY_APIS:
         return 5
     elif "financial" in api_name or api_name in {
@@ -170,5 +173,9 @@ def should_reject_cache(api_name: str, days_old: int, row_count: int = 0) -> boo
         "stock_financial_abstract_ths",
     }) and row_count < 4:
         return True
+    # 龙虎榜历史榜单是参考数据（"最近何时上榜"本身就是信号），旧日期=非热门的有效结论，
+    # 非脏缓存；freshness 由 fetch_lhb 的 90 天窗 + never_listed 语义控制。永不拒绝。
+    if api_name in {"stock_lhb_stock_detail_date_em", "stock_lhb_stock_detail_em"}:
+        return False
     # 所有其他 API：仅拒绝超过 365 天的，季度数据可能是最新的
     return days_old > 365

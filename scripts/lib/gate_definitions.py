@@ -2,7 +2,7 @@
 """
 gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
 
-仓库内唯一的 Gate 定义源（G1, G6–G29, G30, G31，共 27）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
+仓库内唯一的 Gate 定义源（G1, G6–G29, G30, G31, G32, G33，共 29）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
 本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
 PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
 数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
@@ -52,6 +52,8 @@ GATE_DESCS = {
     "G29": "资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）",
     "G30": "综合研判完整性（证据全景全维+反方诚实+概率闭合+情景-动作一致）",
     "G31": "估值数据有效性（quote.peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计'有数据'）",
+    "G32": "龙虎榜信号完整性（lhb.data.processed 存在且 status=ok；真·空 never_listed 仍 PASS）",
+    "G33": "北向资金信号完整性（northbound.data.processed 存在且 status=ok；真·非标的 no_northbound_data 仍 PASS）",
 }
 
 GATE_WEIGHTS = {
@@ -70,10 +72,12 @@ GATE_WEIGHTS = {
     "G29": 2,  # 资产安全完整性（Soft，单独不阻塞；有数据漏写/无数据编造=FAIL）
     "G30": 4,  # 综合研判完整性（capstone 硬关卡，weight≥3 → FAIL 阻塞输出）
     "G31": 1,  # 估值数据有效性（Soft，单独不阻塞；覆盖率<2/3 仅扣 gate_pass 分）
+    "G32": 1,  # 龙虎榜信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
+    "G33": 1,  # 北向资金信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
 }
 
-# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31（共 27）
-ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31"]
+# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31, G32, G33（共 29）
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31", "G32", "G33"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -84,7 +88,7 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29", "G31"]
+SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29", "G31", "G32", "G33"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -93,7 +97,7 @@ SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20
 PROFILES = {
     "profile_full": {
         "name": "full",
-        "description": "深度分析/整体分析/买不买/估值 → 全部 27 Gate 实跑",
+        "description": "深度分析/整体分析/买不买/估值 → 全部 29 Gate 实跑",
         "gates": ALL_GATES,
         # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
         # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
@@ -1058,6 +1062,31 @@ def check_g31(report: str, data: dict) -> bool:
     return present >= 2   # ≥ 2/3
 
 
+def check_g32(report: str, data: dict) -> bool:
+    """G32: 龙虎榜信号完整性（processed 存在且 status=ok）。SOFT（weight 1，单独不阻塞）。
+
+    区分「真·无数据」与「拉取失败」——gate 职责是前者 PASS、后者 FAIL，不检查「数据非零」：
+    - 真·从不上榜 → `processed.status="ok"`, `signal_type="never_listed"` → **PASS**（有效信号）
+    - 拉取失败（东财限流+同花顺全挂） → `processed.status="failed"` 或 processed 缺失 → **FAIL**
+    消费（报告是否提及）由 G30 #1 覆盖检查负责，本 gate 只校验数据层完整性。
+    返回 bool（engine verify_gates 以 `if ok:` 判定——非空 dict 会被当 truthy 永远 PASS）。
+    """
+    p = _snapshot_get(data, "lhb.data.processed")
+    return isinstance(p, dict) and p.get("status") == "ok"
+
+
+def check_g33(report: str, data: dict) -> bool:
+    """G33: 北向资金信号完整性（processed 存在且 status=ok）。SOFT（weight 1，单独不阻塞）。
+
+    区分「真·非北向标的」与「拉取失败」：
+    - 真·非北向标的 → `processed.status="ok"`, `signal_type="no_northbound_data"` → **PASS**（有效信号）
+    - 拉取失败（westock 异常+TOP10 全空） → `processed.status="failed"` 或 processed 缺失 → **FAIL**
+    区分靠 Layer 1 `_process_northbound_signals`（not_in_pool 空表 vs WestockError），gate 事后校验。
+    """
+    p = _snapshot_get(data, "northbound.data.processed")
+    return isinstance(p, dict) and p.get("status") == "ok"
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
@@ -1067,6 +1096,7 @@ GATE_CHECKERS = {
     "G21": check_g21, "G22": check_g22, "G23": check_g23, "G24": check_g24,
     "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
     "G29": check_g29, "G30": check_g30, "G31": check_g31,
+    "G32": check_g32, "G33": check_g33,
 }
 
 

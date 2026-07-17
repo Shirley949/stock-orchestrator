@@ -851,17 +851,46 @@
       "keywords": [
         "龙虎榜",
         "游资",
-        "机构席位"
+        "机构席位",
+        "营业部",
+        "上榜"
       ],
-      "data_needs": "龙虎榜数据 + 机构/游资席位分析",
+      "data_needs": "个股机构/游资席位博弈（上榜频次+买卖席位+次日涨跌）",
       "api_sources": [
-        "stock_lhb_detail_em"
+        "stock_lhb_stock_detail_em",
+        "stock_lhb_stock_detail_date_em"
       ],
-      "related_skills": [],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/lhb.md"
+      ],
       "modules": [
-        "m4"
+        "m4",
+        "m6",
+        "m7"
       ],
       "priority": "P1"
+    },
+    {
+      "keywords": [
+        "北向",
+        "外资",
+        "陆股通",
+        "沪深港通"
+      ],
+      "data_needs": "外资季度持股比例（最新季度，仅水平，无季变动趋势——1Q 不可得）",
+      "api_sources": [
+        "westock fund north-holding"
+      ],
+      "related_skills": [
+        "financial-data-routing/references/scenarios/northbound.md"
+      ],
+      "modules": [
+        "m4",
+        "m6",
+        "m7"
+      ],
+      "priority": "P1",
+      "routing_note": "「外资」关键词与 s3 个股资金流可能重叠；命中北向/龙虎榜优先于 s3（北向=季度外资持仓，s3=当日主力大单小单，口径不同）"
     },
     {
       "keywords": [

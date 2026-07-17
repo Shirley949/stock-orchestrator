@@ -53,6 +53,8 @@ TIMEOUT_MAP = {
     "stock_zh_a_gdhs": 10,              # 快
     "stock_notice_report": 10,          # 快
     "macro_china_pmi": 10,              # 快
+    "stock_lhb_stock_detail_em": 15,        # 龙虎榜个股席位明细（中 2-4s）
+    "stock_lhb_stock_detail_date_em": 10,   # 龙虎榜个股上榜日期（快 0.5-1s）
 }
 
 # ============================================================
@@ -69,6 +71,8 @@ SOURCE_GRADE = {
     "stock_news_em": "A",
     "stock_comment_detail_zlkp_jgcyd_em": "A",
     "stock_profit_forecast_ths": "A",
+    "stock_lhb_stock_detail_em": "A",         # 龙虎榜个股席位明细（东财，2026-07-17 实测可用）
+    "stock_lhb_stock_detail_date_em": "A",    # 龙虎榜个股上榜日期（东财，2026-07-17 实测可用）
     # B 级 — 中性，需交叉验证
     "stock_zh_a_hist": "B",
     "stock_financial_abstract_ths": "B",
@@ -235,6 +239,7 @@ class DataSnapshot:
         api_name: str,
         params: dict,
         cross_check: bool = False,
+        empty_is_ok: bool = False,
     ) -> dict:
         """
         拉取数据（带缓存 + 交叉验证）。
@@ -280,7 +285,7 @@ class DataSnapshot:
             return cached
 
         # 2. 调用 API（_call_akshare 内含退火重试 [1,3,6]）
-        result = self._call_akshare(api_name, params)
+        result = self._call_akshare(api_name, params, empty_is_ok=empty_is_ok)
 
         # 3. 交叉验证
         if cross_check and result.get("status") == "ok":
@@ -331,6 +336,7 @@ class DataSnapshot:
         params: dict,
         fallbacks: list = None,
         cross_check: bool = False,
+        empty_is_ok: bool = False,
     ) -> dict:
         """
         尝试 api_name，失败则依次尝试 fallbacks。
@@ -340,7 +346,7 @@ class DataSnapshot:
         apis_to_try = [(api_name, params)] + (fallbacks or [])
 
         for api, p in apis_to_try:
-            result = self.fetch_or_cache(api, p, cross_check=cross_check)
+            result = self.fetch_or_cache(api, p, cross_check=cross_check, empty_is_ok=empty_is_ok)
             if result.get("status") in ("ok", "cached"):
                 return result
             # stale 数据视为失败，继续尝试下一个降级源
@@ -485,7 +491,7 @@ class DataSnapshot:
     # 内部方法
     # ============================================================
 
-    def _call_akshare(self, api_name: str, params: dict) -> dict:
+    def _call_akshare(self, api_name: str, params: dict, empty_is_ok: bool = False) -> dict:
         """调用 akshare API（含退火重试）。
         预检失败（未安装/不存在/黑名单/D级=永久性）不重试；
         取数失败（空数据/异常/限流=瞬态）按 [1,3,6] 退火重试，最多 3 次。"""
@@ -521,7 +527,7 @@ class DataSnapshot:
         delays = [1, 3, 6]
         result = None
         for attempt in range(len(delays) + 1):
-            result = self._invoke_akshare(func, api_name, params, grade)
+            result = self._invoke_akshare(func, api_name, params, grade, empty_is_ok=empty_is_ok)
             if result.get("status") == "ok":
                 return result
             if attempt < len(delays):
@@ -533,8 +539,11 @@ class DataSnapshot:
                 time.sleep(wait)
         return result
 
-    def _invoke_akshare(self, func, api_name: str, params: dict, grade: str) -> dict:
-        """单次 akshare 取数 + 标准化（退火重试的单次单元 = 原 _call_akshare 取数块）。"""
+    def _invoke_akshare(self, func, api_name: str, params: dict, grade: str, empty_is_ok: bool = False) -> dict:
+        """单次 akshare 取数 + 标准化（退火重试的单次单元 = 原 _call_akshare 取数块）。
+
+        empty_is_ok=True 时，空 DataFrame 视为真·无数据（ok+[]），与限流/异常失败(failed)
+        区分——用于「从不上榜」「无北向持仓」等合法空值场景。默认 False 保留旧行为。"""
         try:
             df = func(**params)
 
@@ -558,6 +567,16 @@ class DataSnapshot:
                 }
 
             if df.empty:
+                # empty_is_ok：空 DataFrame = 真·无数据（ok+[]），与限流/异常失败(failed)区分。
+                # 用于龙虎榜日期列表（从不上榜）等合法空值；默认 False 保留旧行为（kline/三表需 empty=failed）。
+                if empty_is_ok:
+                    return {
+                        "status": "ok", "api_used": api_name, "params": params,
+                        "rows": 0, "columns": list(df.columns),
+                        "data_preview": [], "data_full": [],
+                        "fetch_time": datetime.now().isoformat(),
+                        "_grade": grade, "_empty": True, "_warnings": [],
+                    }
                 return {"status": "failed", "error": f"{api_name} 返回空数据"}
 
             # 性能优化：全市场 API 自动过滤到目标股票

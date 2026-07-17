@@ -13,7 +13,7 @@ bash run_regression.sh
 
 | 文件 | 角色 |
 |------|------|
-| `scripts/lib/data_contracts.py` | 契约注册表（17 scene：produces/consumers/confidence/priority/cost/depends_on/fallback） |
+| `scripts/lib/data_contracts.py` | 契约注册表（22 scene：produces/consumers/confidence/priority/cost/depends_on/fallback） |
 | `scripts/verify_data_contracts.py` | 契约 CI（断言型，hard=error / warn） |
 | `test_data_contracts.py` | 反例测试（CI 健全性 + 真实注册表零 error + 已知暴露面锁定） |
 
@@ -38,7 +38,7 @@ westock_client + fetcher reshape 形状回归在 `financial-data-routing/test_we
 | 那套 fixture | 管什么 |
 |---|---|
 | `test_gate_throttled.py` | 10 份冻结 snapshot self_score delta |
-| `gate_fixture_test.py` | 27-gate verdict 0 漏报总闸 |
+| `gate_fixture_test.py` | 29-gate verdict 0 漏报总闸 |
 
 ## 设计备忘
 

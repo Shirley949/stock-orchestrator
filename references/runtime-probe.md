@@ -5,7 +5,7 @@
 
 ---
 
-## 7 个关键 API 清单
+## 9 个关键 API 清单
 
 | 序号 | API 名称 | 用途 | 状态 |
 |------|---------|------|------|
@@ -16,10 +16,8 @@
 | 5 | `stock_news_em` | 个股新闻 | ✅ 稳定 |
 | 6 | `stock_yjyg_em` | 业绩预告 | ✅ 季度更新 |
 | 7 | `curl hq.sinajs.cn` | 新浪行情降级源 | ✅ shell级 |
-
-> **已移除的 API：**
-> - `stock_gdfx_free_holding_detail_em`（股东持仓）：API 返回 None，已失效
-> - `stock_hsgt_*`（北向资金全系列）：个股级停更 + 沪深港通实时持股 2024-08 起停止披露
+| 8 | `curl 新浪杜邦` | 杜邦三因子分析源（SSR HTML） | ✅ 稳定 |
+| 9 | `westock fund north-holding` | 北向季度持仓（northbound scene 主源） | ✅ 稳定 |
 
 ---
 

@@ -93,6 +93,10 @@ QUANT_THEMES = [
     ("前瞻预期", ["consensus_forecast", "valuation_snapshot.data.analystRating",
                 "s55_industry", "s6_macro.data.pmi"],
      ["一致预期", "评级", "催化", "景气", "预期", "预测", "研报", "目标", "展望"]),
+    ("龙虎榜资金", ["lhb.data.processed"],
+     ["龙虎榜", "上榜", "机构席位", "游资", "营业部", "席位"]),
+    ("北向资金", ["northbound.data.processed"],
+     ["北向", "外资", "沪深港通", "陆股通", "持股比例"]),
 ]
 
 QUAL_THEMES = [
@@ -185,26 +189,115 @@ def panorama(data: dict) -> dict:
         if isinstance(ar, dict) and ar.get("institutionCnt"):
             out["values"]["analystRating"] = f"买入{ar.get('buy_ratio', 0):.0f}%/机构{ar.get('institutionCnt')}家"
 
+    # 龙虎榜资金（90 天窗·编码信号范式：signals[]/aggregates/trend）
+    lp = _snapshot_get(data, "lhb.data.processed")
+    if isinstance(lp, dict) and lp.get("status") == "ok":
+        out["values"]["lhb"] = {
+            "signal_type": lp.get("signal_type"),
+            "severity": lp.get("severity"),
+            "summary": lp.get("summary"),
+            "total_count": lp.get("total_count"),            # 90 天内上榜次数
+            "recent_count_30d": lp.get("recent_count_30d"),
+            "signals": lp.get("signals") or [],
+            "trend": lp.get("trend"),
+            "aggregates": lp.get("aggregates") or {},
+        }
+
+    # 北向资金（1 季度·仅水平信号；change_qoq/trend_direction 1Q 恒 null，不抽）
+    nb = _snapshot_get(data, "northbound.data.processed")
+    if isinstance(nb, dict) and nb.get("status") == "ok":
+        out["values"]["northbound"] = {
+            "signal_type": nb.get("signal_type"),
+            "severity": nb.get("severity"),
+            "summary": nb.get("summary"),
+            "data_source": nb.get("data_source"),
+            "holding_ratio_latest": nb.get("holding_ratio_latest"),
+            "signals": nb.get("signals") or [],
+        }
+
     # ---- 渲染证据全景草稿表（Layer1）----
     _render_draft(out, data)
     return out
 
 
+def _render_income(L, v):
+    if not v.get("income"):
+        return
+    L.append(f"- 财务质量/成长性：{v['income'].get('报告期','')} 营收 {v['income'].get('营业总收入')}，"
+             f"归母 {v['income'].get('归母净利润')}，扣非 {v['income'].get('扣非净利润')}；"
+             f"ROE {v.get('ROE',{}).get('value')}%（{v.get('ROE',{}).get('period','')}）。")
+
+
+def _render_asset_safety(L, v):
+    if not v.get("asset_safety"):
+        return
+    a = v["asset_safety"]
+    L.append(f"- 资产安全：cash_to_debt {a.get('cash_to_debt')}（{a.get('level')}，"
+             f"applicable={a.get('applicable')}）权益乘数 {a.get('equity_multiplier')}。")
+
+
+def _render_valuation(L, v):
+    if not (v.get("targetPrice") or v.get("analystRating")):
+        return
+    L.append(f"- 估值/前瞻：目标价 {v.get('targetPrice','—')}，评级 {v.get('analystRating','—')}。")
+
+
+def _render_lhb(L, v):
+    """龙虎榜聚合渲染（不渲 seats 明细——m7 职责，避免叙事重复）。"""
+    l = v.get("lhb")
+    if not l:
+        return
+    parts = [str(l.get("summary") or "")]
+    warn_sigs = [s.get("name") for s in (l.get("signals") or [])
+                 if s.get("severity") == "warning"][:2]
+    if warn_sigs:
+        parts.append("警示：" + "/".join(warn_sigs))
+    agg = l.get("aggregates") or {}
+    if agg.get("inst_buy_seats"):
+        parts.append(f"机构净买入{agg['inst_buy_seats']}席")
+    if agg.get("hot_money_seats"):
+        parts.append(f"游资{agg['hot_money_seats']}席/净额{agg.get('hot_money_net_amount_元', 0):.0f}元")
+    dist = agg.get("reason_cat_dist") or {}
+    if dist:
+        parts.append("席位分布：" + ",".join(f"{k}{w}" for k, w in dist.items()))
+    trend = l.get("trend")
+    if isinstance(trend, dict) and trend.get("direction"):
+        parts.append(f"趋势={trend.get('direction')}")
+    L.append(f"- 龙虎榜资金（90天窗）：{'；'.join(parts)}（signal={l.get('signal_type')}，"
+             f"90天内{l.get('total_count')}次/近30天{l.get('recent_count_30d')}次）。")
+
+
+def _render_northbound(L, v):
+    """北向资金水平渲染（1 季度，无加仓/减仓动作）。"""
+    n = v.get("northbound")
+    if not n:
+        return
+    ds_label = {"westock": "westock季度持仓", "top10_deal": "TOP10成交活跃度",
+                "none": "—"}.get(n.get("data_source"), n.get("data_source"))
+    ratio = n.get("holding_ratio_latest")
+    ratio_txt = f"{ratio:.2f}%" if ratio is not None else "—"
+    sigs = [s.get("name") for s in (n.get("signals") or [])][:2]
+    L.append(f"- 北向资金（1季度·仅水平，无加仓减仓）：{n.get('summary')}（源={ds_label}，"
+             f"持股{ratio_txt}，signal={n.get('signal_type')}，信号={'/'.join(sigs) if sigs else '—'}）。")
+
+
+# 证据全景草稿渲染器注册表（决策D：新增主题=加一项，不动 _render_draft）
+THEME_RENDERERS = {
+    "income": _render_income,
+    "asset_safety": _render_asset_safety,
+    "valuation": _render_valuation,
+    "lhb": _render_lhb,
+    "northbound": _render_northbound,
+}
+
+
 def _render_draft(out: dict, data: dict) -> None:
-    """生成 Layer1 证据全景草稿 markdown 行（LLM 在此基础上补定性 + 自己判断方向）。"""
+    """生成 Layer1 证据全景草稿 markdown 行（通用化：遍历 THEME_RENDERERS，新增主题=加 dict 项）。"""
     L = out["draft_lines"]
     L.append("#### 证据全景（helper 抽值草稿——只列值与 gap，方向/权重由你判断）")
     v = out["values"]
-    if v.get("income"):
-        L.append(f"- 财务质量/成长性：{v['income'].get('报告期','')} 营收 {v['income'].get('营业总收入')}，"
-                 f"归母 {v['income'].get('归母净利润')}，扣非 {v['income'].get('扣非净利润')}；"
-                 f"ROE {v.get('ROE',{}).get('value')}%（{v.get('ROE',{}).get('period','')}）。")
-    if v.get("asset_safety"):
-        a = v["asset_safety"]
-        L.append(f"- 资产安全：cash_to_debt {a.get('cash_to_debt')}（{a.get('level')}，"
-                 f"applicable={a.get('applicable')}）权益乘数 {a.get('equity_multiplier')}。")
-    if v.get("targetPrice") or v.get("analystRating"):
-        L.append(f"- 估值/前瞻：目标价 {v.get('targetPrice','—')}，评级 {v.get('analystRating','—')}。")
+    for _theme, renderer in THEME_RENDERERS.items():
+        renderer(L, v)
     if out["gap_quant"]:
         L.append(f"- ⚠️ 数据 gap（m8 须披露；反片面 gate 豁免）：{out['gap_quant']} 无 snapshot 数据。")
     L.append("- 定性（你须从 m1–m9 叙事提炼，机械模型丢失的关键）：护城河 / 治理战略 / 前瞻催化。")

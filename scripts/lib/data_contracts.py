@@ -345,6 +345,52 @@ SCENES = {
         "cacheable": True,
     },
 
+    "lhb": {
+        "fetcher": "fetch_lhb",                     # runner.py（东财个股席位 + 同花顺 daily 摘要）
+        "mode": ["A"],
+        "produces": [
+            {"path": "data.processed", "confidence": CONFIRMED},
+            {"path": "data.seats", "confidence": CONFIRMED},     # 元·单席（东财）；m7 highlight 读 类型/_reason_cat
+            {"path": "data.daily", "confidence": CONFIRMED},     # 万元·全榜（同花顺）；90d 窗
+        ],
+        "consumers": {
+            "data.processed": ["m4", "m6", "m7", "capstone", "G32"],
+            "data.seats": ["m7"],                                # §7.5.3 highlight
+            "data.daily": ["m7"],
+        },
+        "priority": P1,
+        "cost": {"calls": 8, "calls_worst": 41, "latency": "medium"},  # 90d 窗：典型 1日期+~3日×2 flag+1 THS；热股最多 1+20×2+1
+        "depends_on": [],
+        "fallback": {},
+        "cacheable": True,
+        "note": "个股机构/游资席位（东财 stock_lhb_stock_detail_em 主 + 同花顺 lhbgg HTML 补次日涨跌/原因→daily）。"
+                "⚠️ 90 天窗：seats/daily/detail_dates 均过滤 90d，total_count=90d 内上榜次数。"
+                "daily=万元·全榜前5 / seats=元·单席（单位进字段名）。三态靠 signal_type 编码："
+                "never_listed(真·空,ok) / event_only_summary(东财降级,ok/L5) / fetch_failed(双源挂,failed)；G32 据此判完整性。"
+                "有意不进 gate _EXPECTED_SCENES（self-score 分母不变，风险>收益）。",
+    },
+
+    "northbound": {
+        "fetcher": "fetch_northbound",              # runner.py（westock 季度持仓 + 东财 TOP10 降级）
+        "mode": ["A"],
+        "produces": [
+            {"path": "data.processed", "confidence": CONFIRMED},
+        ],
+        "consumers": {
+            "data.processed": ["m4", "m6", "m7", "capstone", "G33"],
+        },
+        "priority": P1,
+        "cost": {"calls": 1, "calls_worst": 2, "latency": "low"},   # 1Q：1 westock 调用；失败 +1 TOP10
+        "depends_on": [],
+        "fallback": {},
+        "cacheable": True,
+        "note": "外资季度持仓（westock fund north-holding 主 + 东财 RPT_MUTUAL_TOP10DEAL 降级）。"
+                "⚠️ 只拉 1 季度（最新季度，order={'最新季度':0}）·仅水平信号：holding_ratio_prev/change_qoq/"
+                "trend_direction 恒 null，删 foreign_accumulating/reducing（流向需 2Q）。"
+                "processed 区分 no_northbound_data(真·非标的, status=ok) vs failed(双源拉取失败)；G33 据此判完整性。"
+                "有意不进 gate _EXPECTED_SCENES（同 lhb）。",
+    },
+
     "s35_research_reports": {
         "fetcher": "fetch_research_reports",      # runner.py:2149
         "mode": ["A"],
