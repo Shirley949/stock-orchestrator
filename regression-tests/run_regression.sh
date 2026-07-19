@@ -32,16 +32,22 @@ echo "[① 契约层] test_data_contracts.py"
 python3 "$HERE/test_data_contracts.py" 2>&1 | tail -3
 echo "[① 契约层] test_overseas_derivation.py"
 python3 "$HERE/test_overseas_derivation.py" 2>&1 | tail -3
+echo "[① 契约层] test_segment_dimensions.py（三维主营构成 + 海外五态 + 跨维信号 + G34/35/36/G17/G22）"
+python3 "$HERE/test_segment_dimensions.py" 2>&1 | tail -3
 echo "[① 契约层] test_westock_integration.py（westock_client + fetcher reshape）"
 python3 -m pytest "$ROUTING/test_westock_integration.py" -q 2>&1 | tail -2
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
 python3 "$HERE/test_lhb_northbound_processor.py" 2>&1 | tail -3
+echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术面完整性+TD 数据驱动+三态+禁编造）"
+python3 "$HERE/test_g1_g14_dual_segment.py" 2>&1 | tail -3
+echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径对齐+#2/#3/#6 拦截）"
+python3 "$HERE/test_g30_label_format.py" 2>&1 | tail -3
 
 if [ -d "$GATE_FIXTURES" ]; then
   echo
   echo "[② 运行时层] gate-audit fixtures 在线，串跑："
   cd "$GATE_FIXTURES/.."
-  echo "  · gate_fixture_test (29-gate 漏报=0)"
+  echo "  · gate_fixture_test (32-gate 漏报=0；含 G34/G35/G36 三维对称)"
   python3 fixtures/gate_fixture_test.py 2>&1 | grep -E "漏报.*共" | tail -1
   echo "  · test_gate_throttled"
   python3 -m unittest fixtures.test_gate_throttled 2>&1 | tail -2

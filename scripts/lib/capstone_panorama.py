@@ -97,6 +97,10 @@ QUANT_THEMES = [
      ["龙虎榜", "上榜", "机构席位", "游资", "营业部", "席位"]),
     ("北向资金", ["northbound.data.processed"],
      ["北向", "外资", "沪深港通", "陆股通", "持股比例"]),
+    # §2.2 主营构成三维（产品/行业/地区同等量级）——G30 #1 反片面经 QUANT_KW 自动同步
+    ("主营构成", ["s1_financial.data.segment_composition"],
+     ["分产品", "分行业", "分地区", "主营构成", "收入占比", "毛利率",
+      "海外", "境外", "外销", "敞口", "集中度", "关税"]),
 ]
 
 QUAL_THEMES = [
@@ -179,6 +183,58 @@ def panorama(data: dict) -> dict:
                     f"（金融股高杠杆为常态，非利空）")
         except (TypeError, ValueError):
             pass
+
+    # §2.2 主营构成三维 + 跨维派生信号（m6 Layer1「主营构成」行 + m6/m7 risk_register 解耦）
+    seg = _snapshot_get(data, "s1_financial.data.segment_composition") or {}
+    if isinstance(seg, dict):
+        dim_st = seg.get("dimension_status") or {}
+        seg_vals = {}
+        for dim, label in (("product", "产品"), ("industry", "行业"), ("geo", "地区")):
+            d = dim_st.get(dim) or {}
+            rows = seg.get(dim, []) or []
+            seg_vals[label] = {
+                "status": d.get("status"), "top1": d.get("top1_name"),
+                "top1_ratio": d.get("top1_ratio"), "row_count": d.get("row_count"),
+                "report_date": d.get("report_date"),
+                "has_margin": any(isinstance(r, dict)
+                                  and _snapshot_get(r, "gross_margin") not in (None, "", 0)
+                                  for r in rows),
+            }
+        if seg_vals:
+            out["values"]["segment"] = seg_vals
+            # 缺维提示（cross_ref_hints）直达 LLM，防编造海外%
+            hints = seg.get("cross_ref_hints") or []
+            if hints:
+                out["interpretation_flags"].append(
+                    "主营构成缺维：" + " | ".join(h.get("template", "") for h in hints))
+
+    ov = _snapshot_get(data, "computed_metrics.overseas") or {}
+    if isinstance(ov, dict) and ov.get("status"):
+        out["values"]["overseas"] = ov
+        if ov.get("status") == "underivable_but_historical":
+            out["interpretation_flags"].append(
+                f"海外占比 {ov.get('pct')}% 为 {ov.get('as_of')} 历史值（本期停披），引用须标注「停披/历史」")
+
+    cc = _snapshot_get(data, "computed_metrics.concentration_composite") or {}
+    if isinstance(cc, dict) and cc.get("region_cr1") is not None:
+        out["values"]["concentration"] = cc
+        if cc.get("composite_severe"):
+            out["interpretation_flags"].append(
+                f"营收双集中（地区CR1={cc.get('region_cr1')}×产品CR1={cc.get('product_cr1')}）→ 单点失败风险，悲观情景须引")
+
+    tv = _snapshot_get(data, "computed_metrics.tariff_vulnerability") or {}
+    if isinstance(tv, dict) and tv.get("level") in ("fatal", "partial"):
+        out["values"]["tariff_vulnerability"] = tv
+        out["interpretation_flags"].append(
+            f"关税脆弱性={tv.get('level')}（海外{tv.get('overseas_pct')}% + 产品「{tv.get('top1_product')}」+ 行业「{tv.get('industry')}」）→ m7 §7.1 须列地缘/关税风险行 + §7.1.1 估值折让")
+
+    al = _snapshot_get(data, "computed_metrics.product_industry_alignment") or {}
+    if isinstance(al, dict) and al.get("status") == "ok":
+        out["values"]["alignment"] = al
+
+    rr = _snapshot_get(data, "computed_metrics.risk_register") or []
+    if isinstance(rr, list) and rr:
+        out["values"]["risk_register"] = rr   # severity 排序；m6 悲观情景挑 top，m7 §7.1 叙事
 
     vs = _snapshot_get(data, "valuation_snapshot.data") or {}
     if isinstance(vs, dict):

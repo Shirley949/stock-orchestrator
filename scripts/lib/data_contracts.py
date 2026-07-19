@@ -56,7 +56,7 @@ SCENES = {
             "data.cash_flow":            ["m2", "G8"],
             "data.financial_abstract":   ["m2", "G7"],
             "data.financial_indicators": ["m2", "G27"],
-            "data.segment_composition":  ["m2", "m25:13"],
+            "data.segment_composition":  ["m2:§2.2", "m25:13", "m6:Layer1", "m7:7.1", "m0", "m1", "m5:§5.2"],   # 三维 canonical v2.0（product/industry/geo + dimension_status）；m0 分类/m1 叙事/m5 同业本公司行/m6 主营构成行/m7 地缘/关税+集中度/m2 分业务表
             "data.dupont":               ["m2:291", "G28"],
         },
         "priority": P0,   # G6/G7/G8/G9/G16/G27 均读它
@@ -117,20 +117,29 @@ SCENES = {
         "produces": [
             {"path": "data.daily_kline",    "confidence": CONFIRMED},
             {"path": "data.realtime_quote", "confidence": CONFIRMED},
-            {"path": "data.realtime_quote.turnover",   "confidence": CONFIRMED},  # 换手率%，腾讯 qt.gtimg.cn data[38]（sina/kline 无此字段，单开腾讯调用）
-            {"path": "data.realtime_quote.change_pct", "confidence": CONFIRMED},  # 涨跌幅%，腾讯 data[32]，跨 scene 注入 valuation_snapshot.quote.changeRatio
+            {"path": "data.realtime_quote.turnover",       "confidence": CONFIRMED},  # 换手率%（=turnover_pct 归一，腾讯 d[38]，与 daily.turnover×100 统一口径）
+            {"path": "data.realtime_quote.turnover_pct",   "confidence": CONFIRMED},  # 换手率% 归一字段（四态 ok 态填；兼容名 turnover）
+            {"path": "data.realtime_quote.amount_yuan",    "confidence": CONFIRMED},  # 成交额 元（d[37]万×10000；兼容名 amount）
+            {"path": "data.realtime_quote.volume_ratio",   "confidence": CONFIRMED},  # 量比 d[46]（量价领先镜头核心）
+            {"path": "data.realtime_quote.change_pct",     "confidence": CONFIRMED},  # 涨跌幅% 腾讯 d[32]，跨 scene 注入 valuation_snapshot.quote.changeRatio
+            {"path": "data.realtime_quote._turnover_status","confidence": CONFIRMED}, # 四态信封 not_applicable/no_trade/fetch_failed/ok（G1 判结构性豁免 vs 瞬态失败）
         ],
         "consumers": {
             "data.daily_kline":   ["m3-technical", "computed_metrics", "R6_holder_distribution", "G14", "_EXPECTED_SCENES"],
             "data.realtime_quote": ["m3-technical", "computed_metrics"],
-            "data.realtime_quote.turnover":   ["m3-technical"],   # m3 量比/换手率行（15% 权重）
-            "data.realtime_quote.change_pct": ["valuation_snapshot.quote.changeRatio"],  # 跨 scene 单向注入
+            # 换手率归一% 扩展到 7 模块 + G1（量价四镜头消费链；原仅 m3 → 603663 漏消费根因）
+            "data.realtime_quote.turnover":      ["m3-technical", "m4-sentiment", "m5-valuation", "m6-decision", "m7-risk", "m9-governance", "m25-orders", "G1"],
+            "data.realtime_quote.turnover_pct":  ["m3-technical", "m6-decision"],     # 归一字段同 turnover 语义
+            "data.realtime_quote.amount_yuan":   ["m3-technical", "m6-decision", "m7-risk"],   # 成交额（流动性/量价）
+            "data.realtime_quote.volume_ratio":  ["m3-technical", "m6-decision"],     # 量比（四镜头之量价领先）
+            "data.realtime_quote.change_pct":    ["valuation_snapshot.quote.changeRatio"],     # 跨 scene 单向注入
+            "data.realtime_quote._turnover_status": ["G1"],                          # G1 四段判结构性豁免
         },
         "priority": P1,
         "cost": {"calls": 2, "calls_worst": 9, "latency": "medium"},
         "depends_on": [],
         "fallback": {
-            "data.daily_kline":   "stock_zh_a_daily → curl_eastmoney_kline → stock_zh_a_hist",
+            "data.daily_kline":   "stock_zh_a_daily（新浪单源；Tier2/Tier3 已删）",
             "data.realtime_quote": "curl_sina_hq → _derive_quote_from_daily",
         },
         "cacheable": True,
@@ -485,8 +494,8 @@ SCENES = {
             "data.D2_audit_opinion": ["G23", "m9"],
             "data.D3_dividend":      ["m9"],
             "data.D4_top10_holders": ["m9"],
-            "data.D5_biz_breakdown": ["m2", "m9"],
-            "data.D6_geo_revenue":   ["m2", "m9"],
+            "data.D5_biz_breakdown": ["m2", "m6", "m7"],   # m9 实测零消费（用自己 D-编号 D4=分红/D5=治理/D6=审计，非主营构成），契约漂移已修；三维 zygc 为主源，PDF D5 互补
+            "data.D6_geo_revenue":   ["m2", "m6", "m7"],   # 同上；D6 地区维补 zygc.geo（缺维/陈旧时）
         },
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
@@ -505,19 +514,31 @@ SCENES = {
             {"path": "data.eps_fy_consensus","confidence": CONFIRMED},
             {"path": "data.peg_forward",     "confidence": CONFIRMED},   # consensus 同源 forward PE÷netProfitYoy（四档适用性）
             {"path": "data.gross_margin_calc","confidence": CONFIRMED},
-            {"path": "data.has_overseas_exposure",  "confidence": CONFIRMED},   # G17 标记（D6 派生）
-            {"path": "data.reported_overseas_pct", "confidence": CONFIRMED},   # m25 关税影响引用
+            {"path": "data.has_overseas_exposure",  "confidence": CONFIRMED},   # 海外顶层镜像（geo 派生量，G17 旧读，现 computed_metrics 内部派生 overseas.status）
+            {"path": "data.reported_overseas_pct", "confidence": CONFIRMED},   # 海外占比%（m25/m35 关税情景引用）
             {"path": "data.asset_safety",           "confidence": CONFIRMED},   # m2 §2.10 防雷（balance_sheet 派生）；G29 校验
+            # §1.5/§1.6 三维派生信号（zero 新 API，全从 segment_composition 派生）
+            {"path": "data.overseas",                "confidence": CONFIRMED},   # §1.5 海外五态（geo 派生，降级信号）：activated/domestic_only/underivable_*；m7 §7.1 读 status/pct/as_of
+            {"path": "data.concentration_composite","confidence": CONFIRMED},   # §1.6 营收复合集中度（region_cr1 × product_cr1，合取→composite_severe 单点失败跳级）
+            {"path": "data.tariff_vulnerability",   "confidence": CONFIRMED},   # §1.6 关税脆弱性三维合取（fatal/partial/low/none）；G17 Phase3 触发源
+            {"path": "data.product_industry_alignment","confidence": CONFIRMED},# §1.6 产品毛利×行业景气 4 象限（extendable/margin_erosion/volume_compensates/double_pressure）
+            {"path": "data.risk_register",          "confidence": CONFIRMED},   # §1.6 结构化风险登记册（severity 排序；m6/m7 解耦统一接口）
         ],
         "consumers": {
             "data.pe_ttm": ["m5"], "data.pb": ["m5"],
             "data.eps_fy_consensus": ["m5", "m6"],
             "data.peg_forward": ["m5"],        # m5 估值表 PEG 行（读 value/applicability）
             "data.gross_margin_calc": ["m2"],
-            "data.has_overseas_exposure": ["G17"],
-            "data.reported_overseas_pct": ["m25"],
+            "data.has_overseas_exposure": ["computed_metrics"],   # _compute_overseas_status 内部读它派生 overseas.status（G17 Phase3 改读 tariff_vulnerability）
+            "data.reported_overseas_pct": ["m25", "m35", "computed_metrics"],
             "data.asset_safety": ["m2:246", "G29"],
+            "data.overseas":                  ["m7", "computed_metrics"],                  # m7 §7.1；tariff_vulnerability 派生读它
+            "data.concentration_composite":   ["m7", "m6"],                                # m7 识别（§7.1 集中度行）+ m6 悲观引用（单点失败）
+            "data.tariff_vulnerability":      ["m7", "m6", "m25", "m35", "G17"],           # m7 识别（§7.1 地缘+§7.1.1 折让）+ m6 悲观引用 + m25 T0-T4 + m35 关税情景行 + G17 三维合取触发
+            "data.product_industry_alignment":["m2", "m6", "m7"],                          # m2 §2.11 行业位置 + m6 Layer1 主营构成 + m7 行业风险
+            "data.risk_register":             ["m7", "m6"],                                # m7 叙事+反转 / m6 悲观 top 风险（m6/m7 解耦接口）
         },
+        "note": "computed_metrics 实存 snapshot['computed_metrics'][key]（无 .data. 中缀）；契约 path 用 data.X 仅为场景内符号一致，verify 不解析真实 snapshot 路径。",
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
         "depends_on": ["s1_financial", "valuation_snapshot", "consensus_forecast", "s36_annual_analysis"],   # ★顺序敏感（s36=D6 源）
@@ -527,16 +548,36 @@ SCENES = {
     },
 
     "s4_technical": {
-        # Mode B 占位（runner.py:2435，"由 Claude 用 K线数据自算"，零网络）
-        "fetcher": None,
-        "mode": ["B"],
-        "produces": [{"path": "data", "confidence": CONFIRMED}],
-        "consumers": {"data": ["m3-technical"]},
+        # fetch_technical（runner.py:1407）：westock technical/chip/score + td_analyzer + 形态加工
+        # 加工前置：fibonacci/支撑压力/量价/筹码判定 在拉取层算好，snapshot 存变量+值，报告只消费不算
+        # 三态信封（仿 lhb/northbound）：ok / never_traded（北交/港股/指标全None 豁免）/ failed
+        "fetcher": "fetch_technical",
+        "mode": ["A", "B"],
+        "produces": [
+            {"path": "data.technical",          "confidence": CONFIRMED, "note": "westock technical 9族（ma/macd/kdj/rsi/boll/bias/wr/dmi/other），腾讯源无限流"},
+            {"path": "data.score",              "confidence": CONFIRMED, "note": "westock score 个股评分（综合/资金/基本面/风险/技术 + 周/月/季趋势），北交/港股 None"},
+            {"path": "data.chip",               "confidence": CONFIRMED, "note": "westock chip 筹码（chipProfitRate/chipAvgCost/集中度），北交/港股 None"},
+            {"path": "data.td",                 "confidence": CONFIRMED, "note": "td_analyzer：Setup/Countdown/TDST/PriceFlip/Confluence/趋势过滤/回测/summary（零网络，从 s2 close 算）"},
+            {"path": "data.fibonacci",          "confidence": CONFIRMED, "note": "加工前置：swing high/low + 6 回撤位 + 当前回撤位%"},
+            {"path": "data.support_resistance", "confidence": CONFIRMED, "note": "加工前置：5层（压力1/2 + 第一/强/深度支撑）带价位区间+依据"},
+            {"path": "data.volume_price",       "confidence": CONFIRMED, "note": "加工前置：双口径量价（realtime vr + daily v/ma20）+ 背离 + turnover MA"},
+            {"path": "data.chip_behavior",      "confidence": CONFIRMED, "note": "加工前置：跨场景筹码判定（派发/吸筹/洗盘/中性）"},
+        ],
+        "consumers": {
+            "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
+            "data.score":              ["m6-decision"],                             # 个股评分（综合/技术维度参考）
+            "data.chip":               ["m3-technical", "m6-decision"],             # 筹码分布
+            "data.td":                 ["m3-technical", "m6-decision", "G1", "G14"],  # m3 §3.1 TD、G14 数据驱动 setup≥9
+            "data.fibonacci":          ["m3-technical"],                            # §3.4 斐波那契
+            "data.support_resistance": ["m3-technical"],                            # §3.3 五层支撑压力
+            "data.volume_price":       ["m3-technical", "m6-decision"],             # 量价配合（四镜头之量价领先）
+            "data.chip_behavior":      ["m6-decision"],                             # 主力行为四联判定
+        },
         "priority": P1,
-        "cost": {"calls": 0, "latency": "low"},
+        "cost": {"calls": 3, "latency": "medium"},   # westock technical/chip/score 3次 CLI（td/fibonacci/支撑压力/量价/筹码判定 零网络从 s2 算）
         "depends_on": ["s2_quote_kline"],
         "fallback": {},
-        "cacheable": False,
+        "cacheable": True,
         "derived": True,
     },
 }

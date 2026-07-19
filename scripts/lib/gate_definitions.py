@@ -25,7 +25,7 @@ from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
 # ============================================================
 
 GATE_DESCS = {
-    "G1": "信号矩阵完整性（≥8行×3列：短/中/长）",
+    "G1": "技术面完整性（s4_technical 落盘+量价消费；四段：拉取/存放/读取/消费）",
     "G6": "季报连续性（≥6个连续季度数据）",
     "G7": "扣非对比（净利润/扣非/差额%三列已展示）",
     "G8": "现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）",
@@ -34,15 +34,15 @@ GATE_DESCS = {
     "G11": "数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）",
     "G12": "局限性披露（≥3条具体局限）",
     "G13": "持仓↔决策一致（若用户提供持仓信息，操作建议应考虑持仓语境）",
-    "G14": "TD逐根展示（TD计数表≥9行+结论）",
+    "G14": "TD序列数据驱动（s4.td 驱动 setup 信号）+ 报告逐根展示",
     "G15": "同业对比（≥2家可比公司+≥4指标）",
     "G16": "订单Layer6核对（合同负债核对偏差≤15%；销量/海外收入核对已跳过）",
-    "G17": "海外关税完整（海外敞口公司必须有T0-T4分析）",
+    "G17": "关税/地缘风险完整（m7 责任；tariff_vulnerability≥partial 时须有地缘/关税风险行+估值折让区间）",
     "G18": "竞品对标≥3家（Layer5可比公司≥3家）",
     "G19": "营收预测区间（Layer8给区间或标注'无法量化'）",
     "G20": "口径一致（Layer0口径=Layer8输出）",
     "G21": "SOURCE溯源（报告[src:]标记→snapshot路径验证）",
-    "G22": "分业务数据完整性（模块二包含分业务/分产品/分行业表格）",
+    "G22": "分业务数据完整性（m2§2.2 数据驱动；segment_composition 已披露维须有 [src:segment_composition]+分业务表）",
     "G23": "PDF数据完整性（D2-D6覆盖率+质量标记）",
     "G24": "数据交叉验证（PDF vs API 一致性）",
     "G25": "新闻分析流程完整性验证",
@@ -54,6 +54,9 @@ GATE_DESCS = {
     "G31": "估值数据有效性（quote.peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计'有数据'）",
     "G32": "龙虎榜信号完整性（lhb.data.processed 存在且 status=ok；真·空 never_listed 仍 PASS）",
     "G33": "北向资金信号完整性（northbound.data.processed 存在且 status=ok；真·非标的 no_northbound_data 仍 PASS）",
+    "G34": "分产品维完整性（_quality_markers.segment_product.status 有效态；fetch_failed/degraded=FAIL）",
+    "G35": "分行业维完整性（_quality_markers.segment_industry.status 有效态；fetch_failed/degraded=FAIL）",
+    "G36": "分地区维完整性（_quality_markers.segment_geo.status 有效态；fetch_failed/degraded=FAIL）",
 }
 
 GATE_WEIGHTS = {
@@ -74,21 +77,24 @@ GATE_WEIGHTS = {
     "G31": 1,  # 估值数据有效性（Soft，单独不阻塞；覆盖率<2/3 仅扣 gate_pass 分）
     "G32": 1,  # 龙虎榜信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
     "G33": 1,  # 北向资金信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
+    "G34": 1,  # 分产品维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
+    "G35": 1,  # 分行业维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
+    "G36": 1,  # 分地区维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
 }
 
-# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31, G32, G33（共 29）
-ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31", "G32", "G33"]
+# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31–G36（共 32）
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
 # ============================================================
 
 # Tier 1: Hard Gates — 数据完整性, Python 可验证, FAIL 阻塞输出
-HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G23", "G24", "G25", "G26", "G30"]
+HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G22", "G23", "G24", "G25", "G26", "G30"]
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G22", "G27", "G28", "G29", "G31", "G32", "G33"]
+SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G27", "G28", "G29", "G31", "G32", "G33", "G34", "G35", "G36"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -147,18 +153,73 @@ def _snapshot_get(data: dict, path: str):
 
 
 def check_g1(report: str, data: dict) -> bool:
-    """G1: 信号矩阵完整性（≥8行×3列：短/中/长）"""
-    # 检查报告中是否有信号矩阵相关内容
+    """G1: 技术面完整性（四段：拉取/存放/读取/消费，仿 G26/G29；2026-07 重构）。
+
+    覆盖拉取→存放→读取→消费全流程（用户钦定，根治 603663 换手率漏消费）：
+    ① 拉取：s4_technical.status（ok/failed/never_traded）+ realtime_quote._turnover_status
+    ② 存放：s4.data.technical 或 s4.data.td 非空（真落盘，非 stub）
+    ③ 读取：_snapshot_get 双兜底（内置保证）
+    ④ 消费：报告含技术词任一；tq=ok 须含"换手/量比/成交额"（量价消费）
+    三态放行（仿 G28）：never_traded → 结构性 PASS；failed → FAIL（禁编造）。
+    向后兼容：旧 snapshot 无 s4 键 → 退化原信号矩阵检查（保 fixture 漏报=0）。
+    """
+    s4 = _snapshot_get(data, "s4_technical")
+    if not isinstance(s4, dict) or not s4:
+        return _g1_legacy(report)
+
+    status = s4.get("status", "")
+    signal_type = s4.get("signal_type", "")
+    # 三态放行：never_traded（北交/港股/指标全None）→ 结构性 PASS（禁编造：见下）
+    if status == "never_traded" or signal_type == "never_traded":
+        # 禁编造：never_traded 却报告出现具体技术数值 → FAIL（数据不可得不应有数值）
+        return not _has_specific_tech_numbers(report)
+    # fetch_failed → FAIL（禁编造：failed 却报告出现具体技术数值同样 FAIL）
+    if status == "failed" or signal_type == "fetch_failed":
+        return False
+
+    # ② 存放：technical 或 td 非空（数据真落盘）
+    s4_data = s4.get("data", {}) or {}
+    if not (s4_data.get("technical") or s4_data.get("td")):
+        return False
+
+    # ④ 消费：技术词任一
+    tech_words = ["MACD", "KDJ", "RSI", "均线", "金叉", "死叉", "多头", "空头",
+                  "TD", "布林", "BOLL", "MA5", "MA20", "量价"]
+    if not any(w in report for w in tech_words):
+        return False
+
+    # ④ 量价消费：tq=ok 须含换手/量比/成交额（603663 漏消费根因修复）
+    tq = _snapshot_get(data, "s2_quote_kline.data.realtime_quote") or {}
+    tq_status = tq.get("_turnover_status", "ok")  # 旧 snapshot 无此键默认 ok
+    if tq_status == "ok":
+        if not any(w in report for w in ("换手", "量比", "成交额")):
+            return False
+    return True
+
+
+def _g1_legacy(report: str) -> bool:
+    """旧 snapshot（无 s4_technical）退化：原信号矩阵行数检查，保 fixture 漏报=0。"""
     if "信号" not in report and "矩阵" not in report:
         return False
-    # 检查是否有短/中/长三个维度
-    has_dims = _has_keywords(report, ["短", "中", "长"]) or _has_keywords(report, ["短期", "中期", "长期"])
-    if not has_dims:
+    if not (_has_keywords(report, ["短", "中", "长"]) or _has_keywords(report, ["短期", "中期", "长期"])):
         return False
-    # 检查矩阵行数（至少8行数据行）
-    matrix_rows = _count_pattern(report, r'[│|].*[│|].*[│|]')  # 表格行
-    table_rows = _count_pattern(report, r'^\s*\|.*\|.*\|', )  # markdown 表格行
+    matrix_rows = _count_pattern(report, r'[│|].*[│|].*[│|]')      # 表格行
+    table_rows = _count_pattern(report, r'^\s*\|.*\|.*\|')         # markdown 表格行
     return matrix_rows >= 8 or table_rows >= 8
+
+
+def _has_specific_tech_numbers(report: str) -> bool:
+    """检测报告是否含具体技术指标数值（MACD/KDJ/RSI/MA + 数字）。
+
+    用于 never_traded 禁编造判定：数据结构性不可得时，报告不应出现具体指标数值。
+    仅匹配「指标名+数字」组合，避免「RSI 超买」等定性词误判。
+    """
+    patterns = [
+        r'(?:MACD|DIF|DEA)\s*[：:=\-]?\s*-?\d',
+        r'(?:KDJ|RSI|CCI|WR|VR)\s*[：:=\-]?\s*-?\d',
+        r'MA[_\s]?\d+\s*[：:=\-]?\s*-?\d',
+    ]
+    return any(re.search(p, report) for p in patterns)
 
 
 def check_g6(report: str, data: dict) -> bool:
@@ -329,12 +390,37 @@ def check_g13(report: str, data: dict) -> bool:
 
 
 def check_g14(report: str, data: dict) -> bool:
-    """G14: TD逐根展示（TD计数表≥9行+结论）"""
+    """G14: TD 序列数据驱动 + 报告逐根展示（仿 G26；2026-07 重构）。
+
+    ① 拉取+存放：s4.td 已固化（td_analyzer 从 s2 close 算，零网络，覆盖 setup/countdown/tdst）
+    ② 消费：报告含 TD；有信号（summary.stage≠无信号）→ 须有计数/Setup/Countdown 展示
+    三态放行（仿 G28）：never_traded → PASS。
+    向后兼容：旧 snapshot 无 s4.td → 退化原检查（TD + ≥9 计数行）。
+    """
+    s4 = _snapshot_get(data, "s4_technical")
+    if isinstance(s4, dict) and (s4.get("status") == "never_traded"
+                                  or s4.get("signal_type") == "never_traded"):
+        return True
+    td = _snapshot_get(data, "s4_technical.data.td")
+    if not isinstance(td, dict) or "summary" not in td:
+        return _g14_legacy(report)
+
+    # 消费：报告须含 TD
     if "TD" not in report:
         return False
-    # 检查是否有 TD 计数表
-    td_rows = _count_pattern(report, r'(?:TD|计数|Setup)\s*\d+')
-    return td_rows >= 9
+    stage = (td.get("summary", {}) or {}).get("stage", "")
+    # 有信号（stage≠无信号，如"买Setup N/9"/"Countdown M/13"/"TD13完成"）→ 须有计数展示
+    if stage and stage != "无信号":
+        return _count_pattern(report, r'(?:TD|计数|Setup|Countdown|序列)\s*\d+') >= 1
+    # 无信号 → 提及 TD 即可（标注"无 TD 信号"等）
+    return True
+
+
+def _g14_legacy(report: str) -> bool:
+    """旧 snapshot（无 s4.td）退化：TD + ≥9 计数行，保 fixture 漏报=0。"""
+    if "TD" not in report:
+        return False
+    return _count_pattern(report, r'(?:TD|计数|Setup)\s*\d+') >= 9
 
 
 def check_g15(report: str, data: dict) -> bool:
@@ -434,15 +520,26 @@ def check_g16(report: str, data: dict) -> bool:
 
 
 def check_g17(report: str, data: dict) -> bool:
-    """G17: 海外关税完整（海外敞口公司必须有T0-T4分析）
+    """G17: 关税/地缘风险完整（m7 责任；tariff_vulnerability≥partial 触发）。SOFT（weight 3）。
 
-    海外敞口只认 data 层显式标记 has_overseas_exposure，不再用 report 里"海外"
-    一词触发（描述台资背景/海外讨论等文字会误判）。T0-T4 关税分析为 LLM+websearch
-    手动项（数据层不生产），未声明海外敞口即放行。
+    Phase 3 升级（三维合取代单维 has_overseas_exposure，避免误伤纯海外非敏感公司）：
+      - tariff_vulnerability.level∈{fatal,partial} → 须有 m7 §7.1 地缘/关税风险行
+        （关税/地缘/制裁/贸易摩擦/双反/出口管制/实体清单 任一）AND §7.1.1 估值折让
+        （-% 区间 或 折让/折价 词）。
+      - level∈{low,none}（含 domestic_only/underivable_*）→ 放行（无脆弱性不强制关税分析）。
+    校验对象 = m7（§7.1 风险行 + §7.1.1 折让），非 m6/m25 的 T0-T4（m25 detail 供 m7 引用）。
     """
-    if not data.get("has_overseas_exposure"):
-        return True  # 未声明海外敞口 → 不要求 T0-T4
-    return "T0" in report and "T1" in report
+    cm = data.get("computed_metrics") or {}
+    tv = cm.get("tariff_vulnerability") or {}
+    if tv.get("level") not in ("fatal", "partial"):
+        return True  # 无关税脆弱性 → 不要求 m7 关税分析（domestic_only/low/none 放行）
+    # m7 §7.1 地缘/关税风险行（关键词底线）
+    risk_kws = ("关税", "地缘", "制裁", "贸易摩擦", "双反", "出口管制", "实体清单", "倾销")
+    has_risk_row = any(kw in report for kw in risk_kws)
+    # m7 §7.1.1 估值折让区间（负百分比区间 或 折让/折价 词）
+    has_haircut = bool(re.search(r'-\s*\d+\s*[%％]\s*[~\-–至到]\s*-?\s*\d+\s*[%％]', report)) \
+                  or "折让" in report or "折价" in report or "估值传导" in report
+    return has_risk_row and has_haircut
 
 
 def check_g18(report: str, data: dict) -> bool:
@@ -535,13 +632,22 @@ def check_g21(report: str, data: dict) -> bool:
 
 
 def check_g22(report: str, data: dict) -> bool:
-    """G22: 分业务数据完整性（模块二包含分业务/分产品/分行业表格）"""
-    has_segment = any(kw in report for kw in ["分业务", "分产品", "分行业", "业务分拆"])
-    if not has_segment:
-        return False
-    has_revenue = "营业收入" in report or "营收" in report
-    has_margin = "毛利率" in report or "毛利" in report
-    return has_revenue and has_margin
+    """G22: 分业务数据完整性（m2 §2.2 数据驱动；防橡皮章脑补分业务表）。HARD（weight 3）。
+
+    Phase 3 升级（从纯 grep 关键词 → 读 segment_composition，对齐 m2 §2.2 数据驱动）：
+      - product/industry 任一维 disclosed_ok → 报告须含 (分业务/分产品/分行业/主营构成 表)
+        AND [src: ...segment_composition...] 溯源（证明用真数据非脑补）。
+      - 全部 not_disclosed/stale/fetch_failed（如招行无行业维）→ 放行（不强制脑补，防空公司误伤）。
+    """
+    seg = ((((data.get("s1_financial") or {}).get("data")) or {}).get("segment_composition")) or {}
+    dim_status = seg.get("dimension_status") or {}
+    product_ok = (dim_status.get("product") or {}).get("status") == "disclosed_ok"
+    industry_ok = (dim_status.get("industry") or {}).get("status") == "disclosed_ok"
+    if not (product_ok or industry_ok):
+        return True  # 无 disclosed 维度 → 不要求分业务表（招行无行业即此态）
+    has_segment = any(kw in report for kw in ["分业务", "分产品", "分行业", "业务分拆", "主营构成"])
+    has_src = "segment_composition" in report   # [src: snapshot.s1_financial.data.segment_composition.{product,industry}]
+    return has_segment and has_src
 
 
 def check_g23(report: str, data: dict) -> bool:
@@ -744,12 +850,18 @@ def check_g29(report: str, data: dict) -> bool:
 # ============================================================
 
 _G30_CAPSTONE_HEAD_RE = re.compile(r"^#{1,4}\s.*(?:综合研判|情景|三档|概率|研判)", re.MULTILINE)
-# 行首情景标签 + %（防"主情景(基准)概率40%"/"基准偏乐观"等散文污染）
+# 行首散文情景标签 + %（Layer2 每情景标题：### 乐观 42% / **乐观** 45%）。
+# 字符类 [#*\-] 故意不含 |——表格行 | 乐观 | 交 _G30_SCENARIO_TABLE_RE，避免与本正则
+# 职责混淆（否则裸 label 表格行被本正则误匹配，与 TABLE_RE 加粗 label 口径冲突，
+# find_scenarios 在混合 label 表格里漏识别→#3 假 FAIL；2026-07-19 宁德实测配套修，与 TABLE_RE 同步）。
 _G30_SCENARIO_HEADER_RE = re.compile(
-    r"^[ \t]*[#*|\-]*[ \t]*(乐观|基准|中性|悲观)[^%\n]{0,15}?(\d+(?:\.\d+)?)\s*%",
+    r"^[ \t]*[#*\-]*[ \t]*(乐观|基准|中性|悲观)[^%\n]{0,15}?(\d+(?:\.\d+)?)\s*%",
     re.MULTILINE)
 # 表格行回退（Layer3 矩阵：| 乐观 | ... |，概率取行内首个 %）
-_G30_SCENARIO_TABLE_RE = re.compile(r"^[ \t]*\|\s*(乐观|基准|中性|悲观)\s*\|[^\n]*", re.MULTILINE)
+# label 两侧容忍 markdown 强调符(**/*/`)——向 _g30_parse_matrix_table(cells+in)口径对齐。
+# 否则 | **中性** | 这种正常加粗会让 find_scenarios→_g30_scenario_probs 漏识别→#3 概率闭合 FAIL，
+# 而同 gate 的 #2/#4(走 parse_matrix，用 in) 却 PASS，口径自相矛盾（2026-07-19 修，宁德时代实测暴露）。
+_G30_SCENARIO_TABLE_RE = re.compile(r"^[ \t]*\|\s*[*`]*\s*(乐观|基准|中性|悲观)\s*[*`]*\s*\|[^\n]*", re.MULTILINE)
 # 反方证据标记（#2 诚实硬要求）—— 覆盖真实研报常见表述
 _G30_COUNTER_MARKERS = ["须克服", "反方", "相反", "利空", "不利", "风险", "然而", "但是",
                         "尽管", "不过", "隐患", "压制", "拖累", "担忧", "脆弱", "质疑",
@@ -1087,6 +1199,36 @@ def check_g33(report: str, data: dict) -> bool:
     return isinstance(p, dict) and p.get("status") == "ok"
 
 
+def _check_segment_dim(data: dict, dim: str) -> bool:
+    """三维对称 SOFT gate 共用：校验 _quality_markers.segment_<dim> 数据完整性（5 态）。
+
+    镜像 G32/G33「真空 vs 失败」范式（逐字相同，硬对称）：
+      - disclosed_ok / not_disclosed / stale_disclosure / partial → PASS
+        （有效状态：真披露 / 真·空 / 历史停披 / 行数过少——均非失败）
+      - fetch_failed / degraded / marker 缺失 → FAIL（拉取失败 / 脏数据 / 数据层未产 marker）
+    消费（报告是否渲染）由 G30 #1 / G22 覆盖，本 gate 只校验数据层完整性。
+    """
+    quality = data.get("_quality_markers", {})
+    marker = quality.get(f"segment_{dim}") or {}
+    status = marker.get("status")
+    return status in ("disclosed_ok", "not_disclosed", "stale_disclosure", "partial")
+
+
+def check_g34(report: str, data: dict) -> bool:
+    """G34: 分产品维完整性（_quality_markers.segment_product.status 有效态）。SOFT（weight 1）。"""
+    return _check_segment_dim(data, "product")
+
+
+def check_g35(report: str, data: dict) -> bool:
+    """G35: 分行业维完整性（_quality_markers.segment_industry.status 有效态）。SOFT（weight 1）。"""
+    return _check_segment_dim(data, "industry")
+
+
+def check_g36(report: str, data: dict) -> bool:
+    """G36: 分地区维完整性（_quality_markers.segment_geo.status 有效态）。SOFT（weight 1）。"""
+    return _check_segment_dim(data, "geo")
+
+
 # 注册所有 Gate 验证函数
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
@@ -1097,6 +1239,7 @@ GATE_CHECKERS = {
     "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
     "G29": check_g29, "G30": check_g30, "G31": check_g31,
     "G32": check_g32, "G33": check_g33,
+    "G34": check_g34, "G35": check_g35, "G36": check_g36,
 }
 
 

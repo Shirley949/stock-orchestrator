@@ -113,12 +113,12 @@ class OverseasDerivationTest(unittest.TestCase):
         self.assertAlmostEqual(pct, 40.0, places=2)
 
     def test_zygc_geo_fallback(self):
-        """D6 无海外关键词行时，segment_composition.geo 兜底（name/income 字段）。"""
+        """D6 无海外关键词行时，segment_composition.geo 兜底（name/revenue 字段，§1.1 income→revenue）。"""
         snap = {
             "s3_cninfo_pdf": {"data": {"D6_geo_revenue": [{"region": "境内", "revenue": 50}]}},
             "s1_financial": {"data": {"segment_composition": {"geo": [
-                {"name": "境内", "income": 60},
-                {"name": "境外", "income": 40},
+                {"name": "境内", "revenue": 60},
+                {"name": "境外", "revenue": 40},
             ]}}},
         }
         flag, pct = _derive(snap)
