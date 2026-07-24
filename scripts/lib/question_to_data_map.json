@@ -243,7 +243,7 @@
         "有什么风险",
         "风险因素"
       ],
-      "data_needs": "事件扫描(18类) + 财务风险指标 + 行业风险",
+      "data_needs": "重大事件信号（risk_signals.processed M 风险/P 利好）+ 财务风险指标 + 行业风险",
       "api_sources": [
         "stock_news_em",
         "event_scan_18",
@@ -267,7 +267,7 @@
         "利多",
         "黑天鹅"
       ],
-      "data_needs": "18类事件扫描(高优8类+低优10类)",
+      "data_needs": "重大事件信号（risk_signals.processed M 风险/P 利好双桶）",
       "api_sources": [
         "stock_news_em",
         "web_search site:cninfo.com.cn"

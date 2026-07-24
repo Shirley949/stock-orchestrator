@@ -155,6 +155,16 @@ class DataSnapshot:
         # 从磁盘加载已有缓存
         self._load_disk_cache()
 
+        # 注册 westock fetch_log 钩子：westock 走 npx 绕过本类的 akshare/curl
+        # 记录路径，经此钩子把 westock 调用（含 technical_series/margin/disclosure/esg）
+        # 记进同一 fetch_log（source="westock"）。新实例 set_logger 覆盖旧钩子，
+        # 天然防同进程跨股票串日志。westock_client 不在 path 时（独立测试）静默跳过。
+        try:
+            import westock_client
+            westock_client.set_logger(self._fetch_log.append)
+        except ImportError:
+            pass
+
     # --------------------------------------------------------
     # 缓存键生成
     # --------------------------------------------------------
@@ -311,6 +321,7 @@ class DataSnapshot:
                 "api": api_name,
                 "params": params,
                 "status": "ok",
+                "source": "akshare",
                 "time": datetime.now().isoformat(),
             })
         else:
@@ -320,6 +331,7 @@ class DataSnapshot:
                 "api": api_name,
                 "params": params,
                 "status": result.get("status", "unknown"),
+                "source": "akshare",
                 "error": result.get("error", ""),
                 "time": datetime.now().isoformat(),
             })
@@ -367,14 +379,23 @@ class DataSnapshot:
 
     def fetch_curl(self, url: str, label: str) -> dict:
         """
-        Shell curl 降级（用于 sina hq.sinajs.cn 等不走 AkShare 的源）。
+        Shell curl 降级（用于 sina hq.sinajs.cn / 腾讯 jiankuang 等不走 AkShare 的源）。
+        [1,3,6] 退火重试在 _call_curl 内；失败记忆(_fail_cache)防同 run 重复出拳。
         自动运行 UTF-8 编码校验。
         """
         cache_key = self._cache_key(f"curl_{label}", {"url": url})
 
+        # 1a. 成功缓存命中
         if cache_key in self._mem_cache:
             cached = self._mem_cache[cache_key].copy()
             cached["status"] = "cached"
+            cached["_warnings"] = []
+            return cached
+
+        # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_curl 内耗尽，
+        #     同一 run 内同 key 不再重打限流端点（fail_cache 不重试）
+        if cache_key in self._fail_cache:
+            cached = self._fail_cache[cache_key].copy()
             cached["_warnings"] = []
             return cached
 
@@ -387,13 +408,24 @@ class DataSnapshot:
                 result.setdefault("_warnings", []).extend(encoding_warnings)
                 self._warnings.extend(encoding_warnings)
 
-        # 缓存成功结果
+        # 缓存成功 / 记忆失败（运行期，镜像 fetch_or_cache）
         if result.get("status") == "ok":
             self._mem_cache[cache_key] = result.copy()
             self._fetch_log.append({
                 "api": f"curl_{label}",
                 "params": {"url": url},
                 "status": "ok",
+                "source": "curl",
+                "time": datetime.now().isoformat(),
+            })
+        else:
+            self._fail_cache[cache_key] = result.copy()
+            self._fetch_log.append({
+                "api": f"curl_{label}",
+                "params": {"url": url},
+                "status": result.get("status", "unknown"),
+                "source": "curl",
+                "error": result.get("error", ""),
                 "time": datetime.now().isoformat(),
             })
 
@@ -402,6 +434,39 @@ class DataSnapshot:
     # --------------------------------------------------------
     # 查询接口
     # --------------------------------------------------------
+
+    def fetch_web_research(self, items: list, topic_hint: str = "") -> dict:
+        """F4: LLM websearch 研究发现封装为 web_research_findings 信封（grade=C，_verified=false）。
+
+        非网络拉取——接收 LLM websearch 的 findings（机构覆盖/目标价/评级/产能/份额等），
+        标准化为 scene 信封。websearch 非一手 API → 所有数字 _verified=false；报告引用须
+        `[src: web_research_findings]`（G21 路径验证 + G45 目标价口径混用 gate）。
+        记 fetch_log（source=llm_web_research, grade=C）让 get_summary 可见——「死映射
+        web_search→C（SOURCE_GRADE:81）终于活路径」。
+        """
+        norm = []
+        for it in (items or []):
+            if not isinstance(it, dict):
+                continue
+            norm.append({
+                "topic": str(it.get("topic", "")),
+                "value": it.get("value"),
+                "provider": str(it.get("provider", "")),   # exa / web_reader / tavily
+                "url": str(it.get("url", "")),
+                "query": str(it.get("query", "")),
+                "_source": "llm_web_research",
+                "_verified": False,
+            })
+        status = "ok" if norm else "missing"
+        self._fetch_log.append({
+            "api": "llm_web_research", "params": {"topic_hint": topic_hint, "items": len(norm)},
+            "status": status, "source": "llm_web_research", "time": datetime.now().isoformat(),
+        })
+        return {
+            "scene": "web_research_findings",
+            "data": {"status": "ok" if norm else "missing", "source": "llm_web_research", "items": norm},
+            "_warnings": [] if norm else ["[web_research] 空 items——LLM 未提供 websearch 发现"],
+        }
 
     def get_warnings(self) -> list:
         """返回所有累积告警"""
@@ -476,12 +541,18 @@ class DataSnapshot:
         """返回缓存摘要（哪些成功、哪些失败）"""
         ok_count = sum(1 for e in self._fetch_log if e.get("status") == "ok")
         fail_count = sum(1 for e in self._fetch_log if e.get("status") not in ("ok",))
+        # source 分布（akshare/curl/westock；旧记录无 source 字段归 akshare）
+        source_counts = {}
+        for e in self._fetch_log:
+            src = e.get("source", "akshare")
+            source_counts[src] = source_counts.get(src, 0) + 1
         return {
             "stock_code": self.stock_code,
             "date": self._today,
             "total_fetches": len(self._fetch_log),
             "ok": ok_count,
             "failed": fail_count,
+            "sources": source_counts,
             "cached_entries": len(self._mem_cache),
             "warning_count": len(self._warnings),
             "fetch_log": self._fetch_log,
@@ -639,7 +710,26 @@ class DataSnapshot:
             return {"status": "failed", "error": msg, "api_used": api_name}
 
     def _call_curl(self, url: str, label: str) -> dict:
-        """Shell curl 调用"""
+        """Shell curl 调用（含 [1,3,6] 退火重试，镜像 _call_akshare）。
+        健康调用首试即 ok，零开销；瞬态失败（限流/超时/连接重置）按 [1,3,6] 退避重试，最多 3 次。"""
+        import time
+        delays = [1, 3, 6]
+        result = None
+        for attempt in range(len(delays) + 1):
+            result = self._invoke_curl(url, label)
+            if result.get("status") == "ok":
+                return result
+            if attempt < len(delays):
+                wait = delays[attempt]
+                self._warnings.append(
+                    f"[anneal] curl_{label} 第{attempt + 1}次失败，{wait}s 后重试: "
+                    f"{result.get('error', '')[:80]}"
+                )
+                time.sleep(wait)
+        return result
+
+    def _invoke_curl(self, url: str, label: str) -> dict:
+        """单次 curl 取数（退火重试的单次单元）。"""
         try:
             result = subprocess.run(
                 ["curl", "-s", "--connect-timeout", "10", "-m", "15", url],
@@ -661,9 +751,9 @@ class DataSnapshot:
                 return {
                     "status": "ok",
                     "api_used": f"curl_{label}",
-                    "raw": text[:2000],
+                    "raw": text[:50000],  # sina hq 小；jiankuang 等 JSON 端点需 full body 才能解析
                     "fetch_time": datetime.now().isoformat(),
-                    "_grade": "A",  # sina curl 为 A 级
+                    "_grade": "A",  # sina/tencent curl 为 A 级（无鉴权、无限流）
                     "_warnings": [],
                 }
             else:

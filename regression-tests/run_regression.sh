@@ -42,6 +42,10 @@ echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术�
 python3 "$HERE/test_g1_g14_dual_segment.py" 2>&1 | tail -3
 echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径对齐+#2/#3/#6 拦截）"
 python3 "$HERE/test_g30_label_format.py" 2>&1 | tail -3
+echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
+python3 "$HERE/test_freshness_helper.py" 2>&1 | tail -3
+echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 presence + G38 分红有效性）"
+python3 "$HERE/test_freshness_gate.py" 2>&1 | tail -3
 
 if [ -d "$GATE_FIXTURES" ]; then
   echo

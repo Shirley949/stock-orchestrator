@@ -37,7 +37,7 @@ SWL_RULES = {
             "石油", "天然气", "稀土", "锂", "铜", "铝", "黄金",
             "建筑装饰", "建筑材料", "基础化工", "交通运输",
         ],
-        "board_keywords": ["有色金属", "钢铁", "煤炭", "石油石化", "基础化工"],
+        "board_keywords": ["有色金属", "钢铁", "煤炭", "石油石化", "基础化工", "建筑材料"],
     },
     "金融股": {
         "keywords": ["银行", "保险", "证券", "多元金融", "信托", "期货"],
@@ -57,7 +57,15 @@ SWL_RULES = {
     },
     "防御股": {
         "keywords": ["电力", "水务", "燃气", "高速公路", "铁路", "环保", "公用事业"],
-        "board_keywords": ["公用事业", "电力", "环保"],
+        # 不含裸"电力"：电力设备 board=新能源(电池/光伏/硅料)属成长股，会与成长股"电力设备"冲突
+        # 且因 dict 插入序在成长股之前而抢先误判（301217铜冠铜箔/300750宁德/002129中环/601012隆基 全中招）。
+        # 真防御电力（水电/火电/核电，board="公用事业-电力-*"）靠"公用事业"命中。
+        # 22+11票验证(2026-07-22)：删"电力"修上述误判，长江/华能/广核/川投等真防御零回归。
+        # + "铁路公路"：board L2（"交通运输-铁路公路-铁路运输/高速公路"）→ 大秦铁路/京沪高铁/高速
+        #   归防御（稳定现金流+分红）。窄化的是 board L2 而非"交通运输" keyword——后者保留供
+        #   航运(中远海控)/航空(中国国航)/港口(上港集团)走 Step2 csrc→周期，互不干扰。
+        #   验证(2026-07-22)：大秦铁路→防御，中远海控/国航/上港仍周期零回归。
+        "board_keywords": ["公用事业", "环保", "铁路公路"],
     },
     "成长股": {
         "keywords": [
@@ -240,6 +248,40 @@ def classify_stock(stock_code: str) -> dict:
     result = classify_by_rules(facts)
     result["raw_facts"] = facts
     return result
+
+
+# ============================================================
+# 分类属性派生（C2：m0 分类表 → 静态属性，单一真相源）
+# ============================================================
+# 从 primary_type 机械派生（不需 LLM，对齐 m0-classification.md 分类表）。
+# 这些字段让 G37/估值 gate/m1 都从 snapshot.classification 单源读，消除 product_industry_alignment
+# 重叠分类与 flaky momentum 依赖。preferred_macro 限定为 s6_macro 实际有的 {PPI, M2, PMI}。
+# 混合型(is_mixed/secondary_type) 不在此处设——由 runner C3 overlay 在 segment_composition 到手后判定。
+_TYPE_DERIVATION = {
+    "周期股": {"macro_sensitivity": "high",   "preferred_macro": "PPI", "valuation_framework": "PB/EV-EBITDA/股息率", "forbidden_metric": "PE做主要", "is_cyclic": True,  "is_financial": False},
+    "成长股": {"macro_sensitivity": "medium", "preferred_macro": "PMI", "valuation_framework": "PS/PEG/DCF",         "forbidden_metric": "PB做主要", "is_cyclic": False, "is_financial": False},
+    "消费股": {"macro_sensitivity": "low",    "preferred_macro": None,  "valuation_framework": "ROE/品牌溢价",        "forbidden_metric": None,       "is_cyclic": False, "is_financial": False},
+    "金融股": {"macro_sensitivity": "high",   "preferred_macro": "M2",  "valuation_framework": "PB/不良率/ROE",        "forbidden_metric": "PE做主要", "is_cyclic": False, "is_financial": True},
+    "防御股": {"macro_sensitivity": "low",    "preferred_macro": None,  "valuation_framework": "股息率/现金流",       "forbidden_metric": None,       "is_cyclic": False, "is_financial": False},
+    "多元化控股": {"macro_sensitivity": "medium", "preferred_macro": None, "valuation_framework": "分部估值/NAV",     "forbidden_metric": None,       "is_cyclic": False, "is_financial": False},
+}
+
+
+def enrich_classification(classification: dict | None) -> dict | None:
+    """从 primary_type 静态派生 macro_sensitivity/preferred_macro/valuation_framework/
+    forbidden_metric/is_cyclic/is_financial（加法式，setdefault 不覆盖已有/overlay 已设字段）。
+
+    None 输入（用户 CLI 显式传 stock_type 时 classification 为 None）→ 原样返回 None。
+    混合型属性(is_mixed/secondary_type)由 runner C3 overlay 后续设置。
+    """
+    if not classification or not classification.get("primary_type"):
+        return classification
+    deriv = _TYPE_DERIVATION.get(classification["primary_type"])
+    if not deriv:
+        return classification
+    for k, v in deriv.items():
+        classification.setdefault(k, v)
+    return classification
 
 
 def _fetch_via_akshare(stock_code: str) -> dict:

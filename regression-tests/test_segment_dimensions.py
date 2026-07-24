@@ -9,8 +9,9 @@ Phase 3 §3.4 测试矩阵（金牌范式仿 test_overseas_derivation.py）。�
   ③ runner._compute_overseas_status 五态（geo.status 派生：activated / domestic_only /
      underivable_geo_vacuum / underivable_geo_failed / underivable_but_historical）
   ④ runner._compute_concentration_composite（region×product CR1 合取 → composite_severe 跳级）
-  ⑤ runner._compute_tariff_vulnerability（三维合取：fatal / partial / low / none）
-  ⑥ runner._compute_product_industry_alignment（4 象限 + underivable）
+  ⑤ runner._compute_tariff_vulnerability（海外毛利率判别 + 产品族兜底：fatal / partial_low_margin_export
+     / partial_mixed / partial_unverified / none，2026-07-23 替代旧三维布尔合取）
+  ⑥ 已退役：_compute_product_industry_alignment（margin/momentum 并入 classification 单源）
   ⑦ runner._cr1_from_revenue
   ⑧ gate G34/G35/G36（三维对称 5 态）+ G17（tariff_vulnerability 触发）+ G22（segment 数据驱动）
 
@@ -244,7 +245,7 @@ class ConcentrationCompositeTest(unittest.TestCase):
 
 
 # ============================================================
-# ⑤ _compute_tariff_vulnerability（三维合取）
+# ⑤ _compute_tariff_vulnerability（海外毛利率判别 + 产品族兜底，2026-07-23 替代旧三维布尔合取）
 # ============================================================
 class TariffVulnerabilityTest(unittest.TestCase):
 
@@ -260,17 +261,47 @@ class TariffVulnerabilityTest(unittest.TestCase):
         self.assertTrue(out["product_sensitive"])
         self.assertTrue(out["industry_sensitive"])
 
-    def test_partial_one_sensitive(self):
-        """海外 activated + 变压器 + 食品（行业不敏感）→ partial。"""
+    def test_fatal_sensitive_product_no_margin(self):
+        """海外 activated + 变压器(出口敏感产品) + 食品(行业不敏感)，缺毛利率 → fatal。
+        新算法：变压器 ∈ _EXPORT_SENSITIVE_PRODUCTS 且非高价值族 → 缺毛利率时产品族兜底 fatal
+        （旧三维合取须 prod×行业双敏感才 fatal，漏判单一产品敏感的变压器/电缆出口商）。"""
         snap = self._snap("变压器", "食品饮料")
         out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 40})
-        self.assertEqual(out["level"], "partial")
+        self.assertEqual(out["level"], "fatal")
+        self.assertTrue(out["product_sensitive"])    # 变压器 ∈ 敏感产品
+        self.assertFalse(out["industry_sensitive"])  # 食品 ∉ 制裁行业（产品单独 fatal）
 
-    def test_low_neither_sensitive(self):
-        """海外 activated + 服装 + 纺织（均不敏感）→ low。"""
+    def test_partial_unverified_non_sensitive(self):
+        """海外 activated + 服装 + 纺织（均不敏感），缺毛利率 → partial_unverified。
+        新算法：非敏感产品 + 非制裁行业 + 缺毛利率 → m7 兜底核实（旧 low 过度自信断言低风险）。"""
         snap = self._snap("服装", "纺织")
         out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 50})
-        self.assertEqual(out["level"], "low")
+        self.assertEqual(out["level"], "partial_unverified")
+        self.assertFalse(out["product_sensitive"])
+
+    def test_partial_low_margin_high_value_overseas(self):
+        """鼎龙 case：半导体(高价值族) 海外毛利率 0.184(<30%) → partial_low_margin_export。
+        有毛利率分支：高附加值族海外低毛利，关税影响有限（修复旧三维合取 fatal 误报）。"""
+        snap = _snap_seg(product=[{"name": "半导体材料及芯片产品", "revenue_ratio": 0.9, "revenue": 900}],
+                         geo=[{"name": "海外", "gross_margin": 0.184134}])
+        out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 18})
+        self.assertEqual(out["level"], "partial_low_margin_export")
+        self.assertAlmostEqual(out["overseas_margin"], 0.184134, places=4)
+
+    def test_partial_mixed_high_value_plus_commodity(self):
+        """半导体(高价值) + 光伏(商品) 共存，海外毛利率 0.15(<30%) → partial_mixed（难归类）。"""
+        snap = _snap_seg(product=[{"name": "半导体", "revenue_ratio": 0.6, "revenue": 600},
+                                  {"name": "光伏", "revenue_ratio": 0.3, "revenue": 300}],
+                         geo=[{"name": "海外", "gross_margin": 0.15}])
+        out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 30})
+        self.assertEqual(out["level"], "partial_mixed")
+
+    def test_fatal_high_overseas_margin(self):
+        """海外毛利率 ≥0.30（高毛利真受关税打击）→ fatal，不分产品族。"""
+        snap = _snap_seg(product=[{"name": "医药", "revenue_ratio": 0.9, "revenue": 900}],
+                         geo=[{"name": "海外", "gross_margin": 0.40}])
+        out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 40})
+        self.assertEqual(out["level"], "fatal")
 
     def test_none_domestic_only(self):
         """海外 domestic_only → none（无敞口无关税脆弱性）。"""
@@ -318,7 +349,8 @@ class TariffVulnerabilityTest(unittest.TestCase):
 
     def test_steel_industry_partial(self):
         """宝钢 case：产品维=收入性质(销售商品,无钢材名) → prod_sens=False，但 s55=钢铁(制裁敏感)
-        + 海外 activated → partial。验证「钢铁」入制裁表后钢铁出口商不再漏判（Section 232）。"""
+        + 缺毛利率 → partial_low_margin_export（行业兜底，提示核实关税，G17 仍触发）。
+        验证「钢铁」入制裁表后钢铁出口商不再漏判（Section 232）。"""
         snap = _snap_seg(product=[
             {"name": "销售商品", "revenue_ratio": 0.969, "revenue": 969},
             {"name": "提供劳务", "revenue_ratio": 0.018, "revenue": 18},
@@ -326,50 +358,14 @@ class TariffVulnerabilityTest(unittest.TestCase):
         out = runner._compute_tariff_vulnerability(snap, {"status": "activated", "pct": 13.9})
         self.assertFalse(out["product_sensitive"])   # 收入性质产品，无钢材关键词
         self.assertTrue(out["industry_sensitive"])    # 钢铁 ∈ 制裁表
-        self.assertEqual(out["level"], "partial")
+        self.assertEqual(out["level"], "partial_low_margin_export")
 
 
 # ============================================================
-# ⑥ _compute_product_industry_alignment（4 象限 + underivable）
+# ⑥ 已退役(2026-07-22)：_compute_product_industry_alignment 整体退役（margin/momentum
+#    并入 classification 单一真相源：dominant_business.gross_margin + industry_momentum）。
+#    原 4 象限测试随函数删除；m2 §2.11/m6/m7 改读 snapshot.classification。
 # ============================================================
-class ProductIndustryAlignmentTest(unittest.TestCase):
-
-    def _snap(self, margin, change_pct):
-        return _snap_seg(product=[{"name": "P1", "revenue": 100, "gross_margin": margin}]) \
-            | {"s55_industry": {"data": {"momentum": {"change_pct": change_pct}}}}
-
-    def test_extendable(self):
-        """高毛利(40) × 上行(+5) → extendable（可外推）。"""
-        out = runner._compute_product_industry_alignment(self._snap(40, 5))
-        self.assertEqual(out["quadrant"], "extendable")
-        self.assertEqual(out["status"], "ok")
-
-    def test_margin_erosion(self):
-        """高毛利(40) × 下行(-5) → margin_erosion（毛利侵蚀）。"""
-        self.assertEqual(runner._compute_product_industry_alignment(self._snap(40, -5))["quadrant"],
-                         "margin_erosion")
-
-    def test_volume_compensates(self):
-        """低毛利(20) × 上行(+5) → volume_compensates（量补价）。"""
-        self.assertEqual(runner._compute_product_industry_alignment(self._snap(20, 5))["quadrant"],
-                         "volume_compensates")
-
-    def test_double_pressure(self):
-        """低毛利(20) × 下行(-5) → double_pressure（双重承压，高危）。"""
-        self.assertEqual(runner._compute_product_industry_alignment(self._snap(20, -5))["quadrant"],
-                         "double_pressure")
-
-    def test_underivable_missing_margin(self):
-        """缺毛利率 → underivable（不臆测象限）。"""
-        snap = _snap_seg(product=[{"name": "P1", "revenue": 100}]) \
-            | {"s55_industry": {"data": {"momentum": {"change_pct": 5}}}}
-        out = runner._compute_product_industry_alignment(snap)
-        self.assertEqual(out["status"], "underivable")
-
-    def test_underivable_missing_momentum(self):
-        """缺行业动量 → underivable。"""
-        snap = _snap_seg(product=[{"name": "P1", "revenue": 100, "gross_margin": 40}])
-        self.assertEqual(runner._compute_product_industry_alignment(snap)["status"], "underivable")
 
 
 # ============================================================

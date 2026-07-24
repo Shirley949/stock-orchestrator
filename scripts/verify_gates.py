@@ -60,6 +60,25 @@ def load_data_snapshot(data_path: str) -> dict:
         return json.load(f)
 
 
+def _build_action_required(failed_gates: list, details: list) -> list:
+    """构建 action_required：失败 gate 的 desc + 具体原因（gate 返 dict 时上浮 reasons）。
+
+    有 reasons 的 gate（如 G30 返 {passed,failed,reasons}）逐条展开，让作者看到具体 FAIL 项
+    （如「G30: ... → #1 数值新鲜度 FAIL — 股东户数 stale」），而非泛化 desc。
+    """
+    detail_by_gate = {d["gate"]: d for d in details}
+    lines = []
+    for g in failed_gates:
+        base = f"{g}: {GATE_DESCS.get(g, '未知')}"
+        reasons = (detail_by_gate.get(g) or {}).get("reasons") or []
+        if reasons:
+            for r in reasons:
+                lines.append(f"{base} → {r}")
+        else:
+            lines.append(base)
+    return lines
+
+
 def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     """
     执行 Gate 校验。
@@ -124,23 +143,24 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
             continue
 
         try:
-            ok = checker(report, data)
+            ret = checker(report, data)
+            # 兼容 bool 与 dict 返回：dict 含 {passed, reasons} 时上浮具体 FAIL 原因到
+            # sidecar/action_required（如 G30 「股东户数 stale」），让作者知是哪个值 stale。
+            if isinstance(ret, dict):
+                ok = bool(ret.get("passed", False))
+                gate_reasons = ret.get("reasons") or []
+            else:
+                ok = bool(ret)
+                gate_reasons = []
             if ok:
                 passed.append(gate)
-                details.append({
-                    "gate": gate,
-                    "status": "pass",
-                    "desc": desc,
-                    "weight": weight,
-                })
+                detail = {"gate": gate, "status": "pass", "desc": desc, "weight": weight}
             else:
                 failed.append(gate)
-                details.append({
-                    "gate": gate,
-                    "status": "fail",
-                    "desc": desc,
-                    "weight": weight,
-                })
+                detail = {"gate": gate, "status": "fail", "desc": desc, "weight": weight}
+            if gate_reasons:
+                detail["reasons"] = gate_reasons
+            details.append(detail)
         except Exception as e:
             errors.append(gate)
             details.append({
@@ -182,9 +202,7 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
         "verdict": verdict,
         "details": details,
         "failed_gates": failed + errors,
-        "action_required": [
-            f"{g}: {GATE_DESCS.get(g, '未知')}" for g in failed + errors
-        ],
+        "action_required": _build_action_required(failed + errors, details),
     }
 
     # A2: 脚本化三维自评分（数据覆盖 / Gate通过 / SOURCE溯源）—— 禁止手填
@@ -213,6 +231,8 @@ def print_report(result: dict):
         if d["status"] == "error":
             line += f" [ERROR: {d.get('error', '')}]"
         print(line)
+        for r in (d.get("reasons") or []):
+            print(f"      ↳ {r}")
 
     # 汇总
     print()

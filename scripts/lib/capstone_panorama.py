@@ -22,6 +22,8 @@ import re
 import sys
 from pathlib import Path
 
+from latest_extract import days_old  # freshness stale 标记（叶工具，无循环依赖）
+
 
 # ============================================================
 # 自包含 snapshot 读取（与 gate_definitions 同语义，避免循环 import）
@@ -101,6 +103,9 @@ QUANT_THEMES = [
     ("主营构成", ["s1_financial.data.segment_composition"],
      ["分产品", "分行业", "分地区", "主营构成", "收入占比", "毛利率",
       "海外", "境外", "外销", "敞口", "集中度", "关税"]),
+    # F3 同业对比（target + ≤3 peer 核心6；s11_peer 为 first-class scene，capstone 须 surface）
+    ("同业对比", ["s11_peer.data"],
+     ["同业", "可比", "竞品", "peer", "营收增速", "净利增速", "毛利率", "PE", "PB", "ROE"]),
 ]
 
 QUAL_THEMES = [
@@ -116,6 +121,23 @@ QUANT_KW = {t: kw for t, _, kw in QUANT_THEMES}
 QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
 
 
+# 信号覆盖维度（G30#1 信号驱动覆盖的数据源）：读各 signal-envelope scene 的 processed，
+# 收集 critical 码 → present_signals（数据驱动，真空票自动豁免）。每码配**精确词**（拒 K线/换手冒充）。
+# (processed 路径, 取码子键, critical 码集, {code: (name, precise_kws)})
+_SIGNAL_SOURCES = [
+    ("s5_events.data.risk_signals.processed", "risk",
+     ("M1", "M4", "M5", "M8"),
+     {"M1": ("股东减持", ("减持", "股东减持")),
+      "M4": ("违规/诉讼", ("违规", "处罚", "立案调查", "监管处罚")),
+      "M5": ("ST/退市", ("ST", "退市", "*ST")),
+      "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值"))}),
+    ("s8_a_share.data.shareholder_count.processed", "signals",
+     ("S2", "S7"),
+     {"S2": ("高位派发", ("派发", "高位派发")),
+      "S7": ("筹码急剧分散", ("筹码分散", "急剧分散", "筹码松动"))}),
+]
+
+
 # ============================================================
 # panorama —— 抽值（不打分）+ gap + 适用性 flag
 # ============================================================
@@ -127,12 +149,27 @@ def _yi(v):
         return None
 
 
+def _stale_marker(lp: dict, threshold_days: int) -> str:
+    """latest_period 信封的 stale 标记：days_old > threshold → ' ⚠️历史数据·非近期(距今N天)'。
+
+    信号族（lhb/northbound）/ company_guidance 是稀疏·时序敏感数据，越远越不重要——
+    渲染时须让 LLM 一眼看到「这是旧信号，别当近期活跃据此调仓位」（plan §4.1 改动 F）。
+    """
+    if not isinstance(lp, dict) or lp.get("sort_key") is None:
+        return ""
+    d_old = days_old(lp.get("sort_key"), lp.get("as_of"))
+    if d_old is not None and d_old > threshold_days:
+        return f" ⚠️历史数据·非近期(距今{d_old}天)"
+    return ""
+
+
 def panorama(data: dict) -> dict:
     """读 snapshot → 证据全景结构（只抽值，不映射概率/方向）。"""
     out = {
         "present_quant": [], "gap_quant": [],
         "qual_required": [t for t, _ in QUAL_THEMES],
         "values": {}, "interpretation_flags": [], "draft_lines": [],
+        "present_signals": [],
         "stock_type": _snapshot_get(data, "classification.primary_type") or _snapshot_get(data, "stock_type"),
     }
 
@@ -152,20 +189,44 @@ def panorama(data: dict) -> dict:
         }
 
     fi = _snapshot_get(data, "s1_financial.data.financial_indicators")
-    fi_rows = _rows(fi)
-    roe_row = next((r for r in fi_rows if "净资产收益率" in str(r.get("指标", ""))), None)
-    if roe_row:
-        cols = [k for k in roe_row.keys() if k != "指标"]
-        latest = cols[0] if cols else None
-        out["values"]["ROE"] = {"period": latest, "value": roe_row.get(latest)}
-        # 期间 flag：单季 ROE 勿直接当全年盈利能力
-        if latest and str(latest).endswith("0331"):
+    # 财务质量三源 latest_period 信封（indicators/abstract/dupont，period 显式驱动 freshness）。
+    # 旧 cols[0] dict-order 已废弃——改读 latest_period（runner 已 desc 排序 + 信封）。
+    quality = {}
+    fi_lp = (fi or {}).get("latest_period") if isinstance(fi, dict) else None
+    if isinstance(fi_lp, dict) and fi_lp.get("value"):
+        quality["indicators"] = fi_lp
+        # 单季 ROE flag：Q1（0331）非年报，勿直接当全年盈利能力
+        v = fi_lp.get("value") or {}
+        roe = v.get("加权净资产收益率(%)") or v.get("净资产收益率(%)")
+        if roe is not None and str(fi_lp.get("raw_date", "")).endswith("0331"):
             try:
-                if float(roe_row.get(latest)) < 5:
+                if float(roe) < 5:
                     out["interpretation_flags"].append(
-                        f"ROE={roe_row.get(latest)}% 取自 {latest}（疑似单季非年化，解读时勿直接当全年盈利能力低）")
+                        f"ROE={roe}% 取自 {fi_lp.get('period_label')}（单季非年化，解读时勿直接当全年盈利能力低）")
             except (TypeError, ValueError):
                 pass
+    ab = _snapshot_get(data, "s1_financial.data.financial_abstract")
+    ab_lp = (ab or {}).get("latest_period") if isinstance(ab, dict) else None
+    if isinstance(ab_lp, dict) and ab_lp.get("value"):
+        quality["abstract"] = ab_lp
+    du = _snapshot_get(data, "s1_financial.data.dupont")
+    du_lp = (du or {}).get("latest_period") if isinstance(du, dict) else None
+    if isinstance(du_lp, dict) and du_lp.get("value"):
+        quality["dupont"] = du_lp
+    if quality:
+        out["values"]["quality"] = quality
+
+    # 同业对比（s11_peer：target + ≤3 peer 核心6，横截面·各股取各自最新报告期；独立 peer 模式拉取后合并）
+    peer = _snapshot_get(data, "s11_peer.data") or {}
+    if isinstance(peer, dict) and peer.get("status") in ("ok", "degraded", "missing"):
+        out["values"]["peer"] = {
+            "status": peer.get("status"),
+            "target_metrics": peer.get("target_metrics"),
+            "target_report_period": peer.get("target_report_period"),
+            "items": peer.get("items") or [],
+            "peers_count": peer.get("peers_count", 0),
+            "latest_period": peer.get("latest_period"),
+        }
 
     am = _snapshot_get(data, "computed_metrics.asset_safety")
     if isinstance(am, dict) and am.get("status") == "ok":
@@ -223,18 +284,50 @@ def panorama(data: dict) -> dict:
                 f"营收双集中（地区CR1={cc.get('region_cr1')}×产品CR1={cc.get('product_cr1')}）→ 单点失败风险，悲观情景须引")
 
     tv = _snapshot_get(data, "computed_metrics.tariff_vulnerability") or {}
-    if isinstance(tv, dict) and tv.get("level") in ("fatal", "partial"):
+    _tv_lvl = tv.get("level") if isinstance(tv, dict) else None
+    if _tv_lvl and (_tv_lvl == "fatal" or str(_tv_lvl).startswith("partial")):
         out["values"]["tariff_vulnerability"] = tv
+        _tv_margin = tv.get("overseas_margin")
+        _margin_str = f"、海外毛利率{round(_tv_margin * 100, 1)}%" if isinstance(_tv_margin, (int, float)) else ""
         out["interpretation_flags"].append(
-            f"关税脆弱性={tv.get('level')}（海外{tv.get('overseas_pct')}% + 产品「{tv.get('top1_product')}」+ 行业「{tv.get('industry')}」）→ m7 §7.1 须列地缘/关税风险行 + §7.1.1 估值折让")
+            f"关税脆弱性={_tv_lvl}（海外{tv.get('overseas_pct')}%{_margin_str} + 产品「{tv.get('top1_product')}」+ 行业「{tv.get('industry')}」）→ m7 §7.1 须列地缘/关税风险行 + §7.1.1 估值折让")
 
-    al = _snapshot_get(data, "computed_metrics.product_industry_alignment") or {}
-    if isinstance(al, dict) and al.get("status") == "ok":
-        out["values"]["alignment"] = al
+    # product_industry_alignment 已退役（2026-07-22）：margin/momentum 并入 classification
+    # 单一真相源（dominant_business.gross_margin + industry_momentum），m2/m6/m7 改读 snapshot.classification。
 
     rr = _snapshot_get(data, "computed_metrics.risk_register") or []
     if isinstance(rr, list) and rr:
         out["values"]["risk_register"] = rr   # severity 排序；m6 悲观情景挑 top，m7 §7.1 叙事
+
+    # 重大事件（M 风险 / P 利好 双桶）——G30#1 信号覆盖数据层 + capstone 悲观/乐观打分素材。
+    mat = _snapshot_get(data, "s5_events.data.risk_signals.processed")
+    if isinstance(mat, dict) and mat.get("status") == "ok" and (mat.get("risk") or mat.get("catalyst")):
+        risk_sigs = mat.get("risk") or []
+        cat_sigs = mat.get("catalyst") or []
+        crit_codes = (mat.get("aggregates") or {}).get("critical_codes") or []
+        out["values"]["material_events"] = {
+            "summary": mat.get("summary"), "signal_type": mat.get("signal_type"),
+            "risk": risk_sigs, "catalyst": cat_sigs, "critical_codes": crit_codes,
+            "latest_period": mat.get("latest_period"),
+        }
+        # critical 风险（M1/M4/M5/M8…）→ 前置「⚠️关键风险信号」段（经 _CRITICAL_KW 命中）
+        for s in risk_sigs:
+            if s.get("severity") == "critical":
+                out["interpretation_flags"].append(
+                    f"关键风险信号·{s.get('name')}：{s.get('evidence')} → 悲观情景核心驱动，须高亮")
+
+    # present_signals（G30#1 信号驱动覆盖）：遍历 _SIGNAL_SOURCES，收集实际存在的 critical 码。
+    for path, subkey, crit_codes, code_map in _SIGNAL_SOURCES:
+        proc = _snapshot_get(data, path)
+        if not isinstance(proc, dict):
+            continue
+        sigs = proc.get(subkey) or proc.get("signals") or []
+        present = {s.get("code") for s in sigs if isinstance(s, dict)}
+        for code in crit_codes:
+            if code in present:
+                name, kws = code_map[code]
+                out["present_signals"].append(
+                    {"source": path, "code": code, "name": name, "kws": list(kws)})
 
     vs = _snapshot_get(data, "valuation_snapshot.data") or {}
     if isinstance(vs, dict):
@@ -257,6 +350,7 @@ def panorama(data: dict) -> dict:
             "signals": lp.get("signals") or [],
             "trend": lp.get("trend"),
             "aggregates": lp.get("aggregates") or {},
+            "latest_period": lp.get("latest_period"),   # 信号族 freshness 信封（period_label+sort_key+summary）
         }
 
     # 北向资金（1 季度·仅水平信号；change_qoq/trend_direction 1Q 恒 null，不抽）
@@ -269,7 +363,34 @@ def panorama(data: dict) -> dict:
             "data_source": nb.get("data_source"),
             "holding_ratio_latest": nb.get("holding_ratio_latest"),
             "signals": nb.get("signals") or [],
+            "latest_period": nb.get("latest_period"),   # 信号族 freshness 信封（period_label+sort_key+summary）
         }
+
+    # 股东户数（latest_period 信封——★ bug 原案：写作期须见最新值，防引旧值如"10.12万"）
+    sc_lp = _snapshot_get(data, "s8_a_share.data.shareholder_count.latest_period")
+    if isinstance(sc_lp, dict) and sc_lp.get("value") is not None:
+        out["values"]["shareholder_count"] = sc_lp
+
+    # 前瞻预期（company_guidance 业绩预告·forecast 一等公民 + consensus annual[最近预测年]）
+    cf = _snapshot_get(data, "consensus_forecast.data") or {}
+    if isinstance(cf, dict):
+        outlook = {}
+        cg = cf.get("company_guidance") or {}
+        if isinstance(cg, dict) and isinstance(cg.get("latest_period"), dict):
+            outlook["guidance"] = cg["latest_period"]
+            outlook["guidance_status"] = cg.get("status")
+        annual = cf.get("annual") or {}
+        if isinstance(annual, dict) and annual:
+            try:
+                yrs = sorted(int(y) for y in annual.keys())
+                asof = (cf.get("latest_period") or {}).get("as_of") or ""
+                asof_y = int(asof[:4]) if asof[:4].isdigit() else yrs[0]
+                near = min((y for y in yrs if y >= asof_y), default=yrs[0])  # 最近预测年
+                outlook["annual_near"] = {"year": near, **(annual.get(str(near)) or {})}
+            except (ValueError, TypeError):
+                pass
+        if outlook:
+            out["values"]["outlook"] = outlook
 
     # ---- 渲染证据全景草稿表（Layer1）----
     _render_draft(out, data)
@@ -279,9 +400,9 @@ def panorama(data: dict) -> dict:
 def _render_income(L, v):
     if not v.get("income"):
         return
-    L.append(f"- 财务质量/成长性：{v['income'].get('报告期','')} 营收 {v['income'].get('营业总收入')}，"
-             f"归母 {v['income'].get('归母净利润')}，扣非 {v['income'].get('扣非净利润')}；"
-             f"ROE {v.get('ROE',{}).get('value')}%（{v.get('ROE',{}).get('period','')}）。")
+    L.append(f"- 成长性：{v['income'].get('报告期','')} 营收 {v['income'].get('营业总收入')}，"
+             f"归母 {v['income'].get('归母净利润')}，扣非 {v['income'].get('扣非净利润')}。"
+             f"（ROE/盈利能力见下「财务质量」行）")
 
 
 def _render_asset_safety(L, v):
@@ -319,8 +440,11 @@ def _render_lhb(L, v):
     trend = l.get("trend")
     if isinstance(trend, dict) and trend.get("direction"):
         parts.append(f"趋势={trend.get('direction')}")
-    L.append(f"- 龙虎榜资金（90天窗）：{'；'.join(parts)}（signal={l.get('signal_type')}，"
-             f"90天内{l.get('total_count')}次/近30天{l.get('recent_count_30d')}次）。")
+    lp_env = l.get("latest_period") or {}
+    stale = _stale_marker(lp_env, 90)
+    pl = f"（{lp_env.get('period_label')}）" if lp_env.get("period_label") else ""
+    L.append(f"- 龙虎榜资金（90天窗）{pl}：{'；'.join(parts)}（signal={l.get('signal_type')}，"
+             f"90天内{l.get('total_count')}次/近30天{l.get('recent_count_30d')}次）{stale}。")
 
 
 def _render_northbound(L, v):
@@ -333,15 +457,189 @@ def _render_northbound(L, v):
     ratio = n.get("holding_ratio_latest")
     ratio_txt = f"{ratio:.2f}%" if ratio is not None else "—"
     sigs = [s.get("name") for s in (n.get("signals") or [])][:2]
-    L.append(f"- 北向资金（1季度·仅水平，无加仓减仓）：{n.get('summary')}（源={ds_label}，"
-             f"持股{ratio_txt}，signal={n.get('signal_type')}，信号={'/'.join(sigs) if sigs else '—'}）。")
+    lp_env = n.get("latest_period") or {}
+    stale = _stale_marker(lp_env, 120)
+    pl = f"（{lp_env.get('period_label')}）" if lp_env.get("period_label") else ""
+    L.append(f"- 北向资金（1季度·仅水平，无加仓减仓）{pl}：{n.get('summary')}（源={ds_label}，"
+             f"持股{ratio_txt}，signal={n.get('signal_type')}，信号={'/'.join(sigs) if sigs else '—'}）{stale}。")
+
+
+def _render_material_events(L, v):
+    """重大事件（M 风险 / P 利好 双桶）——G30#1 信号覆盖数据层 + capstone 悲观/乐观打分素材。
+
+    数据驱动：悲观情景读风险桶（减持/违规/ST/下修…），乐观情景读利好桶（增持/回购/分红/上修…），
+    取代散文脑补。严重风险经 interpretation_flags→_CRITICAL_KW 前置「⚠️关键风险信号」段。
+    """
+    m = v.get("material_events")
+    if not m:
+        return
+    risk = m.get("risk") or []
+    cat = m.get("catalyst") or []
+    parts = []
+    if risk:
+        crit = [f"{s.get('name')}({(s.get('evidence') or '')[:14]})" for s in risk
+                if s.get("severity") == "critical"]
+        parts.append(f"风险{len(risk)}类" + (f"，高危：{'、'.join(crit[:3])}" if crit else ""))
+    if cat:
+        parts.append(f"利好{len(cat)}类：{'、'.join(s.get('name', '') for s in cat[:4])}")
+    if parts:
+        L.append("- 重大事件：" + "；".join(parts) + "。（悲观读风险桶、乐观读利好桶）")
+
+
+def _render_shareholder_count(L, v):
+    """股东户数（latest_period 信封）——★ bug 原案：写作期直见最新值+环比，防引旧值如"10.12万"。"""
+    lp = v.get("shareholder_count")
+    if not lp:
+        return
+    val = lp.get("value")
+    try:
+        val_txt = f"{int(val):,} 户"
+    except (TypeError, ValueError):
+        val_txt = f"{val} 户"
+    chg = lp.get("change_pct")
+    chg_txt = f"（环比{chg:+.1f}%）" if isinstance(chg, (int, float)) else ""
+    summ = (lp.get("summary") or "").strip()
+    L.append(f"- 股东户数（最新期 {lp.get('period_label','')}）：{val_txt}{chg_txt}。{summ}".rstrip())
+
+
+def _render_outlook(L, v):
+    """前瞻预期：company_guidance（业绩预告·forecast 一等公民）+ consensus annual[最近预测年]。
+
+    company_guidance stale（is_forward_looking=False / 覆盖期已实际化）→ 标「无前瞻增量，参考实际财报」，
+    防 LLM 把过期预告当 forward earnings 锚（plan §2.4.5）。
+    """
+    o = v.get("outlook")
+    if not o:
+        return
+    parts = []
+    g = o.get("guidance")
+    if isinstance(g, dict):
+        stale = ""
+        if o.get("guidance_status") == "stale" or g.get("is_forward_looking") is False:
+            stale = " ⚠️最近预告覆盖期已实际化，无前瞻增量，引用须参考实际财报"
+        parts.append(f"业绩预告（{g.get('period_label','')}）：{g.get('summary','')}{stale}")
+    an = o.get("annual_near")
+    if isinstance(an, dict) and an.get("eps") is not None:
+        parts.append(f"一致预期{an.get('year')}：EPS {an.get('eps')}，净利 {an.get('netProfit')}亿(同比{an.get('netProfitYoy')}%)")
+    if parts:
+        L.append("- 前瞻预期：" + "；".join(parts) + "。")
+
+
+def _render_segment(L, v):
+    """主营构成三维（产品/行业/地区 top1 + 占比）——G30#1 反片面硬维度 + G34/35/36 数据层。
+
+    数据已在 panorama values['segment']（dimension_status.<dim>.top1_name，runner 已算好 max）。
+    三维对称渲染，让 LLM 写作期直见集中度，不必回翻 snapshot segment_composition。
+    """
+    seg = v.get("segment")
+    if not seg:
+        return
+    parts = []
+    for dim in ("产品", "行业", "地区"):
+        d = seg.get(dim) or {}
+        if not d.get("top1"):
+            continue
+        ratio = d.get("top1_ratio")
+        ratio_txt = f"({ratio*100:.1f}%)" if isinstance(ratio, (int, float)) else ""
+        parts.append(f"{dim}top1={d['top1']}{ratio_txt}")
+    if parts:
+        rd = (seg.get("产品") or {}).get("report_date") or ""
+        L.append(f"- 主营构成{f'（{rd}）' if rd else ''}：" + "；".join(parts) + "。")
+
+
+def _q_caveat(raw_date) -> str:
+    """季末日期（0331/0630/0930）→ 单季·未年化提示；年报(1231)无提示。"""
+    s = str(raw_date or "").replace("-", "")
+    return "（单季·未年化）" if len(s) >= 8 and s[4:8] in ("0331", "0630", "0930") else ""
+
+
+def _render_quality(L, v):
+    """财务质量（ROE/净利率/杜邦三因子）——G30#1 反片面硬维度·财务质量。
+
+    三源 latest_period 信封各带期次（indicators 加权ROE+周转 / abstract 毛利率+净利率 /
+    dupont 三因子分解）。Q1/中报/三季 ROE 标「单季·未年化」（防 LLM 把单季 ROE 当全年盈利能力）。
+    """
+    q = v.get("quality")
+    if not q:
+        return
+    ind = q.get("indicators")
+    if ind:
+        iv = ind.get("value") or {}
+        roe = iv.get("加权净资产收益率(%)") or iv.get("净资产收益率(%)")
+        to = iv.get("总资产周转率(次)")
+        parts = []
+        if roe is not None:
+            parts.append(f"加权ROE {roe}%")
+        if to is not None:
+            parts.append(f"总资产周转 {to}次")
+        if parts:
+            L.append(f"- 财务质量（{ind.get('period_label')}）{_q_caveat(ind.get('raw_date'))}："
+                     + "，".join(parts) + "。")
+    du = q.get("dupont")
+    if du:
+        dv = du.get("value") or {}
+        roe, npm, to, em = (dv.get("净资产收益率"), dv.get("销售净利率"),
+                            dv.get("资产周转率(次)"), dv.get("权益乘数"))
+        if roe is not None:
+            decomp = "×".join(x for x in (
+                f"净利率{npm}%" if npm is not None else None,
+                f"周转{to}" if to is not None else None,
+                f"权益乘数{em}" if em is not None else None) if x)
+            L.append(f"  杜邦分解（{du.get('period_label')}）：ROE {roe}%"
+                     + (f" = {decomp}" if decomp else "") + "。")
+    ab = q.get("abstract")
+    if ab:
+        av = ab.get("value") or {}
+        parts = [f"毛利率 {av['毛利率']}%" for k in ("毛利率",) if av.get(k) is not None]
+        if av.get("销售净利率") is not None:
+            parts.append(f"净利率 {av['销售净利率']}%")
+        if parts:
+            L.append(f"  盈利能力（{ab.get('period_label')}）{_q_caveat(ab.get('raw_date'))}："
+                     + "，".join(parts) + "。")
+
+
+def _render_peer(L, v):
+    """同业对比（s11_peer：target + ≤3 peer 核心6）——G30#1 反片面硬维度·同业对比。
+
+    横截面·各股取各自最新报告期（jiankuang date，如 '2026一季报'）；peer 由独立
+    `runner.py peer` 模式拉取后合并，A 模式快照常缺 → status=missing 时提示先跑 peer 模式。
+    """
+    p = v.get("peer")
+    if not p:
+        return
+    st = p.get("status")
+    if st == "missing":
+        L.append("- 同业对比：未拉取（status=missing）。⚠️ 须先 websearch 定 peer 码、跑 "
+                 "`runner.py peer` 模式合并，再写本维度（防 G30#1 反片面遗漏）。")
+        return
+    rp = p.get("target_report_period")
+    L.append(f"- 同业对比（status={st}，{p.get('peers_count', 0)} 家）{f'（{rp}）' if rp else ''}：")
+    for it in [{"name": "目标", "metrics": p.get("target_metrics")}] + list(p.get("items") or []):
+        m = it.get("metrics") or {}
+        if not m:
+            continue
+        parts = []
+        for k, lbl in (("pe", "PE"), ("pb", "PB"), ("roe", "ROE"),
+                       ("rev_yoy", "营收增速"), ("np_yoy", "净利增速"), ("gross_margin", "毛利率")):
+            val = m.get(k)
+            if val is not None:
+                parts.append(f"{lbl} {val}{'%' if k in ('roe','rev_yoy','np_yoy','gross_margin') else ''}")
+        if parts:
+            name = it.get("name") or it.get("code")
+            L.append(f"  - {name}：" + "｜".join(parts) + "。")
 
 
 # 证据全景草稿渲染器注册表（决策D：新增主题=加一项，不动 _render_draft）
 THEME_RENDERERS = {
     "income": _render_income,
+    "quality": _render_quality,
+    "material_events": _render_material_events,
+    "shareholder_count": _render_shareholder_count,
     "asset_safety": _render_asset_safety,
     "valuation": _render_valuation,
+    "segment": _render_segment,
+    "peer": _render_peer,
+    "outlook": _render_outlook,
     "lhb": _render_lhb,
     "northbound": _render_northbound,
 }
@@ -350,6 +648,16 @@ THEME_RENDERERS = {
 def _render_draft(out: dict, data: dict) -> None:
     """生成 Layer1 证据全景草稿 markdown 行（通用化：遍历 THEME_RENDERERS，新增主题=加 dict 项）。"""
     L = out["draft_lines"]
+    # 关键风险信号前置（plan §4.1 改动D）：关税/集中度/派发/停披等决策信号不被量化数据淹没，
+    # 单列「⚠️ 关键风险信号」子节置首（证据全景 heading 仍存，G30 #1 定位不受影响）。
+    _CRITICAL_KW = ("关税", "集中度", "双集中", "致命", "fatal", "派发", "过热", "停披", "stale",
+                    "关键风险信号", "减持", "违规", "处罚", "退市", "ST", "计损", "减值", "预减", "预亏")
+    critical = [f for f in out["interpretation_flags"] if any(k in f for k in _CRITICAL_KW)]
+    normal = [f for f in out["interpretation_flags"] if f not in critical]
+    if critical:
+        L.append("#### ⚠️ 关键风险信号（写作期须显眼，直接影响悲观情景与仓位裁决）")
+        for f in critical:
+            L.append(f"- ⚠️ {f}")
     L.append("#### 证据全景（helper 抽值草稿——只列值与 gap，方向/权重由你判断）")
     v = out["values"]
     for _theme, renderer in THEME_RENDERERS.items():
@@ -357,7 +665,7 @@ def _render_draft(out: dict, data: dict) -> None:
     if out["gap_quant"]:
         L.append(f"- ⚠️ 数据 gap（m8 须披露；反片面 gate 豁免）：{out['gap_quant']} 无 snapshot 数据。")
     L.append("- 定性（你须从 m1–m9 叙事提炼，机械模型丢失的关键）：护城河 / 治理战略 / 前瞻催化。")
-    for f in out["interpretation_flags"]:
+    for f in normal:
         L.append(f"- 🔎 解读提示：{f}")
 
 
