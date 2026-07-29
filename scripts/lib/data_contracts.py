@@ -242,6 +242,10 @@ SCENES = {
             {"path": "data.targetPrice.average",  "confidence": CONFIRMED},
             {"path": "data.targetPrice.highest",  "confidence": CONFIRMED},
             {"path": "data.targetPrice.lowest",   "confidence": CONFIRMED},
+            # ST2 估值分位（近五年 baidu 序列自算，零增量调用）：pe_ttm/pb 双窗口分位 + 适用性/history_sufficient
+            {"path": "data.valuation_percentile", "confidence": CONFIRMED,
+             "note": "ST2 估值分位 {pe_ttm,pb}，每项 {pct_5y,pct_all,current,median_5y,min_5y,max_5y,window_5y,window_all,applicable,history_sufficient,as_of}；"
+                     "baidu 近五年日序列(914行)自算 pct=(vals<=current).mean()；亏损 PE→applicable=false；次新 5y<3y→history_sufficient=false。m5 §5.1/m6 Layer1 消费"},
         ],
         "consumers": {
             "data.quote.price":          ["computed_metrics"],
@@ -264,6 +268,7 @@ SCENES = {
             "data.targetPrice.average":  ["m4:113"],
             "data.targetPrice.highest":  ["m4:114"],
             "data.targetPrice.lowest":   ["m4:114"],
+            "data.valuation_percentile": ["m5", "m6", "capstone_panorama"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull
         },
         "priority": P1,
         # westock(腾讯源)无限流；baidu stock_zh_valuation_baidu 稳定（PE-TTM/市净率/总市值）。
@@ -293,7 +298,7 @@ SCENES = {
             "data.ebit":      ["m10:10A.3"],
             "data.annual":    ["m10:10A.3"],
             "data.last_actual": ["m10:10A.3"],
-            "data.paid_in_capital": ["m5"],   # 总股本×收盘价 与 baidu 总市值交叉校验
+            "data.paid_in_capital": ["m5", "_aggregate_shareholder_dynamics", "_assemble_programs"],   # 总股本×收盘价 与 baidu 总市值交叉校验 + ST5 占总股本% 派生分母（缺→%全 None 诚实降级）
         },
         "priority": P1,
         # westock consensus + finance 各 1 次 npx（腾讯源无限流）。
@@ -327,6 +332,68 @@ SCENES = {
              "note": "P1增持/P2回购/P3分红/P4上修/P5激励/P6合同/P7补贴/P8重组；乐观打分（gate 不强制·门禁分级）"},
             {"path": "data.risk_signals.latest_period", "confidence": CONFIRMED,
              "note": "最新事件日信封（period_type=event，value=最新风险码；真空→None）"},
+            # v3：逐条公告登记表（material 过滤后）+ 原始 notice_records（命门：akshare 6 列铁定存在）
+            {"path": "data.risk_signals.notice_records", "confidence": CONFIRMED,
+             "note": "公告大全逐条原始 [{公告日期:str,公告标题,公告类型,网址}]（akshare stock_individual_notice_report 6 列子集）；m4 登记表渲染源；公告日期 astype(str) 保 JSON-friendly"},
+            {"path": "data.risk_signals.processed.announcements", "confidence": CONFIRMED,
+             "note": "v3 material 公告登记表 [{code,name,severity,bucket,material_subtype,machine_fields,structured_horizon,title,label,date,url}]；m4/m6/m9 消费，G30#4 presence 校验"},
+            {"path": "data.risk_signals.processed.announcements[].code", "confidence": CONFIRMED,
+             "note": "M1-M11/P1-P8（M11 新码：人员变动/立案；M4 拆监管类/诉讼）；加法式复用 signal 形状"},
+            {"path": "data.risk_signals.processed.announcements[].structured_horizon.reaction", "confidence": CONFIRMED,
+             "note": "immediate/latent/none（按码派生）；m6 Layer3 短/中/长动作"},
+            {"path": "data.risk_signals.processed.announcements[].material_subtype", "confidence": CONFIRMED,
+             "note": "M4 监管类/诉讼；M9 境内/境外担保；M11 离任/立案/聘任"},
+            # ST1：actor_tier（label PRIMARY + 标题细化）→ escalate 精度门（实控人/5%大股东减持升档）
+            {"path": "data.risk_signals.processed.announcements[].machine_fields.actor_tier", "confidence": CONFIRMED,
+             "note": "ST1 actor 级别中文标签（实控人/控股股东｜5%以上大股东｜董监高），label「股东/实际控制人股份减持」作 PRIMARY；"
+                     "G46 泛型校验须 surface（m4 §4.2 actor 列）；escalate→critical→G30#4 兜底"},
+            # ST3：减持增持融合（意图×内部人×前十大）—— executive_trade/shareholder 既有 raw 激活（前十大今日 orphan）
+            {"path": "data.risk_signals.executive_trade", "confidence": CONFIRMED,
+             "note": "westock 董监高/实控人个人增减持 list[dict]（managerName/managerSharesChange±/managerDealPrice/managerHoldChangeDeclareDate）；M1/P1 evidence + shareholder_dynamics.insiders"},
+            {"path": "data.risk_signals.shareholder", "confidence": CONFIRMED,
+             "note": "westock 十大股东 list[dict]（no/name/holdShares/holdPct/holdChange±；正=增持负=减持，最新一期）；"
+                     "ST3 C1 解码层 fold 进 M1/P1 evidence + shareholder_dynamics.top10（具名大股东方向，今日 orphan 已激活）"},
+            {"path": "data.risk_signals.processed.shareholder_dynamics", "confidence": CONFIRMED,
+             "note": "ST3+ST5 股东行为融合信封 {status,by_source{insiders,top10,controlling_shareholders},vs_intent,windows,verdict,corroboration,latest_trade_date,latest_period,summary}；"
+                     "三态 ok(含空)/failed；m9 §9.2 综合研判 home + m6/m7/m4/capstone 消费，G47 presence。"
+                     "ST6 P4 加法式：by_source.controlling_shareholders（ths_executions fold·控股股东/一致行动人子桶，weight 高于董监高）+ "
+                     "by_source.top10.source（westock|top10_multiperiod·gap-fill）+ named[].multi_period_direction（多期 qoq 趋势）。"
+                     "ST5 加法式 %：total_shares/total_shares_source（=paid_in_capital，缺→None 全 % 降级）+ "
+                     "by_source.insiders.{net_pct,increase_pct,reduce_pct,detail[].pct,detail[].is_grant,grant_count,increase_shares_total,reduce_shares_total}（gross-split，修 net-only 遗漏）+ "
+                     "by_source.top10.{net_pct,named[].delta_pct}；0-1 ratio，消费方 inline {x:.2%}（同 unlock {r:.1%} 范式）"},
+            # ST5：待执行/进行中 增减持计划（forward，决策驱动）—— cap%/窗口=正文 REAL，executed%=THS REAL÷总股本
+            {"path": "data.risk_signals.processed.programs", "confidence": CONFIRMED,
+             "note": "ST5 待执行-FIRST 计划信封 list[dict]：{direction,tier,status(planned|ongoing|completed|abandoned),"
+                     "announce_date,window_start,window_end,window_source[REAL绝对|DERIVED反算|MISSING],announced_pct_cap[REAL正文],announced_shares_cap,"
+                     "executed_shares[REAL THS],executed_pct[REAL÷总股本],remaining_pct(cap−exec),over_executed,avg_price,"
+                     "source_art_codes[],provenance{cap,window,executed,remaining,price:REAL|DERIVED|MISSING}}；"
+                     "预披露 body↔THS 执行 JOIN（actor名+窗口就近）；0/[]（无活跃计划，empty_is_ok）/None；m9 待执行段 + G48 presence"},
+            # ST6 P0：公司级回购计划（与股东级 programs[] 平级·actor=公司；westock buyback 执行 PRIMARY + body 计划层）
+            {"path": "data.risk_signals.processed.repurchase_programs", "confidence": CONFIRMED,
+             "note": "ST6 公司级回购 list[dict]：{purpose[注销并减少注册资本|股权激励/员工持股|市值管理],announce_date,"
+                     "status(planned|ongoing|completed|abandoned),plan_amount_cap_yi[REAL body 不超过/最高限额],"
+                     "plan_amount_floor_yi[REAL body 不低于],plan_price_cap[REAL 调整后价],window_start/end/source,"
+                     "executed_amount_yi[REAL westock sum(BuybackFunds)],executed_shares,avg_price,"
+                     "progress_pct[=executed÷cap 两 REAL 比值],currency(RMB|HKD),source_art_codes[],"
+                     "provenance{plan,executed,window,price:REAL|DERIVED|MISSING}}；"
+                     "0/[]（无回购，empty_is_ok）/None；m9 回购段 + capstone _render_buy_sell_pressure"},
+            # ST6 P2：买卖力量综合 verdict（read-only 聚合·Option 2.5 薄 verdict，跨 scene lhb/northbound/fund_flow + shareholder_dynamics）
+            {"path": "data.risk_signals.processed.buy_sell_pressure", "confidence": CONFIRMED,
+             "note": "ST6 买卖阵营对决 verdict {status,as_of,buy{repurchase,insider_buy,incentive,top10_accum,northbound,lhb_buy,fund_flow},"
+                     "sell{insider_sell,unlock,pledge,placement,top10_dist,lhb_sell,fund_flow_out},verdict(buy_dominant|sell_dominant|balanced|unclear),"
+                     "corroboration{multi_source_buy/sell,source_count,weight},summary,latest_period}；"
+                     "read-only 读既有信封一次（反双渲染：DETAIL 不进 BSP，仍由 _render_shareholder_behavior/_render_lhb 单渲染）；"
+                     "材料性闸（董监高/控股股东 <INSIDER_MIN_RATIO_PCT=1% 不计 force）；三态 ok(含 unclear 空活动)/failed；m9 §9.2 + G49 presence"},
+            # ST5.1：执行/趋势/正文 三 raw 源（_fetch_risk_signals 内 env 兄弟键，processed 派生输入；非模块直读）
+            {"path": "data.risk_signals.ths_executions", "confidence": CONFIRMED,
+             "note": "ST5.1 同花顺 stock_shareholder_change_ths 结构化执行 list[dict]（date/actor/direction/shares/avg_price/remaining/window_start/end/channel）；"
+                     "覆盖控股股东/一致行动人（executive_trade 仅董监高个人的 null gap 根治）；_assemble_programs/_aggregate 内部消费"},
+            {"path": "data.risk_signals.top10_multiperiod", "confidence": CONFIRMED,
+             "note": "ST5.1 东财 datacenter RPT_F10_EH_FREEHOLDERS 前十大流通股东多期趋势 list[{period,holders[{name,delta_shares,hold_pct,qoq_pct,is_new}]}]；"
+                     "多期 QoQ=真趋势（beats westock 单期快照）；_aggregate top10 趋势消费"},
+            {"path": "data.risk_signals.announcement_bodies", "confidence": CONFIRMED,
+             "note": "ST5 预披露/计划/结果 公告正文 {art_code: notice_content}（东财 np-cnotice-stock content API）；"
+                     "announced_pct_cap/窗口/截止日 唯一 REAL 来源（0 结构化源）；_assemble_programs/_parse_reduction_body 消费"},
             {"path": "data.disclosure", "confidence": CONFIRMED,
              "note": "Westock W2: 财报披露日历并入（disclosure_date/desc + latest_period event）；无未来披露日=missing 真空"},
         ],
@@ -338,7 +405,19 @@ SCENES = {
             "data.risk_signals.notice_types":             ["m7"],
             "data.risk_signals.processed":                ["m6", "G30"],
             "data.risk_signals.processed.risk":           ["m6", "m7", "G30"],
-            "data.risk_signals.processed.catalyst":       ["m6"],
+            "data.risk_signals.processed.catalyst":       ["m4", "m6", "m9"],  # v3：catalyst 码现在 m4 登记表 surface + m6 矩阵 + m9 引用
+            "data.risk_signals.processed.announcements":  ["m4", "m6", "m9", "G30"],  # v3 登记表：m4 渲染/m6 矩阵/m9 引用/G30#4 presence
+            "data.risk_signals.processed.announcements[].machine_fields.actor_tier": ["m4", "G46"],  # ST1：m4 §4.2 actor 列 surface + G46 泛型校验
+            "data.risk_signals.executive_trade":          ["m4", "m9", "capstone_panorama"],   # ST3 内部人执行层（既有 raw 补登 consumer）
+            "data.risk_signals.shareholder":              ["m4", "m9", "capstone_panorama"],   # ST3 前十大执行层（今日 orphan 补登）
+            "data.risk_signals.processed.shareholder_dynamics": ["m9", "m6", "m7", "m4", "capstone_panorama", "G47"],  # ST3+ST5 融合信封（含 %）：m9 §9.2 home + m6/m7/m4 消费 + G47 presence
+            "data.risk_signals.processed.programs": ["m9", "m7", "m1", "m6", "capstone_panorama", "G48"],  # ST5 待执行-FIRST 计划：m9 待执行段 + m7 风险行 + m1 overhang + m6 timing + capstone render + G48 presence
+            "data.risk_signals.processed.repurchase_programs": ["m9", "m7", "m1", "capstone_panorama", "_aggregate_buy_sell_pressure"],  # ST6 公司级回购：m9 回购段 + m7/m1 + capstone render + BSP 聚合输入
+            "data.risk_signals.processed.buy_sell_pressure": ["m9", "m6", "m7", "m1", "capstone_panorama", "G49"],  # ST6 买卖阵营 verdict：m9 §9.2 home + m6 timing + m7 卖方 + m1 + capstone render + G49 presence
+            "data.risk_signals.ths_executions": ["_assemble_programs", "_aggregate_shareholder_dynamics"],   # ST5.1 THS 执行（内部派生输入）
+            "data.risk_signals.top10_multiperiod": ["_aggregate_shareholder_dynamics"],   # ST5.1 RPT 多期趋势（内部派生输入）
+            "data.risk_signals.announcement_bodies": ["_assemble_programs", "_parse_reduction_body"],   # ST5 正文 cap%/窗口 REAL 源（内部派生输入）
+            "data.risk_signals.notice_records":           ["m4"],   # v3 raw 逐条公告：m4 登记表渲染源
             "data.disclosure":                            ["m4", "G43"],   # m4 事件扫描（披露日临近=催化/风险）+ G43 消费校验
         },
         "priority": P1,

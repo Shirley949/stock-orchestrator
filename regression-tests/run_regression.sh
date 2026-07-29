@@ -46,6 +46,14 @@ echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公�
 python3 "$HERE/test_freshness_helper.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 presence + G38 分红有效性）"
 python3 "$HERE/test_freshness_gate.py" 2>&1 | tail -3
+echo "[① 契约层] test_checklist_consistency.py（checklist 分母一致：generate N == c-tag 数；100% 可达；mapping c_map_N 可打勾）"
+python3 "$HERE/test_checklist_consistency.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_announcement_materiality.py（P8 标的提取 V2.4：SJSE 长名+资产保留+股份有限公司+边界词截断+0 真回退）"
+python3 "$HERE/test_announcement_materiality.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-run FAIL+fallback emit 四态+capstone 富字段+m6/m1 锚点）"
+python3 "$HERE/test_peer_pipeline.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_g48_shareholder_programs.py（G48 待执行-FIRST 增减持计划 SOFT gate 三态+反编造）"
+python3 "$HERE/test_g48_shareholder_programs.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 
 if [ -d "$GATE_FIXTURES" ]; then
   echo

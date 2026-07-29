@@ -703,7 +703,7 @@ class DataSnapshot:
             if "Length mismatch" in err_str and "axis has 0" in err_str:
                 msg = f"[akshare] {api_name} 返回空数据（当日无记录）"
             elif "NoneType" in err_str and "subscriptable" in err_str:
-                msg = f"[akshare] {api_name} 返回 null（东财无该股数据）"
+                msg = f"[akshare] {api_name} 返回 null（上游无该股数据或代码格式不符）"
             else:
                 msg = f"[akshare] {api_name} 失败: {err_str[:200]}"
             self._warnings.append(msg)

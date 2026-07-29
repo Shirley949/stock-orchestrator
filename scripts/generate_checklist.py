@@ -114,6 +114,7 @@ PHASE_STEPS = {
             {"id": "c17", "desc": "runner 返回的公告标题 → Claude 筛选中标/重大合同", "agent": 3},
             {"id": "c18", "desc": "snapshot 海外派生（D6_geo_revenue + segment_composition.geo）确认 + Claude 判断间接出海", "agent": 4},
             {"id": "c19", "desc": "Claude 选择可比公司（runner 返回候选池）", "agent": 4},
+            {"id": "c19a", "desc": "跑 `python runner.py peer <target> <p1,p2,p3> --snapshot <快照>` 拉取同业对比（websearch 定 peer 码后跑；占位 missing 时 _llm_fallback_tasks 会提示此命令，G15 校验是否执行）", "agent": 4},
             {"id": "c19b", "desc": "Claude 判断期货品种（如用户提到期货）", "agent": 4},
         ],
         "phase_1_skipped": [
@@ -272,9 +273,9 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     output_file = output or f"/tmp/analysis_checklist_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 
-    # 统计总步骤数
-    total_steps = sum(len(steps) for steps in mode_steps.values())
-    # 加上用户问题映射行数
+    # 统计总步骤数（排除 phase_1_skipped：3 项 ❌ 永久跳过、不可勾选、无 c-tag，计入则与 update_checklist 分母不一致）
+    total_steps = sum(len(steps) for k, steps in mode_steps.items() if k != "phase_1_skipped")
+    # 加上用户问题映射行数（每行带 c_map_N c-tag，可被 update_checklist 计数/打勾 → 与步骤分母同源）
     mapping_rows = len(question_result["matched"]) + len(question_result["unmapped"])
     total_steps += mapping_rows
 
@@ -313,13 +314,17 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
     lines.append("| 用户问题 | 需要数据 | API/源 | 来源 | 状态 |")
     lines.append("|---------|---------|-------|------|------|")
 
-    for match in question_result["matched"]:
-        source_label = "映射表"
-        apis = ", ".join(match["api_sources"][:2])  # 最多显示2个API
-        lines.append(f"| {match['segment'][:20]} | {match['data_needs'][:30]} | {apis} | {source_label} | [ ] |")
-
-    for unmapped in question_result["unmapped"]:
-        lines.append(f"| {unmapped['segment'][:20]} | ⚠️ 待LLM判断 | — | [LLM兜底] | [ ] |")
+    # mapping 行带 c_map_N c-tag（c-tag 在 [ ] 之后，对齐 phase 步骤写法 + update_checklist:163 正则 [ ] <!--cid-->）
+    # → update_checklist:185 的 <!--c[\w]+--> 计数包含 mapping 行，与 generate 分母一致（Bug 2 分母对齐）
+    _all_map = ([("matched", m) for m in question_result["matched"]]
+                + [("unmapped", u) for u in question_result["unmapped"]])
+    for i, (kind, row) in enumerate(_all_map, 1):
+        cid = f"c_map_{i}"   # c[\w]+ 匹配；唯一不撞现有 c01..c80 / c_d2_* / c_pdf_*
+        if kind == "matched":
+            apis = ", ".join(row["api_sources"][:2])  # 最多显示2个API
+            lines.append(f"| {row['segment'][:20]} | {row['data_needs'][:30]} | {apis} | 映射表 | [ ] <!--{cid}--> |")
+        else:
+            lines.append(f"| {row['segment'][:20]} | ⚠️ 待LLM判断 | — | [LLM兜底] | [ ] <!--{cid}--> |")
 
     lines.append("")
 

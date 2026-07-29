@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 from latest_extract import days_old  # freshness stale 标记（叶工具，无循环依赖）
+from announcement_materiality import derive_horizon  # v3：present_signals 附 horizon（按码派生，无循环依赖）
 
 
 # ============================================================
@@ -126,11 +127,12 @@ QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
 # (processed 路径, 取码子键, critical 码集, {code: (name, precise_kws)})
 _SIGNAL_SOURCES = [
     ("s5_events.data.risk_signals.processed", "risk",
-     ("M1", "M4", "M5", "M8"),
+     ("M1", "M4", "M5", "M8", "M11"),
      {"M1": ("股东减持", ("减持", "股东减持")),
       "M4": ("违规/诉讼", ("违规", "处罚", "立案调查", "监管处罚")),
       "M5": ("ST/退市", ("ST", "退市", "*ST")),
-      "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值"))}),
+      "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值")),
+      "M11": ("人员变动/立案", ("被立案", "立案调查", "人员变动", "高管变动", "离任", "辞职"))}),
     ("s8_a_share.data.shareholder_count.processed", "signals",
      ("S2", "S7"),
      {"S2": ("高位派发", ("派发", "高位派发")),
@@ -315,8 +317,26 @@ def panorama(data: dict) -> dict:
             if s.get("severity") == "critical":
                 out["interpretation_flags"].append(
                     f"关键风险信号·{s.get('name')}：{s.get('evidence')} → 悲观情景核心驱动，须高亮")
+        # 🆕 ST3 股东行为综合研判（融合意图×内部人×前十大；G47 presence 数据层 + Layer1 起草素材）
+        sd = mat.get("shareholder_dynamics")
+        if isinstance(sd, dict) and sd.get("status") == "ok":
+            out["values"]["shareholder_dynamics"] = sd
+            if sd.get("summary"):
+                out["interpretation_flags"].append(f"股东行为研判·{sd.get('summary')}")
+        # 🆕 ST5 待执行/进行中 增减持计划（forward，cap%/窗口/执行/剩余 + provenance；G48 presence 数据层）
+        # 用户核心意图：现在/未来有无增持/减持悬顶/支撑 → 前置「⚠️关键风险信号」（_CRITICAL_KW 含减持）。
+        progs = mat.get("programs")
+        if isinstance(progs, list) and progs:
+            out["values"]["programs"] = progs
+            for p in progs:
+                if isinstance(p, dict) and p.get("status") in ("planned", "ongoing"):
+                    _act = "、".join(p.get("actor_names") or []) or "股东"
+                    out["interpretation_flags"].append(
+                        f"待执行计划·{_act}{p.get('direction', '')}（{p.get('status')}）→ 决策驱动，须显眼")
+                    break
 
     # present_signals（G30#1 信号驱动覆盖）：遍历 _SIGNAL_SOURCES，收集实际存在的 critical 码。
+    # 附 structured_horizon（从该 code 的 signal 取；缺失则按码派生）→ m6 Layer3 短/中/长动作提示。
     for path, subkey, crit_codes, code_map in _SIGNAL_SOURCES:
         proc = _snapshot_get(data, path)
         if not isinstance(proc, dict):
@@ -326,8 +346,12 @@ def panorama(data: dict) -> dict:
         for code in crit_codes:
             if code in present:
                 name, kws = code_map[code]
+                hz = next((s.get("structured_horizon") for s in sigs
+                           if isinstance(s, dict) and s.get("code") == code
+                           and isinstance(s.get("structured_horizon"), dict)), None)
                 out["present_signals"].append(
-                    {"source": path, "code": code, "name": name, "kws": list(kws)})
+                    {"source": path, "code": code, "name": name, "kws": list(kws),
+                     "structured_horizon": hz or derive_horizon(code)})
 
     vs = _snapshot_get(data, "valuation_snapshot.data") or {}
     if isinstance(vs, dict):
@@ -337,6 +361,10 @@ def panorama(data: dict) -> dict:
             out["values"]["targetPrice"] = tp.get("average")
         if isinstance(ar, dict) and ar.get("institutionCnt"):
             out["values"]["analystRating"] = f"买入{ar.get('buy_ratio', 0):.0f}%/机构{ar.get('institutionCnt')}家"
+        # 🆕 ST2 估值分位（PE-TTM/PB 双窗口 pct_5y/pct_all + 适用性 flag）
+        vp = vs.get("valuation_percentile")
+        if isinstance(vp, dict) and (vp.get("pe_ttm") or vp.get("pb")):
+            out["values"]["valuation_percentile"] = vp
 
     # 龙虎榜资金（90 天窗·编码信号范式：signals[]/aggregates/trend）
     lp = _snapshot_get(data, "lhb.data.processed")
@@ -392,6 +420,18 @@ def panorama(data: dict) -> dict:
         if outlook:
             out["values"]["outlook"] = outlook
 
+    # 🆕 ST6 买卖力量 verdict + 公司级回购（gate 外独立读·镜像 lhb/northbound）：
+    # BSP 聚合跨 scene 数据（lhb/northbound/fund_flow），独立于公告——干净票（大单流入+北向增持但零公告）
+    # 在 mat.status==ok and (risk or catalyst) gate 内会变孤儿 → gate 外填（同 lhb/northbound/shareholder_count）。
+    bsp = _snapshot_get(data, "s5_events.data.risk_signals.processed.buy_sell_pressure")
+    if isinstance(bsp, dict) and bsp.get("status") == "ok":
+        out["values"]["buy_sell_pressure"] = bsp
+        if bsp.get("summary"):
+            out["interpretation_flags"].append(bsp.get("summary"))   # summary 已含「买卖力量：」前缀，勿再叠
+    repos = _snapshot_get(data, "s5_events.data.risk_signals.processed.repurchase_programs")
+    if isinstance(repos, list) and repos:
+        out["values"]["repurchase_programs"] = repos
+
     # ---- 渲染证据全景草稿表（Layer1）----
     _render_draft(out, data)
     return out
@@ -414,9 +454,35 @@ def _render_asset_safety(L, v):
 
 
 def _render_valuation(L, v):
-    if not (v.get("targetPrice") or v.get("analystRating")):
+    # ST2 估值分位（双窗口 pct_5y/pct_all + 适用性 flag）
+    vp = v.get("valuation_percentile") or {}
+    pct_parts = []
+    for key, label in (("pe_ttm", "PE(TTM)"), ("pb", "PB")):
+        seg = vp.get(key)
+        if not isinstance(seg, dict):
+            continue
+        if seg.get("applicable") is False:
+            pct_parts.append(f"{label}分位：不适用")
+            continue
+        p5 = seg.get("pct_5y")
+        pa = seg.get("pct_all")
+        note = ""
+        if seg.get("history_sufficient") is False:
+            note = "（次新·仅参考）"
+        if isinstance(p5, (int, float)):
+            line = f"{label}分位 近五年{p5:.0%}"
+            if isinstance(pa, (int, float)):
+                line += f"/全部{pa:.0%}"
+            pct_parts.append(line + note)
+    has_target = v.get("targetPrice") or v.get("analystRating")
+    if not (has_target or pct_parts):
         return
-    L.append(f"- 估值/前瞻：目标价 {v.get('targetPrice','—')}，评级 {v.get('analystRating','—')}。")
+    pieces = []
+    if has_target:
+        pieces.append(f"目标价 {v.get('targetPrice','—')}，评级 {v.get('analystRating','—')}")
+    if pct_parts:
+        pieces.append("；".join(pct_parts) + "（[src: valuation_snapshot.data.valuation_percentile]）")
+    L.append("- 估值/前瞻：" + "；".join(pieces) + "。")
 
 
 def _render_lhb(L, v):
@@ -464,6 +530,69 @@ def _render_northbound(L, v):
              f"持股{ratio_txt}，signal={n.get('signal_type')}，信号={'/'.join(sigs) if sigs else '—'}）{stale}。")
 
 
+def _render_buy_sell_pressure(L, v):
+    """ST6 买卖力量 verdict 渲染（Option 2.5 反双渲染：只吐 verdict + rollup 量级 + 回购新数字一行）。
+
+    明确禁止重述 insider/top10 具名持有人、lhb 席位、北向 ratio——那些仍由 _render_shareholder_behavior/
+    _render_lhb/_render_northbound 单渲染。此处只汇总阵营对决结论 + 各分量量级（net_pct/已执行额/计数）。
+    """
+    b = v.get("buy_sell_pressure")
+    if not b:
+        return
+    verdict = b.get("verdict")
+    buy, sell = b.get("buy") or {}, b.get("sell") or {}
+    parts = []
+    # 买方 rollup
+    rp = buy.get("repurchase") or {}
+    if rp.get("active_count"):
+        seg = f"在途回购{rp['active_count']}项"
+        if rp.get("executed_amount_yi"):
+            seg += f"/已执行{rp['executed_amount_yi']:.2f}亿"
+        if rp.get("progress_avg_pct") is not None:
+            seg += f"(进度{rp['progress_avg_pct']:.0%})"
+        if rp.get("cancel_type_count"):
+            seg += "(注销型)"
+        parts.append(("买", seg))
+    ff = buy.get("fund_flow")
+    if ff:
+        parts.append(("买", f"大单净流入{ff.get('main_net_yi'):.1f}亿"))
+    ib = buy.get("insider_buy") or {}
+    if ib.get("controlling_365d_net_shares") or ib.get("insider_365d_net_shares"):
+        parts.append(("买", "内部人增持" + ("(含控股股东)" if ib.get("controlling_365d_net_shares") else "")))
+    # 卖方 rollup
+    isl = sell.get("insider_sell") or {}
+    if isl.get("forward_reduction_count"):
+        seg = f"减持悬顶{isl['forward_reduction_count']}项"
+        if isl.get("forward_overhang_cap_pct") is not None:
+            seg += f"(上限{isl['forward_overhang_cap_pct']:.2%})"
+        parts.append(("卖", seg))
+    elif isl.get("controlling_365d_net_shares") or isl.get("insider_365d_net_shares"):
+        parts.append(("卖", "减持" + ("(控股股东)" if isl.get("controlling_365d_net_shares") else "")))
+    un = sell.get("unlock")
+    if un:
+        parts.append(("卖", f"解禁{un.get('upcoming_count')}笔"))
+    pg = sell.get("pledge")
+    if pg:
+        d = pg.get("distance_pct")
+        near = "（邻近强平）" if (d is not None and d < 1.2) else ""
+        parts.append(("卖", f"质押比例{pg.get('pledge_ratio')}{near}"))
+    ffo = sell.get("fund_flow_out")
+    if ffo:
+        parts.append(("卖", f"大单净流出{abs(ffo.get('main_net_yi')):.1f}亿"))
+    _buy_txt = "、".join(s for side, s in parts if side == "买")
+    _sell_txt = "、".join(s for side, s in parts if side == "卖")
+    if not _buy_txt and not _sell_txt:
+        L.append(f"- 买卖力量：近一季无材料级买卖力量异动（verdict={verdict}）。")
+        return
+    corr = b.get("corroboration") or {}
+    corr_txt = ""
+    if corr.get("multi_source_buy") or corr.get("multi_source_sell"):
+        corr_txt = f"（多源共振：买{corr.get('buy_source_count')}源/卖{corr.get('sell_source_count')}源）"
+    duel = f"买方({_buy_txt}) vs 卖方({_sell_txt})" if (_buy_txt and _sell_txt) \
+        else (f"买方({_buy_txt})" if _buy_txt else f"卖方({_sell_txt})")
+    L.append(f"- 买卖力量：{duel} → **{verdict}**{corr_txt}。")
+
+
 def _render_material_events(L, v):
     """重大事件（M 风险 / P 利好 双桶）——G30#1 信号覆盖数据层 + capstone 悲观/乐观打分素材。
 
@@ -500,6 +629,117 @@ def _render_shareholder_count(L, v):
     chg_txt = f"（环比{chg:+.1f}%）" if isinstance(chg, (int, float)) else ""
     summ = (lp.get("summary") or "").strip()
     L.append(f"- 股东户数（最新期 {lp.get('period_label','')}）：{val_txt}{chg_txt}。{summ}".rstrip())
+
+
+def _render_shareholder_behavior(L, v):
+    """🆕 ST3+ST5 股东行为研判：待执行/进行中增减持计划 FIRST（决策驱动）+ 已完成融合（内部人×前十大）。
+
+    待执行段（forward）：programs[] status∈{planned,ongoing} → cap%/窗口/已执行%/剩余%，每字段按
+      provenance(REAL/MISSING) 诚实降级（缺→「需查正文」，绝不编造）。用户核心意图：现在/未来有无
+      增持/减持悬顶/支撑，决定操作。已完成段：shareholder_dynamics（insiders/top10 占总股本%）。
+    所有 `:.2%` 前均 None guard（早调/缺 total_shares → pct=None，f-string 会崩）。
+    """
+    src_sd = "[src: snapshot.s5_events.data.risk_signals.processed.shareholder_dynamics]"
+    src_pg = "[src: snapshot.s5_events.data.risk_signals.processed.programs]"
+
+    # ---- 待执行/进行中 FIRST（forward 计划，决策驱动；每数字带 provenance 诚实降级）----
+    progs = v.get("programs")
+    if isinstance(progs, list):
+        for p in progs:
+            if not isinstance(p, dict) or p.get("status") not in ("planned", "ongoing"):
+                continue
+            d = p.get("direction") or "增减持"
+            tier = p.get("tier") or "股东"
+            actors = "、".join(p.get("actor_names") or []) or "未具名"
+            st = {"planned": "待执行", "ongoing": "进行中"}.get(p.get("status"), p.get("status"))
+            prov = p.get("provenance") or {}
+            seg = [f"{actors}{d}（{tier}，{st}）"]
+            cap = p.get("announced_pct_cap")
+            if cap is not None:
+                seg.append(f"拟{d}不超{cap:.2%}总股本")
+            elif prov.get("cap") == "MISSING":
+                seg.append(f"拟{d}比例需查公告正文")
+            ws, we = p.get("window_start"), p.get("window_end")
+            if ws and we:
+                seg.append(f"窗口{ws}~{we}")
+            ep = p.get("executed_pct")
+            if ep is not None:
+                seg.append(f"已执行{ep:.2%}")
+            rp = p.get("remaining_pct")
+            if rp is not None:
+                seg.append(f"剩余{rp:.2%}")
+            elif cap is not None and ep is None:
+                seg.append("已执行数需查正文")
+            L.append(f"- ⏳待执行计划：{'；'.join(seg)}。 {src_pg}".rstrip())
+
+    # ---- 近期已完成（completed，≤1yr；直接写结果：谁×方向×%，窗口，已执行完毕）----
+    for p in (progs or []):
+        if not isinstance(p, dict) or p.get("status") != "completed":
+            continue
+        d = p.get("direction") or "增减持"
+        tier = p.get("tier") or "股东"
+        actors = "、".join(p.get("actor_names") or []) or "未具名"
+        seg = [f"{actors}{d}（{tier}）"]
+        ep = p.get("executed_pct")
+        cap = p.get("announced_pct_cap")
+        if ep is not None:
+            seg.append(f"实际{d}{ep:.2%}总股本")
+        elif cap is not None:
+            seg.append(f"计划不超{cap:.2%}总股本")
+        we = p.get("window_end")
+        wsrc = p.get("window_source")
+        if we:
+            tag = "" if wsrc == "REAL" else "（反算）"
+            seg.append(f"窗口截至{we}{tag}")
+        seg.append("已执行完毕，影响已释放")
+        L.append(f"- ✅近期已完成：{'；'.join(seg)}。 {src_pg}".rstrip())
+
+    # ---- 已完成融合（backward，内部人×前十大，占总股本%）----
+    sd = v.get("shareholder_dynamics")
+    if not isinstance(sd, dict) or not sd.get("verdict"):
+        return
+    verdict = sd.get("verdict")
+    summary = (sd.get("summary") or "").strip()
+    parts = [f"verdict={verdict}"]
+    by = sd.get("by_source") or {}
+    ins = by.get("insiders") or {}
+    if isinstance(ins, dict) and (ins.get("trades") or ins.get("net_shares")):
+        _s = f"内部人{ins.get('trades', 0)}笔"
+        _np = ins.get("net_pct")
+        if _np is not None:
+            _s += f"({ins.get('net_direction', '')}{_np:.2%}总股本)"
+        _gc = ins.get("grant_count")
+        if _gc:
+            _s += f"，{_gc}笔疑股权激励授予"
+        parts.append(_s)
+    top10 = by.get("top10") or {}
+    if isinstance(top10, dict):
+        named = top10.get("named") or []
+        if isinstance(named, list) and named:
+            _ns = []
+            for n in named[:3]:
+                if not isinstance(n, dict):
+                    continue
+                _t = f"{n.get('name', '')}{'增持' if (n.get('direction') or '').startswith('增') else '减持'}"
+                _dp = n.get("delta_pct")
+                if _dp is not None:
+                    _t += f"{_dp:.2%}"
+                _ns.append(_t)
+            if _ns:
+                parts.append(f"前十大[{'、'.join(_ns)}，资金面]")
+    corr = sd.get("corroboration") or {}
+    if isinstance(corr, dict):
+        if corr.get("double_bearish"):
+            parts.append("内部人∧前十大共振减持(最强看空)")
+        elif corr.get("double_bullish"):
+            parts.append("内部人∧前十大共振增持(最强看多)")
+    vi = sd.get("vs_intent") or {}
+    if isinstance(vi, dict) and vi.get("intent_executed") is not None:
+        parts.append("言行合一" if vi.get("intent_executed") else "公告未执行")
+    lp_env = sd.get("latest_period") or {}
+    pl = f"（最新{lp_env.get('period_label')}）" if lp_env.get("period_label") else ""
+    summ = f" {summary}" if summary else ""
+    L.append(f"- 已完成股东行为{pl}：{'；'.join(parts)}。{summ} {src_sd}".rstrip())
 
 
 def _render_outlook(L, v):
@@ -624,9 +864,24 @@ def _render_peer(L, v):
             val = m.get(k)
             if val is not None:
                 parts.append(f"{lbl} {val}{'%' if k in ('roe','rev_yoy','np_yoy','gross_margin') else ''}")
+        # 富字段次行（eps/营收/净利/资产负债率/每股净资产；jiankuang 直供，gate 不校验，
+        # capstone 是草稿预填——浮出才被 LLM 消化引用，仿 G26 富字段原则）
+        rich = []
+        for k, lbl in (("eps", "EPS"), ("rev", "营收"), ("np", "净利"),
+                       ("debt_ratio", "资产负债率"), ("nav_per_share", "每股净资产")):
+            rv = m.get(k)
+            if rv is not None:
+                if k in ("rev", "np"):
+                    rich.append(f"{lbl} {float(rv) / 1e8:.2f}亿")   # 复用 capstone L149 亿元范式
+                elif k == "debt_ratio":
+                    rich.append(f"{lbl} {rv}%")
+                else:
+                    rich.append(f"{lbl} {rv}")
         if parts:
             name = it.get("name") or it.get("code")
             L.append(f"  - {name}：" + "｜".join(parts) + "。")
+            if rich:
+                L.append(f"      （富：{'｜'.join(rich)}）")
 
 
 # 证据全景草稿渲染器注册表（决策D：新增主题=加一项，不动 _render_draft）
@@ -635,6 +890,7 @@ THEME_RENDERERS = {
     "quality": _render_quality,
     "material_events": _render_material_events,
     "shareholder_count": _render_shareholder_count,
+    "shareholder_behavior": _render_shareholder_behavior,
     "asset_safety": _render_asset_safety,
     "valuation": _render_valuation,
     "segment": _render_segment,
@@ -642,6 +898,7 @@ THEME_RENDERERS = {
     "outlook": _render_outlook,
     "lhb": _render_lhb,
     "northbound": _render_northbound,
+    "buy_sell_pressure": _render_buy_sell_pressure,
 }
 
 

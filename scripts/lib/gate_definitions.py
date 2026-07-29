@@ -2,7 +2,7 @@
 """
 gate_definitions.py — Gate 积木定义 + Profile + 自评分（单一引擎）
 
-仓库内唯一的 Gate 定义源（G1, G6–G29, G30, G31–G45，共 41）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
+仓库内唯一的 Gate 定义源（G1, G6–G29, G30, G31–G46；活跃 gate 数 = len(ALL_GATES)，勿硬编码）。第二套引擎（gate_checker.py 等）已删除（归档于父仓库 git 历史）。
 本模块提供：GATE_DESCS / GATE_WEIGHTS / GATE_CHECKERS（每 Gate 一行可验证）、
 PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_score（三维自评分：
 数据覆盖 40% + Gate 通过 40% + SOURCE 溯源 20%，注入 sidecar 作为 m11 唯一权威分数）。
@@ -64,12 +64,16 @@ GATE_DESCS = {
     "G43": "财报披露日历消费（m4；s5_events.disclosure ok→须含披露/财报词、无数据编造具体预计披露日=FAIL）",
     "G44": "ESG 评级治理维度消费（m9.2/m7；s_esg ok→须含 ESG/评级词(不含裸治理)、无数据编造 ESG 评级=FAIL）",
     "G45": "目标价口径溯源（m5；目标价数字须 [src:] 溯源或不确定性标注；websearch vs API-grade 混用无 src=FAIL）",
+    "G46": "公告登记表 machine_field 消费（m4；announcements 高密度码 title 派生 machine_field 角色/被担保方/占比/标的 须 surface；空/failed 豁免；depth 不校验）",
+    "G47": "股东行为综合研判消费（m9.2/m7；ST3 shareholder_dynamics 融合 意图×内部人×前十大，有材料级方向须 surface 内部人/董监高/前十大/增持/减持/净买/净卖/港资/言行合一；空/中性/failed 豁免；反编造 FAIL）",
+    "G48": "待执行/进行中增减持计划消费（m9.2/m7/m1；ST5 programs[] forward 信封，有 planned/ongoing 须 surface 待执行/进行中/拟减持/拟增持/窗口/计划；无活跃/failed 豁免；反编造 FAIL）",
+    "G49": "买卖力量 verdict 消费（m9.2/m7/m6/m1/capstone；ST6 buy_sell_pressure 信封，verdict∈{buy_dominant,sell_dominant,balanced} 须 surface 买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓；unclear/failed/空 豁免；反编造 FAIL）",
 }
 
 GATE_WEIGHTS = {
     "G1": 2,
     "G6": 2, "G7": 2, "G8": 2, "G9": 2, "G10": 2,
-    "G11": 1, "G12": 2, "G13": 2, "G14": 2, "G15": 2,
+    "G11": 1, "G12": 2, "G13": 2, "G14": 2, "G15": 3,
     "G16": 2, "G17": 3, "G18": 2, "G19": 3,     "G20": 2,
     "G21": 3,  # PR 8: 高权重
     "G22": 3,  # 分业务数据完整性
@@ -96,10 +100,14 @@ GATE_WEIGHTS = {
     "G43": 1,  # 财报披露日历消费（Soft；disclosure ok→须含披露词、无数据编造日期=FAIL）
     "G44": 1,  # ESG 评级治理维度消费（Soft；s_esg ok→须含 ESG 词、无数据编造评级=FAIL）
     "G45": 1,  # 目标价口径溯源（Soft；目标价数字须 src 或不确定性标注；websearch vs API-grade 混用=FAIL）
+    "G46": 2,  # 公告登记表 machine_field 消费（Soft；announcements 高密度码 machine_field 须 surface）
+    "G47": 1,  # 股东行为综合研判消费（Soft；ST3 shareholder_dynamics 有方向须 surface presence 词）
+    "G48": 1,  # 待执行/进行中增减持计划消费（Soft；ST5 programs[] 有 active 须 surface presence 词）
+    "G49": 1,  # 买卖力量 verdict 消费（Soft；ST6 buy_sell_pressure 有 verdict 须 surface 阵营词）
 }
 
-# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31–G45（共 41）
-ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45"]
+# 综合研判 capstone = G30；活跃 gate = G1, G6–G29, G30, G31–G46
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G46", "G47", "G48", "G49"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -110,7 +118,7 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G22", "G23", "G24", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G27", "G28", "G29", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45"]
+SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G27", "G28", "G29", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G46", "G47", "G48", "G49"]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -478,6 +486,15 @@ def check_g15(report: str, data: dict) -> bool:
         if status == "ok" and not items:
             return False
         websearch_codes = peer.get("websearch_peer_codes")
+        # L0（600584 bug 根治）：占位 missing 且无 websearch_peer_codes 键（→ None）=
+        # peer 子命令从未跑（两段式 runner 设计下 LLM 漏步）。须诚实披露「无适用同业」
+        # （独家/垄断/次新/无可比/行业唯一），否则 = 静默漏步零数据假 PASS → FAIL。
+        # None（占位无键）与 []/非空 list（跑了）严格可区分：runner.fetch_peer_comparison 总回填此键。
+        if websearch_codes is None:
+            disclosed = any(kw in report for kw in (
+                "无适用同业", "无可比", "独家", "垄断", "次新", "无同业",
+                "尚无可比", "行业唯一", "无可比标的"))
+            return bool(disclosed)
         has_peer_phrasing = any(kw in report for kw in ("同业", "可比公司", "对比", "竞品", "同行", "对标"))
         has_peer_number = bool(re.search(r"(毛利率|PE|PB|ROE)\s*[:：]\s*[\d.]+", report))
         # F2: peer 子命令回填了 websearch_peer_codes 却仍 missing/空 items → 调子命令但合并失败/拉取失败；
@@ -1208,6 +1225,19 @@ def _g30_panorama_section(capstone: str) -> str:
     return capstone[m.start():m.end() + (nxt.start() if nxt else len(rest))]
 
 
+def _g30_announcement_registry_section(report: str) -> str:
+    """v3：m4 §4.2「公告重要性一览/重要公告/公告登记」小节文本；找不到返回 ''。
+
+    锚定该小节（照 _g30_panorama_section 模式）——避 capstone 误切，且防散文/capstone
+    顺带提及「减持」冒充登记表条目（登记表须是有结构的小节）。扫全 report（m4 在 capstone 外）。"""
+    m = re.search(r"^#{1,4}\s.*(?:公告重要性|重要公告一览|公告一览|公告登记表|重要公告清单)", report, re.MULTILINE)
+    if not m:
+        return ""
+    rest = report[m.end():]
+    nxt = re.search(r"^#{1,4}\s", rest, re.MULTILINE)
+    return report[m.start():m.end() + (nxt.start() if nxt else len(rest))]
+
+
 def _g30_action_class(v):
     if v in _G30_BULLISH_VERBS:
         return "bull"
@@ -1311,6 +1341,47 @@ def _signal_pipeline_consistency_findings(data: dict) -> list:
     return out
 
 
+# v3 critical M-code 集合（HARD 强制 surface；漏报计入 fail_threshold）。
+# 监管类 M4(处罚/违法违规/审计机构变更/会计差错)/M5(ST/退市/破产) any→critical；
+# M11 立案/key-role离任→critical；M1 大额减持。诉讼 M4=default warning 不在此（软门禁 G46）。
+_G30_CRIT_ANNOUNCE_CODES = {"M1", "M4", "M5", "M6", "M8", "M10", "M11"}
+
+
+def _g30_announcement_registry_findings(data: dict, report: str) -> list:
+    """#1 公告登记表 presence（v3 第 4 个 #1 子检查·HARD）：critical M-code 公告
+    须在 m4「公告重要性一览」登记表 surface。
+
+    三态（mirror 信号覆盖）：
+    - 无 critical 公告 → 豁免（真空票不误伤）；
+    - processed.status==failed → 豁免（拉取失败非漏报）；
+    - 有 critical 但登记表小节缺失 / 缺该码 → FAIL（漏 surface 致命风险，计入 fail_threshold）。
+    depth(金额/股数/认购方) 不校验（标题 0%，走 LLM「⚠️ 注」，机判边界清晰）。
+    """
+    rs = _snapshot_get(data, "s5_events.data.risk_signals") or {}
+    proc = rs.get("processed") if isinstance(rs, dict) else None
+    if not isinstance(proc, dict) or proc.get("status") == "failed":
+        return []
+    anns = proc.get("announcements") or []
+    crit = [a for a in anns if isinstance(a, dict)
+            and a.get("severity") == "critical"
+            and str(a.get("code", "")).startswith("M")]
+    if not crit:
+        return []                        # 无 critical 公告 → 真空豁免
+    reg = _g30_announcement_registry_section(report)
+    findings = []
+    if not reg:
+        findings.append(f"公告重要性一览登记表缺失（m4 §4.2 须渲染 {len(crit)} 条 critical 公告）")
+        return findings
+    for a in crit:
+        code = str(a.get("code", ""))
+        name = str(a.get("name", "") or "")
+        # name 首词（「人员变动/立案」→「人员变动」；「股东减持」→「股东减持」）
+        nk = name.replace("/", "、").split("、")[0].strip()
+        if code not in reg and nk and nk not in reg:
+            findings.append(f"critical 公告 {code}({name}) 未在登记表 surface")
+    return findings
+
+
 def _g30_run(report: str, data: dict) -> dict:
     """G30 内核：#1–6 硬检查，富返回 {passed, failed, reasons}。check_g30 取 passed(bool)。"""
     failed = []
@@ -1349,6 +1420,14 @@ def _g30_run(report: str, data: dict) -> dict:
     if sig_findings:
         failed.append(1)
         reasons.append("#1 信号覆盖 FAIL — " + "; ".join(sig_findings))
+
+    # ---- #1 公告登记表 presence（v3 第 4 子检查·HARD）：critical M-code 须在 m4 登记表 surface ----
+    # 数据驱动（无 critical 公告→真空豁免）；锚定 m4「公告重要性一览」小节避 capstone 误切。
+    # depth(金额/股数) 不校验——标题 0%，走 LLM「⚠️ 注」。机判 presence，非字段质量。
+    reg_findings = _g30_announcement_registry_findings(data, report)
+    if reg_findings:
+        failed.append(1)
+        reasons.append("#1 公告登记表 FAIL — " + "; ".join(reg_findings))
 
     # ---- #2 诚实性（每情景须列反方证据）----
     tbl = _g30_parse_matrix_table(cap)
@@ -1808,6 +1887,139 @@ def check_g45(report: str, data: dict) -> bool:
     return has_src or has_uncertainty
 
 
+def check_g46(report: str, data: dict) -> bool:
+    """G46: 公告登记表 machine_field 消费（m4 责任；s5_events.processed.announcements 高密度码）。
+    SOFT(weight2)。三态 mirror G40-44：announcements 非空→高密度码 title 派生 machine_field
+    (M11 角色/M9 被担保方/M1 占比/M5 st_action/P7 项目名/P8 标的) 须在报告 surface；
+    空/failed→豁免。
+
+    **机判边界**：depth(金额/股数/认购方) 标题 0% 不抽（走 LLM「⚠️ 注」），本 gate 只校验
+    已抽出的 machine_field——防登记表只列码不列主体（如 M11 只写「人员变动」不写「董事长离任」）。
+    """
+    rs = _snapshot_get(data, "s5_events.data.risk_signals") or {}
+    proc = rs.get("processed") if isinstance(rs, dict) else None
+    if not isinstance(proc, dict):
+        return True
+    if proc.get("status") == "failed":
+        return True
+    anns = proc.get("announcements") or []
+    if not anns:
+        return True
+    for a in anns:
+        if not isinstance(a, dict):
+            continue
+        mf = a.get("machine_fields") or {}
+        if not isinstance(mf, dict) or not mf:
+            continue
+        for _k, val in mf.items():
+            if val is None:
+                continue
+            # 拆分联合值（M11 role「董事长、总经理」→ 任一 token 出现即算 surface）
+            toks = [t.strip() for t in re.split(r"[、,，/]", str(val)) if t.strip()]
+            toks = [t for t in toks if len(t) >= 2]
+            if not toks:
+                continue
+            if not any(tok in report for tok in toks):
+                return False
+    return True
+
+
+def check_g47(report: str, data: dict) -> bool:
+    """G47: 股东行为综合研判消费（m9.2/m7 责任；ST3 shareholder_dynamics 融合 意图×内部人×前十大）。
+    SOFT(weight1)。三态 mirror G40-44：shareholder_dynamics.status=ok 且有材料级方向
+    → 报告须含 presence 词（内部人/董监高/前十大/增持/减持/净买/净卖/港资）；空/failed→豁免；
+    反编造（无数据却写具名减持/增持）→ FAIL。
+
+    触发判定「有材料级方向」= verdict∈{净减持,净增持,分歧} 或 top10.named 非空 或
+    corroboration.double_bearish/bullish 或 insiders.trades>0；纯中性且无具名活动 → 豁免
+    （「无材料级股东变动」是有效中性结论，不门禁强制）。
+    """
+    proc = _snapshot_get(data, "s5_events.data.risk_signals.processed") or {}
+    sd = proc.get("shareholder_dynamics") if isinstance(proc, dict) else None
+    if not isinstance(sd, dict):
+        return True
+    if sd.get("status") == "failed":
+        return True
+    # 判定是否有材料级方向
+    by = sd.get("by_source") or {}
+    top10 = by.get("top10") or {}
+    has_named = isinstance(top10, dict) and bool(top10.get("named"))
+    ins = by.get("insiders") or {}
+    has_insider_trade = isinstance(ins, dict) and (
+        (isinstance(ins.get("trades"), (int, float)) and ins.get("trades") > 0)
+        or ins.get("net_shares") not in (None, 0))
+    corr = sd.get("corroboration") or {}
+    has_resonance = isinstance(corr, dict) and (
+        corr.get("double_bearish") or corr.get("double_bullish"))
+    verdict = sd.get("verdict")
+    has_direction = (verdict in ("净减持", "净增持", "分歧")) or has_named or has_insider_trade or has_resonance
+    if not has_direction:
+        return True  # 真空/纯中性：有效结论，豁免
+    # presence：报告须含股东行为研判词
+    presence_kws = ("内部人", "董监高", "前十大", "增持", "减持", "净买", "净卖", "港资", "言行合一")
+    if not any(kw in report for kw in presence_kws):
+        return False
+    # 反编造：status != ok 却写具名「前十大N名减持/增持」
+    if sd.get("status") != "ok" and re.search(r"前十大.{0,6}[增减]持", report):
+        return False
+    return True
+
+
+def check_g48(report: str, data: dict) -> bool:
+    """G48: 待执行/进行中增减持计划消费（m9.2/m7/m1 责任；ST5 programs[] forward 信封）。
+    SOFT(weight1)。三态 mirror G40-47：processed.programs 有 status∈{planned,ongoing}
+    → 报告须含 presence 词（待执行/进行中/拟减持/拟增持/窗口/计划/增持/减持）；无活跃 program→豁免
+    （已完成/无计划是有效结论，不门禁强制）；反编造（无活跃计划却写「待执行X%」）→ FAIL。
+
+    用户核心意图：现在/未来有无增持/减持悬顶/支撑，决定操作——有活跃计划须 surface。
+    """
+    proc = _snapshot_get(data, "s5_events.data.risk_signals.processed") or {}
+    if not isinstance(proc, dict):
+        return True
+    progs = proc.get("programs")
+    if not isinstance(progs, list):
+        return True
+    active = [p for p in progs if isinstance(p, dict) and p.get("status") in ("planned", "ongoing")]
+    if not active:
+        # 反编造：无活跃计划却声称「待执行/进行中」+ 具体比例（窄口径：待执行+%，避免「回购进行中」等误伤）
+        if re.search(r"待执行", report) and re.search(r"\d+(?:\.\d+)?\s*%", report):
+            return False
+        return True   # 无待执行/进行中计划：豁免
+    # presence：报告须含待执行/进行中/计划类词
+    presence_kws = ("待执行", "进行中", "拟减持", "拟增持", "窗口", "计划", "增持", "减持")
+    if not any(kw in report for kw in presence_kws):
+        return False
+    return True
+
+
+def check_g49(report: str, data: dict) -> bool:
+    """G49: 买卖力量 verdict 消费（m9.2/m7/m6/m1/capstone 责任；ST6 buy_sell_pressure 信封）。
+    SOFT(weight1)。三态 mirror G40-48：processed.buy_sell_pressure.status==ok 且 verdict∈
+    {buy_dominant,sell_dominant,balanced}（有材料级活动）→ 报告须含 presence 词
+    （买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓）；unclear/failed/空→豁免（近一季无活动是有效结论）；
+    反编造（无 verdict 却写「买卖力量」+ 阵营词）→ FAIL。
+
+    用户核心意图：合并所有公告/资金面信号成买卖阵营对决——有对决结论须 surface。
+    """
+    proc = _snapshot_get(data, "s5_events.data.risk_signals.processed") or {}
+    if not isinstance(proc, dict):
+        return True
+    bsp = proc.get("buy_sell_pressure")
+    if not isinstance(bsp, dict) or bsp.get("status") != "ok":
+        # 反编造：无 BSP（或 failed）却声称「买卖力量」+ 阵营结论词
+        if "买卖力量" in report and re.search(r"买方|卖方|买方占优|卖方占优", report):
+            return False
+        return True
+    verdict = bsp.get("verdict")
+    if verdict in (None, "unclear"):
+        return True   # 无材料级活动：豁免（不门禁强制干净票/真空票）
+    # presence：有 verdict（buy/sell/balanced）→ 报告须含阵营/分量词之一
+    presence_kws = ("买卖力量", "买方", "卖方", "回购", "增持", "减持", "解禁", "质押", "平仓")
+    if not any(kw in report for kw in presence_kws):
+        return False
+    return True
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G10": check_g10, "G11": check_g11, "G12": check_g12,
@@ -1821,7 +2033,10 @@ GATE_CHECKERS = {
     "G37": check_g37, "G38": check_g38, "G39": check_g39,
     "G40": check_g40, "G41": check_g41,
     "G42": check_g42, "G43": check_g43, "G44": check_g44,
-    "G45": check_g45,
+    "G45": check_g45, "G46": check_g46,
+    "G47": check_g47,
+    "G48": check_g48,
+    "G49": check_g49,
 }
 
 

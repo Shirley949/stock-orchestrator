@@ -88,6 +88,7 @@ CONGLOMERATE_KEYWORDS = [
 
 def _to_secucode(stock_code: str) -> str:
     """将股票代码转换为东财 secucode 格式"""
+    stock_code = str(stock_code).split(".")[0].strip()  # 防御:剥 .SH/.SZ/.HK 后缀(runner 入口已归一化,此处双保险)
     if stock_code.startswith("0") and len(stock_code) == 5:
         return f"{stock_code}.HK"
     elif stock_code.startswith("6"):
