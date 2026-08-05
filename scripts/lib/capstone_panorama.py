@@ -122,21 +122,29 @@ QUANT_KW = {t: kw for t, _, kw in QUANT_THEMES}
 QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
 
 
-# 信号覆盖维度（G30#1 信号驱动覆盖的数据源）：读各 signal-envelope scene 的 processed，
-# 收集 critical 码 → present_signals（数据驱动，真空票自动豁免）。每码配**精确词**（拒 K线/换手冒充）。
-# (processed 路径, 取码子键, critical 码集, {code: (name, precise_kws)})
+# 信号覆盖维度（G30#1 信号驱动覆盖）：读各 signal-envelope scene 的 processed，
+# 收集达 severity 阈值的码 → present_signals（数据驱动，真空票自动豁免）。
+# 严重度驱动（非 presence）：M4 审计机构变更=warning 不当关键风险；M2/M3/M9 升档 critical 才收。
+# 每码配**精确词**（拒 K线/换手冒充）。码是否收集由数据 severity 决定，码集不硬编码。
+# (processed 路径, 取码子键, {code: (name, precise_kws)}, 收集的 severity 集)
 _SIGNAL_SOURCES = [
     ("s5_events.data.risk_signals.processed", "risk",
-     ("M1", "M4", "M5", "M8", "M11"),
      {"M1": ("股东减持", ("减持", "股东减持")),
-      "M4": ("违规/诉讼", ("违规", "处罚", "立案调查", "监管处罚")),
+      "M2": ("股权质押", ("质押", "质押平仓", "股权质押")),
+      "M3": ("限售解禁", ("解禁", "限售解禁", "解禁压力")),
+      "M4": ("违规/处罚", ("违规", "处罚", "立案调查", "监管处罚", "会计差错")),
       "M5": ("ST/退市", ("ST", "退市", "*ST")),
+      "M6": ("增发稀释", ("增发", "增发稀释")),
+      "M7": ("监管函", ("监管函", "问询函", "警示函")),
       "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值")),
-      "M11": ("人员变动/立案", ("被立案", "立案调查", "人员变动", "高管变动", "离任", "辞职"))}),
+      "M9": ("对外担保", ("担保", "对外担保", "连带责任")),
+      "M10": ("交易异动", ("异动", "交易异常", "波动")),
+      "M11": ("人员变动/立案", ("被立案", "立案调查", "人员变动", "高管变动", "离任", "辞职"))},
+     ("critical",)),   # M 码仅 critical（warning/info 是例行，不当关键风险）
     ("s8_a_share.data.shareholder_count.processed", "signals",
-     ("S2", "S7"),
      {"S2": ("高位派发", ("派发", "高位派发")),
-      "S7": ("筹码急剧分散", ("筹码分散", "急剧分散", "筹码松动"))}),
+      "S7": ("筹码急剧分散", ("筹码分散", "急剧分散", "筹码松动"))},
+     ("critical", "warning")),   # 筹码码 warning 亦是实质风险（高位派发/散户涌入），非例行噪声
 ]
 
 
@@ -165,6 +173,129 @@ def _stale_marker(lp: dict, threshold_days: int) -> str:
     return ""
 
 
+def _latest_annual_roe(data: dict, roe_key: str = "加权净资产收益率(%)"):
+    """从 financial_indicators 取最近【年报】（日期末 12-31）ROE，供 ①财务质量 dim 用年化基准。
+
+    为什么需要：tally 财务质量阈值 ≥10/<5 按【全年盈利能力】标定，但 snapshot 最新期常为
+    Q1/H1 的 YTD 值（600036 招行：2026Q1=3.37 而 2025年报=13.44）。用 YTD 套年化阈值会把
+    高质量股误判成偏空。优先取最近年报 ROE；无年报（次新/缺数据）返 None 由调用方退回最新期值
+    （m6 解读提示已警示「非年化」）。双键兜底 data/data_full（读三表范式硬规则）。
+
+    顺序：raw cache 行可能是 asc（未排序），故遍历全部取 max 日期的年报行，不信 rows[0]。
+    ISO 日期串（YYYY-MM-DD）字典序比较正确。
+    """
+    fi = _snapshot_get(data, "s1_financial.data.financial_indicators") or {}
+    rows = fi.get("data") or fi.get("data_full") or []
+    best_date, best_roe = None, None
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        dv = r.get("日期") or r.get("报告日") or r.get("截止日期")
+        if not (isinstance(dv, str) and dv.replace("-", "").endswith("1231")):
+            continue
+        if best_date is None or dv > best_date:
+            best_date = dv
+            try:
+                best_roe = float(r.get(roe_key))
+            except (TypeError, ValueError):
+                best_roe = None
+    return best_roe
+
+
+def _signal_direction_tally(values: dict, data: dict, risk_register: list) -> dict:
+    """Part G G-D1 —— 13 维信号方向 tally（概率判断的【参考锚】，非映射公式）。
+
+    读 panorama values（+少数 raw snapshot 字段 peg/volume_state）定每维方向（偏多/偏空/中性/无数据）；
+    fatal 风险单独标注（1 fatal > N 一般利好，由 LLM 权衡非线性权重）。阈值启发式——提供参考锚，
+    LLM 仍自主判断概率，tally 绝不映射成概率分数（m6 哲学：数据是锚点，结论是权衡）。
+
+    断空纠偏（写入前已实测 300750 真 panorama 结构）：原型 plan 脚本② 只对 synthetic flat-key demo
+    验过；真 values 是嵌套结构（quality.indicators.value.加权净资产收益率），peg/volume_state 不在 values
+    须读 raw data。ROE 取【最近年报】（_latest_annual_roe）作年化基准——阈值 ≥10/<5 按全年盈利能力标定，
+    最新期常为 Q1/H1 YTD（600036 招行 2026Q1=3.37 vs 2025年报=13.44；300750 年报 ROE 亦 ≥10 偏多）；
+    无年报退回最新期值，m6 解读提示警示非年化。
+    """
+    from collections import Counter
+
+    def _num(x):
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    def dim(name, val, bull_fn, bear_fn):
+        if val is None:
+            return (name, "无数据")
+        if bull_fn(val):
+            return (name, "偏多")
+        if bear_fn(val):
+            return (name, "偏空")
+        return (name, "中性")
+
+    # ①财务质量：ROE 优先取【最近年报】（阈值 ≥10/<5 按全年盈利能力标定；最新期常为 Q1/H1 YTD，
+    # 如 600036 招行 2026Q1=3.37 而 2025年报=13.44 → 用 YTD 套年化阈值误判偏空）。无年报退回最新期值。
+    ind = _snapshot_get(values, "quality.indicators.value") or {}
+    du = _snapshot_get(values, "quality.dupont.value") or {}
+    roe_latest = _num(ind.get("加权净资产收益率(%)") or du.get("净资产收益率"))
+    roe = _latest_annual_roe(data) or roe_latest
+    # ②成长性：营收增速（peer target_metrics.rev_yoy）
+    rev_yoy = _num(_snapshot_get(values, "peer.target_metrics.rev_yoy"))
+    # ③估值：PEG（computed_metrics.peg_forward，raw 不在 values）
+    peg = _num(_snapshot_get(data, "computed_metrics.peg_forward.value"))
+    # ④资产安全：cash_to_debt
+    cash_to_debt = _num(_snapshot_get(values, "asset_safety.cash_to_debt"))
+    # ⑤技术资金筹码：量价（raw s4_technical）——量价须结合价位，恒中性
+    volume_state = _snapshot_get(data, "s4_technical.data.volume_price.volume_state")
+    # ⑥前瞻预期：consensus 近年净利增速（annual_near.netProfitYoy；空→无数据，诚实）
+    consensus_growth = _num(_snapshot_get(values, "outlook.annual_near.netProfitYoy"))
+    # ⑦龙虎榜：signal_type（never_listed/event_only → 非 L1/L2/L3 → 中性）
+    lhb_signal = _snapshot_get(values, "lhb.signal_type")
+    # ⑧北向：持股比例
+    north_holding = _num(_snapshot_get(values, "northbound.holding_ratio_latest"))
+    # ⑨主营构成：产品 top1 占比（有数据即偏多）
+    seg_top1 = _snapshot_get(values, "segment.产品.top1_ratio")
+    # ⑩同业对比：target ROE 在 target+peers 中的排名
+    tm_roe = _num(_snapshot_get(values, "peer.target_metrics.roe"))
+    peer_items = _snapshot_get(values, "peer.items") or []
+    peer_roes = [_num(_snapshot_get(it, "metrics.roe")) for it in peer_items if isinstance(it, dict)]
+    peer_roes = [r for r in peer_roes if r is not None]
+    if tm_roe is not None and peer_roes:
+        peer_roe_rank = sorted([tm_roe] + peer_roes, reverse=True).index(tm_roe) + 1
+    else:
+        peer_roe_rank = None
+    # ⑪⑫⑬ G-D2 定性锚
+    rd_intensity = _snapshot_get(values, "rd_intensity")
+    pledge_pct = _num(_snapshot_get(values, "pledge_pct"))
+    seg_growth_dim = _snapshot_get(values, "seg_growth_dim")
+
+    out = [
+        dim("财务质量", roe, lambda x: x >= 10, lambda x: x < 5),
+        dim("成长性", rev_yoy, lambda x: x > 20, lambda x: x < 0),
+        dim("估值", peg, lambda x: 0 < x < 1, lambda x: x > 2),
+        dim("资产安全", cash_to_debt, lambda x: x > 1.5, lambda x: x < 0.8),
+        dim("技术资金筹码", volume_state, lambda x: False, lambda x: False),  # 量价须结合价位，恒中性
+        dim("前瞻预期", consensus_growth, lambda x: x > 20, lambda x: x < 0),
+        dim("龙虎榜资金", lhb_signal, lambda x: x in ("L1",), lambda x: x in ("L2", "L3")),
+        dim("北向资金", north_holding, lambda x: x > 10, lambda x: x < 0.5),
+        dim("主营构成", seg_top1, lambda x: x is not None, lambda x: False),
+        dim("同业对比", peer_roe_rank, lambda x: x == 1, lambda x: x > 3),
+        dim("护城河", rd_intensity, lambda x: x is not None, lambda x: False),
+        dim("治理战略", pledge_pct, lambda x: x is not None and x < 5, lambda x: x is not None and x > 30),
+        dim("前瞻催化", seg_growth_dim, lambda x: x is not None, lambda x: False),
+    ]
+    cnt = Counter(d for _, d in out)
+    fatal = any(isinstance(r, dict) and r.get("severity") == "致命" for r in (risk_register or []))
+    bull, neutral, bear, no_data = (cnt.get("偏多", 0), cnt.get("中性", 0),
+                                    cnt.get("偏空", 0), cnt.get("无数据", 0))
+    advisory = f"{bull}偏多/{neutral}中性/{bear}偏空"
+    if no_data:
+        advisory += f"/{no_data}无数据"
+    if fatal:
+        advisory += "；⚠️存在致命风险→压低乐观权重"
+    return {"per_dim": out, "bull": bull, "neutral": neutral, "bear": bear,
+            "no_data": no_data, "fatal_risk": fatal, "advisory": advisory}
+
+
 def panorama(data: dict) -> dict:
     """读 snapshot → 证据全景结构（只抽值，不映射概率/方向）。"""
     out = {
@@ -189,6 +320,11 @@ def panorama(data: dict) -> dict:
             "归母净利润": _yi(r0.get("归属于母公司所有者的净利润")),
             "扣非净利润": _yi(r0.get("扣非净利润")),
         }
+        # 🆕 Part G G-D2 ⑪护城河锚：研发强度 = 研发费用÷营业总收入（fraction，喂 Layer1 ⑪ + tally）
+        _rd = r0.get("研发费用")
+        _rev = r0.get("营业总收入")
+        if isinstance(_rd, (int, float)) and isinstance(_rev, (int, float)) and _rev:
+            out["values"]["rd_intensity"] = _rd / _rev
 
     fi = _snapshot_get(data, "s1_financial.data.financial_indicators")
     # 财务质量三源 latest_period 信封（indicators/abstract/dupont，period 显式驱动 freshness）。
@@ -270,6 +406,12 @@ def panorama(data: dict) -> dict:
             if hints:
                 out["interpretation_flags"].append(
                     "主营构成缺维：" + " | ".join(h.get("template", "") for h in hints))
+        # 🆕 Part G G-D2 ⑬前瞻催化锚：第二曲线 = 产品第 2 大占比（fraction，喂 Layer1 ⑬ + tally）
+        _prod_rows = seg.get("product") if isinstance(seg, dict) else None
+        if isinstance(_prod_rows, list) and len(_prod_rows) >= 2 and isinstance(_prod_rows[1], dict):
+            _r2 = _prod_rows[1].get("revenue_ratio")
+            if isinstance(_r2, (int, float)):
+                out["values"]["seg_growth_dim"] = _r2
 
     ov = _snapshot_get(data, "computed_metrics.overseas") or {}
     if isinstance(ov, dict) and ov.get("status"):
@@ -312,7 +454,7 @@ def panorama(data: dict) -> dict:
             "risk": risk_sigs, "catalyst": cat_sigs, "critical_codes": crit_codes,
             "latest_period": mat.get("latest_period"),
         }
-        # critical 风险（M1/M4/M5/M8…）→ 前置「⚠️关键风险信号」段（经 _CRITICAL_KW 命中）
+        # critical 风险（severity==critical 的 M 码）→ 前置「⚠️关键风险信号」段（经 _CRITICAL_KW 命中）
         for s in risk_sigs:
             if s.get("severity") == "critical":
                 out["interpretation_flags"].append(
@@ -335,23 +477,27 @@ def panorama(data: dict) -> dict:
                         f"待执行计划·{_act}{p.get('direction', '')}（{p.get('status')}）→ 决策驱动，须显眼")
                     break
 
-    # present_signals（G30#1 信号驱动覆盖）：遍历 _SIGNAL_SOURCES，收集实际存在的 critical 码。
+    # present_signals（G30#1 信号驱动覆盖）：遍历 _SIGNAL_SOURCES，按 severity 阈值收集（非 presence）。
+    # M 码仅 critical（M4 审计变更=warning 不当关键风险）；筹码码 critical+warning。
     # 附 structured_horizon（从该 code 的 signal 取；缺失则按码派生）→ m6 Layer3 短/中/长动作提示。
-    for path, subkey, crit_codes, code_map in _SIGNAL_SOURCES:
+    for path, subkey, code_map, sev_set in _SIGNAL_SOURCES:
         proc = _snapshot_get(data, path)
         if not isinstance(proc, dict):
             continue
         sigs = proc.get(subkey) or proc.get("signals") or []
-        present = {s.get("code") for s in sigs if isinstance(s, dict)}
-        for code in crit_codes:
-            if code in present:
-                name, kws = code_map[code]
-                hz = next((s.get("structured_horizon") for s in sigs
-                           if isinstance(s, dict) and s.get("code") == code
-                           and isinstance(s.get("structured_horizon"), dict)), None)
-                out["present_signals"].append(
-                    {"source": path, "code": code, "name": name, "kws": list(kws),
-                     "structured_horizon": hz or derive_horizon(code)})
+        _seen = set()
+        for s in sigs:
+            if not isinstance(s, dict) or s.get("severity") not in sev_set:
+                continue
+            code = s.get("code")
+            if code in _seen or code not in code_map:
+                continue
+            _seen.add(code)
+            name, kws = code_map[code]
+            hz = s.get("structured_horizon") if isinstance(s.get("structured_horizon"), dict) else None
+            out["present_signals"].append(
+                {"source": path, "code": code, "name": name, "kws": list(kws),
+                 "structured_horizon": hz or derive_horizon(code)})
 
     vs = _snapshot_get(data, "valuation_snapshot.data") or {}
     if isinstance(vs, dict):
@@ -428,9 +574,19 @@ def panorama(data: dict) -> dict:
         out["values"]["buy_sell_pressure"] = bsp
         if bsp.get("summary"):
             out["interpretation_flags"].append(bsp.get("summary"))   # summary 已含「买卖力量：」前缀，勿再叠
+    # 🆕 Part G G-D2 ⑫治理战略锚：质押比例（bsp.sell.pledge.pledge_ratio；无质押→0=干净治理）
+    _pl = _snapshot_get(bsp, "sell.pledge.pledge_ratio")
+    if isinstance(_pl, (int, float)):
+        out["values"]["pledge_pct"] = _pl
+    elif isinstance(bsp, dict) and bsp.get("status") == "ok":
+        out["values"]["pledge_pct"] = 0.0   # bsp ok 但无 pledge 子键 = 无质押（干净）
     repos = _snapshot_get(data, "s5_events.data.risk_signals.processed.repurchase_programs")
     if isinstance(repos, list) and repos:
         out["values"]["repurchase_programs"] = repos
+
+    # 🆕 Part G G-D1：信号方向 tally（概率判断的参考锚，非映射公式；fatal 风险单独标注）
+    _rr = out["values"].get("risk_register") or _snapshot_get(data, "computed_metrics.risk_register") or []
+    out["tally"] = _signal_direction_tally(out["values"], data, _rr)
 
     # ---- 渲染证据全景草稿表（Layer1）----
     _render_draft(out, data)
@@ -727,6 +883,28 @@ def _render_shareholder_behavior(L, v):
                 _ns.append(_t)
             if _ns:
                 parts.append(f"前十大[{'、'.join(_ns)}，资金面]")
+    # ---- ST7 前十大流通股东季度信封（一行：季度+净/加权净+tone+强资金）----
+    t10q = by.get("top10_quarterly") or {}
+    t10q_periods = t10q.get("periods") if isinstance(t10q, dict) else None
+    if isinstance(t10q_periods, list) and t10q_periods and isinstance(t10q_periods[0], dict):
+        q0 = t10q_periods[0]
+        if q0.get("quarter") and (q0.get("tone") or q0.get("weighted_net") is not None):
+            def _qm(s):
+                return ("%.1f万" % (s / 10000.0)) if isinstance(s, (int, float)) and abs(s) >= 1 else ("%.0f股" % (s or 0))
+            _seg = [q0.get("quarter")]
+            _ns = q0.get("net_shares")
+            _wn = q0.get("weighted_net")
+            if _ns is not None:
+                _seg.append("净%s%s" % ("+" if _ns >= 0 else "", _qm(_ns)))
+            if _wn is not None:
+                _seg.append("加权%s%s" % ("+" if _wn >= 0 else "", _qm(_wn)))
+            if q0.get("tone"):
+                _seg.append("→ %s" % q0.get("tone"))
+            sin, sout = q0.get("strong_in"), q0.get("strong_out")
+            if sin is not None and sout is not None:
+                _seg.append("强资金 进%s/出%s" % (sin, sout))
+            src_t10q = "[src: snapshot.s5_events.data.risk_signals.processed.shareholder_dynamics.by_source.top10_quarterly]"
+            L.append(("- 前十大流通股东季度：%s。 %s" % ("；".join(_seg), src_t10q)).rstrip())
     corr = sd.get("corroboration") or {}
     if isinstance(corr, dict):
         if corr.get("double_bearish"):
@@ -921,7 +1099,24 @@ def _render_draft(out: dict, data: dict) -> None:
         renderer(L, v)
     if out["gap_quant"]:
         L.append(f"- ⚠️ 数据 gap（m8 须披露；反片面 gate 豁免）：{out['gap_quant']} 无 snapshot 数据。")
+    # 🆕 Part G G-D2：定性锚点（helper 抽值，Layer1 ⑪⑫⑬ 行挂 🔒锚点用）
+    _rd, _pl, _sg = v.get("rd_intensity"), v.get("pledge_pct"), v.get("seg_growth_dim")
+    _anchors = []
+    if isinstance(_rd, (int, float)):
+        _anchors.append(f"研发强度{_rd:.1%}（护城河⑪锚）")
+    if isinstance(_pl, (int, float)):
+        _anchors.append(f"质押{_pl:.2f}%（治理⑫锚）")
+    if isinstance(_sg, (int, float)):
+        _anchors.append(f"第二曲线占比{_sg:.1%}（前瞻催化⑬锚）")
+    if _anchors:
+        L.append("- 定性锚点（helper 抽值，Layer1 ⑪⑫⑬ 行挂 🔒 结构化锚点）："
+                 + "；".join(_anchors) + "。定性补充须显式标「无源」。")
     L.append("- 定性（你须从 m1–m9 叙事提炼，机械模型丢失的关键）：护城河 / 治理战略 / 前瞻催化。")
+    # 🆕 Part G G-D1：信号方向 tally（参考锚，非映射公式；Layer1 末尾一行收口）
+    _tally = out.get("tally")
+    if isinstance(_tally, dict) and _tally.get("advisory"):
+        L.append(f"- 📊 信号方向 tally（13 维参考锚，非概率映射）：{_tally['advisory']}。"
+                 "tally 是参考——致命风险非线性压低乐观权重，LLM 仍自主判断概率。")
     for f in normal:
         L.append(f"- 🔎 解读提示：{f}")
 
@@ -982,6 +1177,10 @@ def main():
     print("\n".join(pan["draft_lines"]))
     print(f"\n[present 维度须全覆盖: {pan['present_quant']}; gap 已豁免: {pan['gap_quant']}; "
           f"定性须覆盖: {pan['qual_required']}]")
+    _tl = pan.get("tally")
+    if isinstance(_tl, dict):
+        print(f"\n[信号方向 tally：{_tl.get('advisory')} | fatal={_tl.get('fatal_risk')}]")
+        print("  逐维：" + "；".join(f"{n}={d}" for n, d in _tl.get("per_dim", [])))
     if args.report:
         rpt = Path(args.report).read_text(encoding="utf-8")
         adv = panorama_advisory(rpt, data)

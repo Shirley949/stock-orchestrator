@@ -111,8 +111,7 @@ class FallbackTaskTests(unittest.TestCase):
 
     def test_placeholder_emits_peer_task(self):
         """占位 missing（无 websearch_peer_codes 键）→ emit peer 任务（交回 LLM）。"""
-        snap = {"stock_code": "600584.SH", "s11_peer": {"data": {"status": "missing"}},
-                "s3_cninfo_pdf": {"data": {}}}
+        snap = {"stock_code": "600584.SH", "s11_peer": {"data": {"status": "missing"}}}
         tasks = self._peer_tasks(snap)
         self.assertEqual(len(tasks), 1)
         self.assertIn("600584.SH", tasks[0]["command"])
@@ -121,20 +120,18 @@ class FallbackTaskTests(unittest.TestCase):
     def test_ran_but_failed_does_not_emit(self):
         """跑了（websearch_peer_codes 非空）→ 不 emit（已跑过，不重复交回）。"""
         snap = {"stock_code": "600584.SH",
-                "s11_peer": {"data": {"status": "missing", "websearch_peer_codes": ["600183"]}},
-                "s3_cninfo_pdf": {"data": {}}}
+                "s11_peer": {"data": {"status": "missing", "websearch_peer_codes": ["600183"]}}}
         self.assertEqual(self._peer_tasks(snap), [])
 
     def test_completed_does_not_emit(self):
         """已完成（status=ok）→ 不 emit。"""
         snap = {"stock_code": "600584.SH",
-                "s11_peer": {"data": {"status": "ok", "websearch_peer_codes": ["600183"], "items": [{}]}},
-                "s3_cninfo_pdf": {"data": {}}}
+                "s11_peer": {"data": {"status": "ok", "websearch_peer_codes": ["600183"], "items": [{}]}}}
         self.assertEqual(self._peer_tasks(snap), [])
 
     def test_no_peer_scene_does_not_emit(self):
         """无 s11_peer（非 peer 场景）→ 不 emit。"""
-        snap = {"stock_code": "600584.SH", "s3_cninfo_pdf": {"data": {}}}
+        snap = {"stock_code": "600584.SH"}
         self.assertEqual(self._peer_tasks(snap), [])
 
 

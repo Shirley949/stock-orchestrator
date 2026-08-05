@@ -70,7 +70,7 @@ class TestG30HolderStaleValue(unittest.TestCase):
         self.assertFalse(any("数值新鲜度" in x for x in r["reasons"]))
 
     def test_stale_with_src_exempt(self):
-        """stale 值但行带 [src:] 溯源 → 豁免（精确值交 G21/G24）。"""
+        """stale 值但行带 [src:] 溯源 → 豁免（精确值交 G21）。"""
         r = gd._g30_run(self._capstone("股东户数 10.12万 [src: snapshot.s8_a_share]"), self._snap())
         self.assertFalse(any("数值新鲜度" in x for x in r["reasons"]))
 

@@ -530,7 +530,7 @@ class DataSnapshot:
         """场景名到 API 关键词的映射"""
         mapping = {
             's1_financial': ['stock_financial_report_sina', 'stock_financial_abstract',
-                             'curl_eastmoney_datacenter', 'curl_sina_hq'],
+                             'curl_sina_hq'],
             's2_quote_kline': ['stock_zh_a_spot_em', 'stock_zh_a_hist', 'stock_zh_a_daily',
                                'curl_eastmoney_kline', 'curl_sina_hq'],
             's5_events': ['stock_news_em'],

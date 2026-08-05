@@ -20,21 +20,24 @@ import re
 from datetime import date, datetime, timezone
 
 # ============================================================
-# M4 拆分：监管类(any→critical) vs 诉讼仲裁(default warning)
+# M4 拆分：监管类(regulatory) vs 诉讼仲裁(litigation)——子类标签（material_subtype）。
 # ============================================================
-# 监管类 label：处罚/违法违规/资金占用/审计非标/会计差错/审计机构变更 → critical
+# ⚠️ severity 不在此定——以 runner._NOTICE_MAP(:2772) 为准：
+#    处罚/违法违规/会计差错更正=critical；审计机构变更/诉讼仲裁=warning。
+# 本函数返回的 severity[1] 仅对称参考、不参与定级（derive_material_subtype 只取 [0] 子类）。
 _M4_REGULATORY_LABELS = {
     "处罚", "违法违规", "会计差错更正", "审计机构变更",
 }
-# 诉讼仲裁 label → default warning（仅当 body/news 确认金额/涉案才升 critical，走 depth→LLM「⚠️ 注」）
+# 诉讼仲裁 label → 'litigation' 子类（severity=warning，_NOTICE_MAP:2823）
 _M4_LITIGATION_LABELS = {"诉讼仲裁"}
 
 
 def m4_subtype_severity(label):
     """M4 拆分。返回 (子类, severity) 或 None（非 M4 子类）。
 
-    监管类(处罚/违法违规/会计差错/审计机构变更) → ('regulatory','critical')；
-    诉讼仲裁 → ('litigation','warning')。
+    子类[0]（material_subtype 用，唯一被消费项）：监管类→'regulatory'，诉讼→'litigation'。
+    severity[1] 仅供对称、不参与定级——实际 announcement severity 以 _NOTICE_MAP 为准：
+    处罚/违法违规/会计差错更正=critical；审计机构变更/诉讼仲裁=warning。
     """
     if label in _M4_REGULATORY_LABELS:
         return ("regulatory", "critical")
@@ -95,6 +98,7 @@ _HORIZON_DEFAULT = {
     "P8":  {"reaction": "latent",    "overhang": "sustained"},   # 重组/扩张
     "P3":  {"reaction": "none",      "overhang": "transient"},   # 分红（m9.1 详述）
     "P5":  {"reaction": "none",      "overhang": "transient"},   # 激励（治理，弱即时）
+    "P9":  {"reaction": "immediate", "overhang": "sustained"},   # 经营数据（即时反应+持续跟踪价值）
 }
 
 
@@ -155,7 +159,7 @@ def extract_machine_fields(code, title):
 
     - M11: role（角色名）+ change（离任/聘任/被立案）
     - M9:  guarantee_party（被担保方）
-    - M1:  ratio_pct（占比，如 5%）
+    - M1:  无（占比由 programs.announced_pct_cap 提供，登记表只 presence）
     - M5:  st_action（实施/撤销/破产）
     - P7:  subject（专利/认证/补贴项目名）
     - P8:  target（重组标的）
@@ -187,13 +191,9 @@ def extract_machine_fields(code, title):
         return {"guarantee_party": m.group(1).strip("的之提供")} if m else {}
 
     if code == "M1":
-        # trap-1 guard（10× 实测）：裸 `(\d+)%` 会把「持股5%以上股东」的 5% 误当减持上限。
-        # 排除「X%以上」actor 门槛型（负向前瞻），且要求真上限上下文（不超/不超过/比例/占）。
-        # 注：ratio_pct 仅 title 派生参考，无下游消费者；权威上限% 由 body-parse →
-        # programs[].announced_pct_cap 提供（ST5.1），此处仅防误导。
-        m = re.search(r"(\d+(?:\.\d+)?)\s*%(?!以上)", t)
-        if m and any(k in t for k in ("不超", "比例", "占")):
-            return {"ratio_pct": m.group(1) + "%"}
+        # M1 占比不在此 title 派生（ratio_pct 已退役）：无下游消费者，且 title 近似值与 programs
+        # 权威占比数字不一致会致 G46 误判。权威上限% 由 body-parse → programs[].announced_pct_cap
+        # 提供（ST5.1）；登记表 M1 只 presence（近一年 N 条 + actor_tier），占比/窗口详见 m9 §9.2。
         return {}
 
     if code == "M5":
@@ -306,16 +306,19 @@ def detect_actor_tier(label, title):
 # severity 三态升档（actor/金额确认才升；供 announcements[] 渲染）
 # ============================================================
 def escalate(code, base_severity, machine_fields=None, depth_fields=None, title="", label=""):
-    """ST1 actor 级别 → severity 升档（**UP-ONLY**，门禁分级：仅确认实控人时升 critical）。
+    """ST1 actor 级别 → severity 升档（**UP-ONLY**，门禁分级）。
 
     10x 统计（59185 条/5775 票）修正的精度门（防关键词误报）：
       · M1 减持 + 实控人 → critical（股权转让/询价转让 base warning → 升 critical；主 label 已 critical 确认）；
-      · M2 质押 + 实控人 + **非解押** → critical（解押=利好，regex 排除「解押/解除质押」，M2 解押占 48%）；
+      · M2 质押 + 实控人 + **非解押** → **warning**（ratio>50% 才 critical，由 runner 比例块 A 独立主导；
+        M2 base=info，故实控人 escalate info→warning 才在 caller `if _esc != _sev` guard 下生效；
+        解押=利好，regex 排除「解押/解除质押」，M2 解押占 48%）；
       · M9 担保 + 实控人 → critical（境内担保已在 is_material 剔除，余为境外）；
       · major5pct / executive / P1 增持 → **不升**（门禁分级：5%减持重大但非治理变更，靠 m4 actor 列 surface）。
 
     **UP-ONLY 设计**（保守，勿降级）：actor_tier 未检出(None)→保持 base（主 label 保守留 critical）；
-    检出 major5pct/executive→保持 base（透明不门禁）。仅实控人确认才升 critical——稀有但致命，零误报。
+    检出 major5pct/executive→保持 base（透明不门禁）。实控人确认才升档——M1/M9→critical（稀有但致命），
+    M2→warning（治理关注层，强制平仓临界 50% 由 ratio 块 A 量化判定，不与 actor 口径叠加为 critical）。
     """
     mf = machine_fields or {}
     tier = mf.get("actor_tier") or ""
@@ -326,7 +329,7 @@ def escalate(code, base_severity, machine_fields=None, depth_fields=None, title=
     if code == "M1":
         return "critical"                 # 实控人减持/股权转让 → critical
     if code == "M2" and not re.search(r"解押|解除质押", t):
-        return "critical"                 # 实控人质押（非解押）→ critical
+        return "warning"                  # 实控人质押（非解押）→ warning；critical 仅 ratio>50%（runner block A 主导，不与 actor 叠加）
     if code == "M9":
         return "critical"                 # 实控人对外担保（境内已剔）→ critical
     return base_severity

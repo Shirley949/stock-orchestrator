@@ -179,5 +179,43 @@ class DeferredChecks(unittest.TestCase):
         self.fail("待 S5 实现 _EXPECTED_SCENES 派生")
 
 
+class SrcDeclaredClosure(unittest.TestCase):
+    """校验7 双向闭合（plan 改动4）：[src:] 标注 ⇔ declared consumers 反例。"""
+
+    def test_actual_consumption_not_declared_warns(self):
+        """向B：模块 .md 引用 snapshot.<X>，X 未登记 → warn（抓漏登 scene，classification 式）。"""
+        scenes = {}
+        mt = {"m1": ("m1-narrative.md", "读 [src: snapshot.ghost_scene.data] 做叙事")}
+        warns = vdc.check_src_coverage_actual(scenes, module_texts=mt)
+        self.assertTrue(
+            any(f.check == "src_coverage" and "ghost_scene" in f.path for f in warns),
+            f"未登记 scene 应 warn，实得 {warns}")
+
+    def test_declared_consumer_not_in_module_warns(self):
+        """向A：declared consumer m-tag 但 module .md 无该 scene 消费标注 → warn（抓 declared ghost）。"""
+        scenes = {"real_scene": _scene(
+            produces=[{"path": "data.x", "confidence": dc.CONFIRMED}],
+            consumers={"data.x": ["m1"]},
+        )}
+        mt = {"m1": ("m1-narrative.md", "本模块只消费 other_scene，正文完全不提目标 scene。")}
+        warns = vdc.check_declared_consumption(scenes, module_texts=mt)
+        self.assertTrue(
+            any(f.check == "declared_consumption" and f.scene == "real_scene" for f in warns),
+            f"declared ghost 应 warn，实得 {warns}")
+
+    def test_clean_closure_zero_warns(self):
+        """正常：declared 在 .md 有消费标注 + [src:] X 已登记 → 双向 0 warn。"""
+        scenes = {"real_scene": _scene(
+            produces=[{"path": "data.x", "confidence": dc.CONFIRMED}],
+            consumers={"data.x": ["m1"]},
+        )}
+        mt = {"m1": ("m1-narrative.md",
+                     "消费 real_scene 的 data.x：[src: snapshot.real_scene.data.x]")}
+        self.assertEqual(vdc.check_src_coverage_actual(scenes, module_texts=mt), [],
+                         f"向B 干净应 0 warn，实得 {[f.path for f in vdc.check_src_coverage_actual(scenes, module_texts=mt)]}")
+        self.assertEqual(vdc.check_declared_consumption(scenes, module_texts=mt), [],
+                         f"向A 干净应 0 warn，实得 {[f.path for f in vdc.check_declared_consumption(scenes, module_texts=mt)]}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

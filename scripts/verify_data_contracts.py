@@ -34,7 +34,7 @@ import data_contracts as dc
 
 Finding = namedtuple("Finding", ["check", "severity", "scene", "path", "msg"])
 
-# consumer 引用合法 tag 前缀（warn 校验用；tag 形如 "m25:67"/"G26"/"s4_rating_backfill"）
+# consumer 引用合法 tag 前缀（warn 校验用；tag 形如 "m25:67"/"G26"/"computed_metrics"）
 _CONSUMER_TAG_RE = re.compile(
     r"^(m\d+|G\d+|R\d+|s\d+|computed_metrics|_EXPECTED_SCENES)"
 )
@@ -182,7 +182,7 @@ def check_schema_coverage(scenes=dc.SCENES, doc_paths=None):
     for dp in sorted(doc_paths):                     # (b) 文档 → 注册表（仅 scene 数据路径）
         if dp.endswith(".scene"):                    # 结构性字段（每个 scene 自带），跳过
             continue
-        if ".data." not in dp:                       # 散文简写（如 s4_rating.distribution）非真实路径，跳过
+        if ".data." not in dp:                       # 散文简写（如 classification.primary_type）非真实路径，跳过
             continue
         head = dp.split(".", 1)[0]
         if head not in scene_names:
@@ -190,6 +190,95 @@ def check_schema_coverage(scenes=dc.SCENES, doc_paths=None):
         if not any(_path_matches(dp, rp) for _, rp in reg_paths):
             finds.append(Finding("schema_coverage", "warn", head, dp,
                 "snapshot_schema.md 路径在注册表无对应（documented but not contracted）"))
+    return finds
+
+
+# ============================================================
+# 校验 7：消费标注 ⇔ declared consumers 双向闭合（向A/向B）→ warn（plan 改动4）
+# ============================================================
+# 防御性 check：堵「4 环链路跨环交叉校验全缺」——契约层只遍历 SCENES 字典内部（produces⇔consumers
+# 本 scene 前缀匹配），从不 grep 模块 .md；gate 层只 G21 认 [src:]（report 级总量，不与 declared 交叉）。
+#   向B（actual→declared）：模块 .md 的 [src: snapshot.<X>]，X 不在 SCENES/_INFRA_TOP → warn（抓漏登 scene，classification 式）。
+#   向A（declared→actual）：SCENES[s].consumers 的 m-tag，对应 module .md 无该 scene 消费标注 → warn（抓 declared ghost）。
+# SOFT warn：向B [src:] 形式规范（0 噪声）；向A 中文/字段名引用匹配有噪声（plan §改动4「先 warn 观察一轮再考虑升 error」）。
+MODULES_DIR = os.path.join(_HERE, "..", "..",
+                           "stock-analysis-quality", "references", "modules")
+_SRC_SNAPSHOT_RE = re.compile(r"\[src:\s*snapshot\.([A-Za-z_][A-Za-z_0-9]*)")
+
+
+def _load_module_texts():
+    """读取 modules/*.md → {module_id: (filename, content)}，module_id 如 'm4'/'m10'/'m25'。"""
+    texts = {}
+    if not os.path.isdir(MODULES_DIR):
+        return texts
+    for fn in sorted(os.listdir(MODULES_DIR)):
+        if not fn.endswith(".md"):
+            continue
+        mid = fn.split("-", 1)[0]
+        if not re.match(r"^m\d+$", mid):
+            continue
+        try:
+            with open(os.path.join(MODULES_DIR, fn), encoding="utf-8") as f:
+                texts[mid] = (fn, f.read())
+        except OSError:
+            pass
+    return texts
+
+
+def check_src_coverage_actual(scenes=dc.SCENES, module_texts=None):
+    """向B：模块 .md 的 [src: snapshot.<X>]，X 不在 SCENES/_INFRA_TOP → warn（抓漏登 scene）。"""
+    finds = []
+    if module_texts is None:
+        module_texts = _load_module_texts()
+    if not module_texts:
+        finds.append(Finding("src_coverage", "warn", "*", "*",
+            f"无法读取 {MODULES_DIR}，跳过 [src:] 覆盖校验"))
+        return finds
+    scene_names = set(scenes.keys())
+    for mid, (fn, content) in module_texts.items():
+        for m in _SRC_SNAPSHOT_RE.finditer(content):
+            token = m.group(1)
+            if token in scene_names or token in _INFRA_TOP:
+                continue
+            finds.append(Finding("src_coverage", "warn", mid, f"[src: snapshot.{token}]",
+                f"模块 {fn} 引用 snapshot.{token} 未在 SCENES/_INFRA_TOP 登记（漏登 scene？）"))
+    return finds
+
+
+def check_declared_consumption(scenes=dc.SCENES, module_texts=None):
+    """向A：SCENES[s].consumers 的 m-tag，对应 module .md 无该 scene 消费标注 → warn（抓 declared ghost）。
+
+    匹配宽松：module.md 含 scene 名 OR consumer path 字段段（≥3字符，过滤 data/items 泛词）。
+    噪声说明：中文/散文引用可能漏匹配 → warn 表示 declared 与文档 drift，需人工核实（SOFT）。
+    """
+    finds = []
+    if module_texts is None:
+        module_texts = _load_module_texts()
+    if not module_texts:
+        return finds  # 向B 已报读取失败，向A 静默跳过
+    seen = set()
+    for sname, entry in scenes.items():
+        for cpath, tags in entry.get("consumers", {}).items():
+            for tag in tags:
+                mm = re.match(r"^(m\d+)", tag)
+                if not mm:
+                    continue
+                mid = mm.group(1)
+                mt = module_texts.get(mid)
+                if mt is None:
+                    continue
+                key = (sname, mid, cpath)
+                if key in seen:
+                    continue
+                fn, content = mt
+                segs = [sname] + [seg for seg in cpath.split(".")
+                                  if seg not in ("data", "items") and len(seg) >= 3]
+                if not any(seg in content for seg in segs):
+                    seen.add(key)
+                    finds.append(Finding("declared_consumption", "warn", sname,
+                        f"{cpath} ← {tag}",
+                        f"declared consumer {tag} 但 {fn} 未见 {sname}/{cpath} 消费标注"
+                        f"（declared ghost 或中文/字段名引用误报？）"))
     return finds
 
 
@@ -204,6 +293,8 @@ def all_findings(scenes=dc.SCENES):
     out += check_non_confirmed(scenes)
     out += check_consumer_tags(scenes)
     out += check_schema_coverage(scenes)
+    out += check_src_coverage_actual(scenes)
+    out += check_declared_consumption(scenes)
     return out
 
 

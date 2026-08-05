@@ -94,7 +94,7 @@ class TestCheckValueFreshness(unittest.TestCase):
         self.assertFalse(gd._check_value_freshness(report, 128685, ["股东户数", "户数"]))
 
     def test_holder_count_stale_with_src_pass(self):
-        """stale 值但行带 [src:] 溯源 → grounded（精确值交 G21/G24）。"""
+        """stale 值但行带 [src:] 溯源 → grounded（精确值交 G21）。"""
         report = "股东户数 10.12万 [src: snapshot.s8_a_share]。"
         self.assertTrue(gd._check_value_freshness(report, 128685, ["股东户数", "户数"]))
 

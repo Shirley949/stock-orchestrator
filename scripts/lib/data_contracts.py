@@ -55,6 +55,10 @@ SCENES = {
             {"path": "data.financial_indicators","confidence": CONFIRMED},
             {"path": "data.segment_composition", "confidence": CONFIRMED},
             {"path": "data.dupont",             "confidence": CONFIRMED},
+            {"path": "data.mainfinadata",       "confidence": CONFIRMED,
+             "note": "东财 MAINFINADATA 指标 165 字段（wide 族，rows[0]=最新期 desc）；ZCFZL/LD/SD 偿债能力 + ROEJQ/ROIC + 同比/DJD 单季；G27③/m2§2.3"},
+            {"path": "data.rd_expense",         "confidence": CONFIRMED,
+             "note": "东财 RDEXP 研发全子字段（序列族取最新年报期 12-31）；RESEARCH_EXPENSE/_CAPITALIZATION/_RATIO/_NUM/_NUM_RATIO；m2§2.3.1/§2.11"},
         ],
         "consumers": {
             "data.income_statement":     ["m2", "m25:67", "G6", "G9", "G27", "computed_metrics"],
@@ -64,6 +68,8 @@ SCENES = {
             "data.financial_indicators": ["m2", "G27"],
             "data.segment_composition":  ["m2:§2.2", "m25:13", "m6:Layer1", "m7:7.1", "m0", "m1", "m5:§5.2"],   # 三维 canonical v2.0（product/industry/geo + dimension_status）；m0 分类/m1 叙事/m5 同业本公司行/m6 主营构成行/m7 地缘/关税+集中度/m2 分业务表
             "data.dupont":               ["m2:291", "G28"],
+            "data.mainfinadata":         ["m2:§2.3", "G27"],   # 偿债能力 ZCFZL/LD/SD（m2§2.3 空白源）+ G27③ presence
+            "data.rd_expense":           ["m2:§2.3.1", "m2:§2.11"],   # 研发资本化/人员（替 PDF rd_expense）
         },
         "priority": P0,   # G6/G7/G8/G9/G16/G27 均读它
         "cost": {"calls": 12, "calls_worst": 33, "latency": "medium"},
@@ -89,30 +95,6 @@ SCENES = {
         "depends_on": [],
         "fallback": {"data.fund_flow": "akshare:stock_fund_flow_individual"},  # 同花顺源
         "cacheable": True,
-    },
-
-    "s3_cninfo_pdf": {
-        "fetcher": "fetch_cninfo_reports",       # runner.py:1553
-        "mode": ["A"],
-        "produces": [
-            {"path": "data.audit_opinion",  "confidence": CONFIRMED},
-            {"path": "data.dividend",       "confidence": CONFIRMED},
-            {"path": "data.biz_breakdown",  "confidence": CONFIRMED},
-            {"path": "data.geo_revenue",    "confidence": CONFIRMED},
-            {"path": "data.top10_holders",  "confidence": CONFIRMED},
-        ],
-        "consumers": {
-            "data.audit_opinion":  ["s36_annual_analysis"],
-            "data.dividend":       ["s36_annual_analysis"],
-            "data.biz_breakdown":  ["s36_annual_analysis"],
-            "data.geo_revenue":    ["s36_annual_analysis"],
-            "data.top10_holders":  ["s36_annual_analysis"],
-        },
-        "priority": P0,   # s36→G23 链路源头；D2_audit.status==ok 经 s36 间接必需
-        "cost": {"calls": 4, "latency": "very_high"},   # ~300s，SIGALRM 锁
-        "depends_on": [],
-        "fallback": [],   # PDF 独家，无替代
-        "cacheable": False,
     },
 
     # ───────────── P1：report-important（核心分析维度）─────────────
@@ -246,6 +228,12 @@ SCENES = {
             {"path": "data.valuation_percentile", "confidence": CONFIRMED,
              "note": "ST2 估值分位 {pe_ttm,pb}，每项 {pct_5y,pct_all,current,median_5y,min_5y,max_5y,window_5y,window_all,applicable,history_sufficient,as_of}；"
                      "baidu 近五年日序列(914行)自算 pct=(vals<=current).mean()；亏损 PE→applicable=false；次新 5y<3y→history_sufficient=false。m5 §5.1/m6 Layer1 消费"},
+            # F-D1/D2 lixinger EV/EBITDA（工业/周期股企业价值口径，填补免费源全缺）
+            {"path": "data.ev_metrics", "confidence": CONFIRMED,
+             "note": "lixinger fundamental/non_financial 快照 {ev_ebitda_r,ev_ebit_r,ey,source,as_of}；"
+                     "金融股跳过（EBITDA 不适用）；best-effort 失败→键缺；m5 §5.x/m6 Layer1 企业价值锚消费"},
+            {"path": "data.valuation_percentile.ev_ebitda", "confidence": CONFIRMED,
+             "note": "lixinger ≤10y 序列本地算 box（同 pe_ttm 结构 + 适用性/history_sufficient）；EV-EBITDA≤0 不适用→键缺"},
         ],
         "consumers": {
             "data.quote.price":          ["computed_metrics"],
@@ -263,12 +251,13 @@ SCENES = {
             "data.quote.changeRatio":    ["m5", "m6"],
             "data.quote.pe_is_loss":     ["m5"],                # 负值语义标注
             "data.quote.pb_insolvent":   ["m5"],
-            "data.analystRating":        ["m10:10A.1", "s4_rating_backfill", "_EXPECTED_SCENES"],
-            "data.targetPrice":          ["m4:113", "m6:83", "m10:55"],
-            "data.targetPrice.average":  ["m4:113"],
-            "data.targetPrice.highest":  ["m4:114"],
-            "data.targetPrice.lowest":   ["m4:114"],
-            "data.valuation_percentile": ["m5", "m6", "capstone_panorama"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull
+            "data.analystRating":        ["m10:10A.1", "_EXPECTED_SCENES"],   # m4 §4.3 收敛后评级→m10 §10A；删 ghost s4_rating_backfill
+            "data.targetPrice":          ["m6:83", "m10:55"],   # m4 §4.3 收敛后目标价明细→m10 §10A，删 m4:113
+            "data.targetPrice.average":  ["m10:55"],   # m10 §10A 渲染目标价（m4 收敛后不再读）
+            "data.targetPrice.highest":  ["m10:55"],
+            "data.targetPrice.lowest":   ["m10:55"],
+            "data.valuation_percentile": ["m5", "m6", "capstone_panorama"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull（含 ev_ebitda 子键）
+            "data.ev_metrics":           ["m5", "m6"],   # F-D1/D2 lixinger EV/EBITDA：m5 企业价值锚 + m6 Layer1 估值锚
         },
         "priority": P1,
         # westock(腾讯源)无限流；baidu stock_zh_valuation_baidu 稳定（PE-TTM/市净率/总市值）。
@@ -290,15 +279,30 @@ SCENES = {
             {"path": "data.annual",         "confidence": CONFIRMED},   # 年度富表 2026/27/28（eps/营收/净利/pe/pb/ps/yoy）
             {"path": "data.last_actual",    "confidence": CONFIRMED},   # 最新期实际值（含 EBIT）
             {"path": "data.paid_in_capital","confidence": CONFIRMED},   # 总股本（市值交叉校验）
+            {"path": "data.company_guidance", "confidence": CONFIRMED,
+             "note": "业绩预告（东财 RPT_PUBLIC_OP_NEWPREDICT，runner.py:6796 嵌套于 consensus_forecast.data）；company_guidance 非顶层 scene"},
+            {"path": "data.company_guidance.latest_period.value.predict_type", "confidence": CONFIRMED,
+             "note": "预增/预减/续盈/扭亏/略增...（M8 预减·首亏·续亏·预亏 / P4 预增·续盈·扭亏 分流；runner.py:3603）"},
+            {"path": "data.company_guidance.latest_period.value.growth_tier", "confidence": CONFIRMED,
+             "note": "高成长强度分档（仅预增按 INCREASE_JZ：>50%→high / 20-50%→moderate / 其余·非预增·缺→None；runner.py:6638 additive 加法式）；m4 G57 校验 presence"},
+            {"path": "data.latest_period", "confidence": CONFIRMED,
+             "note": "最新实绩锚点信封（period_type=year，value=actual；runner.py:6900）；G30#1 数值新鲜度（同 s1/s2/s8 latest_period 范式）"},
+            {"path": "data.annual_latest_period", "confidence": CONFIRMED,
+             "note": "最近预测年信封（period_type=year，value=forecast；runner.py:6901）；m10 §10A 年度预测表读最近预测年"},
         ],
         "consumers": {
-            "data.eps":       ["m10:10A.3", "m6:81", "m5:35", "computed_metrics:eps_fy_consensus", "s73_forecast_backfill"],
+            "data.eps":       ["m10:10A.3", "m6:81", "m5:35", "computed_metrics:eps_fy_consensus"],
             "data.revenue":   ["m10:10A.3"],
             "data.netProfit": ["m10:10A.3"],
             "data.ebit":      ["m10:10A.3"],
             "data.annual":    ["m10:10A.3"],
             "data.last_actual": ["m10:10A.3"],
             "data.paid_in_capital": ["m5", "_aggregate_shareholder_dynamics", "_assemble_programs"],   # 总股本×收盘价 与 baidu 总市值交叉校验 + ST5 占总股本% 派生分母（缺→%全 None 诚实降级）
+            "data.company_guidance": ["_process_material_signals"],   # runner 内部 M8/P4 编码（业绩预告→风险/利好分流）
+            "data.company_guidance.latest_period.value.predict_type": ["m4-sentiment", "m5-valuation"],
+            "data.company_guidance.latest_period.value.growth_tier": ["m4-sentiment", "G57"],
+            "data.latest_period": ["G30"],                # 数值新鲜度（_g30_value_freshness_findings，同 s1/s2/s8 范式）
+            "data.annual_latest_period": ["m10"],         # m10 §10A 年度预测表（最近预测年）
         },
         "priority": P1,
         # westock consensus + finance 各 1 次 npx（腾讯源无限流）。
@@ -323,11 +327,11 @@ SCENES = {
             {"path": "data.risk_signals.unlock.has_forward_pressure", "confidence": UNVERIFIED,
              "note": "runner 默认 {unlock:None,...}，子键依赖填充代码；m7:19 引用"},
             {"path": "data.risk_signals.notice_types", "confidence": CONFIRMED,
-             "note": "公告大全官方 公告类型 tally {标签:条数}（akshare stock_individual_notice_report）；M/P 编码权威分类源"},
+             "note": "公告大全官方 公告类型 tally {标签:条数}（akshare stock_individual_notice_report，全历史）；M/P 编码权威分类源（上游全量；processed 内 risk bucket/announcements 取 180 天窗口，经 notice_records 重统）"},
             {"path": "data.risk_signals.processed", "confidence": CONFIRMED,
-             "note": "重大事件编码双桶信封 {status,signal_type,severity,summary,risk[],catalyst[],signals[],aggregates,latest_period}；M 风险 / P 利好"},
+             "note": "重大事件编码双桶信封 {status,signal_type,severity,summary,risk[],catalyst[],signals[],aggregates,latest_period}；M 风险 / P 利好；公告事件统一 180 天窗口（M2/M3 质押解禁/M8 业绩预告/programs ST5 各走独立通道不在此窗口）"},
             {"path": "data.risk_signals.processed.risk[].code", "confidence": CONFIRMED,
-             "note": "M1减持/M2质押/M3解禁/M4违规/M5 ST/M6增发/M7监管/M8下修/M9担保/M10异动；悲观打分+G30#1 强制 M1/M4/M5/M8"},
+             "note": "M1减持/M2质押/M3解禁/M4违规/M5 ST/M6增发/M7监管/M8下修/M9担保/M10异动；悲观打分+G30#1 强制 severity==critical 的 M 码（含 M2>50%/M3>10%/M9实控人/M11立案 升档）"},
             {"path": "data.risk_signals.processed.catalyst[].code", "confidence": CONFIRMED,
              "note": "P1增持/P2回购/P3分红/P4上修/P5激励/P6合同/P7补贴/P8重组；乐观打分（gate 不强制·门禁分级）"},
             {"path": "data.risk_signals.latest_period", "confidence": CONFIRMED,
@@ -336,7 +340,7 @@ SCENES = {
             {"path": "data.risk_signals.notice_records", "confidence": CONFIRMED,
              "note": "公告大全逐条原始 [{公告日期:str,公告标题,公告类型,网址}]（akshare stock_individual_notice_report 6 列子集）；m4 登记表渲染源；公告日期 astype(str) 保 JSON-friendly"},
             {"path": "data.risk_signals.processed.announcements", "confidence": CONFIRMED,
-             "note": "v3 material 公告登记表 [{code,name,severity,bucket,material_subtype,machine_fields,structured_horizon,title,label,date,url}]；m4/m6/m9 消费，G30#4 presence 校验"},
+             "note": "v3 material 公告登记表 [{code,name,severity,bucket,material_subtype,machine_fields,structured_horizon,title,label,date,url}]；所有码 180 天窗口（公告事件统一近半年）；m4/m6/m9 消费，G30#4 presence 校验"},
             {"path": "data.risk_signals.processed.announcements[].code", "confidence": CONFIRMED,
              "note": "M1-M11/P1-P8（M11 新码：人员变动/立案；M4 拆监管类/诉讼）；加法式复用 signal 形状"},
             {"path": "data.risk_signals.processed.announcements[].structured_horizon.reaction", "confidence": CONFIRMED,
@@ -360,7 +364,8 @@ SCENES = {
                      "by_source.top10.source（westock|top10_multiperiod·gap-fill）+ named[].multi_period_direction（多期 qoq 趋势）。"
                      "ST5 加法式 %：total_shares/total_shares_source（=paid_in_capital，缺→None 全 % 降级）+ "
                      "by_source.insiders.{net_pct,increase_pct,reduce_pct,detail[].pct,detail[].is_grant,grant_count,increase_shares_total,reduce_shares_total}（gross-split，修 net-only 遗漏）+ "
-                     "by_source.top10.{net_pct,named[].delta_pct}；0-1 ratio，消费方 inline {x:.2%}（同 unlock {r:.1%} 范式）"},
+                     "by_source.top10.{net_pct,named[].delta_pct}；0-1 ratio，消费方 inline {x:.2%}（同 unlock {r:.1%} 范式）。"
+                     "ST7 加法式：by_source.top10_quarterly（券商级季度信封 periods[{period,quarter,new_entrants[],increasers[],decreasers[],exited[],flat[],net_shares,weighted_net,strong_in/strong_out,tone}] + latest_period(quarter)；源 RPT_F10_EH_FREEHOLDERS HOLDER_STATE_NEW/HOLDER_NEWTYPE/HOLD_NUM 官方结构化 PRIMARY；m9 §9.2 券商表 + G47 presence）"},
             # ST5：待执行/进行中 增减持计划（forward，决策驱动）—— cap%/窗口=正文 REAL，executed%=THS REAL÷总股本
             {"path": "data.risk_signals.processed.programs", "confidence": CONFIRMED,
              "note": "ST5 待执行-FIRST 计划信封 list[dict]：{direction,tier,status(planned|ongoing|completed|abandoned),"
@@ -537,7 +542,7 @@ SCENES = {
         "fetcher": "fetch_peer_comparison",      # runner.py（target + ≤3 peer）
         "mode": ["A"],
         "produces": [
-            # 伞路径 data（同 s55_industry/s7_cyclical 范式）：覆盖 status/target_metrics/
+            # 伞路径 data（同 s55_industry/s36_annual_analysis 范式）：覆盖 status/target_metrics/
             # items[].metrics(核心6)/items[].gsjj_yw 等全部子字段（_path_matches 前缀匹配）。
             # 核心 6（gate 强制）vs 富字段（不计 gate）的区分见 schema.md 散文 + 下方 note。
             {"path": "data", "confidence": CONFIRMED},
@@ -578,9 +583,9 @@ SCENES = {
              "note": "_compute_eps_consensus(runner.py:1946) 返回结构未确认含 .current.mean；m5:33/m6:83/m10:11 引用"},
         ],
         "consumers": {
-            "data.layer1.em_reports_count":                   ["m10:105"],
-            "data.layer1.em_rating_distribution":             ["m4:112", "s4_rating_backfill"],
-            "data.layer1.eps_consensus":                      ["m5:33", "m6:83", "m10:11", "s4_rating_backfill"],
+            "data.layer1.em_reports_count":                   ["m10:105", "m4"],   # m4 §4.1 机构关注度代理（P1-9：研报覆盖数=机构关注度；P2-10 补登 m4 consumer）
+            "data.layer1.em_rating_distribution":             ["m10:10A.1"],   # m4 §4.3 收敛后评级分布→m10 §10A.1；删 m4:112 + ghost s4_rating_backfill
+            "data.layer1.eps_consensus":                      ["m5:33", "m6:83", "m10:11"],
             "data.layer1.eps_consensus.current.mean":         ["m5:33", "m6:83", "m10:11"],
         },
         "priority": P1,
@@ -610,7 +615,7 @@ SCENES = {
         "fetcher": "DataSnapshot.fetch_web_research",  # F4: LLM websearch 产出（非 runner 网络）；data_snapshot.py 封装信封
         "mode": ["A", "B"],
         "produces": [{"path": "data", "confidence": UNVERIFIED}],  # websearch 非一手 API → UNVERIFIED + items _verified=false
-        "consumers": {},   # 报告层引用 [src: web_research_findings]（G21 路径验证 + G45 目标价口径），非 data 字段消费
+        "consumers": {"data.items": ["m5"]},   # F-D4：m5 目标价/API 缺失时引 web_research（[src: web_research_findings]，G21 路径验证 + G45 口径）
         "priority": P2,
         "cost": {"calls": 0, "latency": "low"},   # LLM websearch 成本不计入 runner
         "depends_on": [],
@@ -627,7 +632,7 @@ SCENES = {
         "mode": ["A"],
         "produces": [{"path": "data.finance_value_yi", "confidence": CONFIRMED,
                       "note": "融资余额(亿) + security_value_yi 融券 + finance_dod/security_dod 环比(DOD现成信号) + latest_period"}],
-        "consumers": {"data.finance_value_yi": ["m4-sentiment", "m7-risk", "G42"]},  # m4 杠杆情绪 / m7 踩踏风险 / G42 消费校验
+        "consumers": {"data.finance_value_yi": ["m7-risk", "G42"]},  # m7 踩踏风险 / G42 消费校验（m4 杠杆情绪已删→归 m7）
         "priority": P2,
         "cost": {"calls": 1, "latency": "low"},
         "depends_on": [],
@@ -653,66 +658,26 @@ SCENES = {
         "note": "Westock W3: ESG 评级(中证/聚源双源)，低 ESG=治理/合规风险，变动=趋势；三态 ok/missing/failed。",
     },
 
-    "s7_cyclical": {
-        "fetcher": "fetch_cyclical",              # runner.py:1259
-        "mode": ["A"],
-        "produces": [{"path": "data", "confidence": CONFIRMED}],
-        "consumers": {"data": ["m35-cyclical"]},
-        "priority": P2,
-        "cost": {"calls": 0, "latency": "low"},   # 非周期股直接 return
-        "depends_on": [],
-        "fallback": {},
-        "cacheable": False,
-    },
-
     # ───────────── 派生/backfill scene（无独立 fetcher，读其他 scene）─────────────
-
-    "s4_rating": {
-        "fetcher": None,   # 回填 runner.py:2392-2428
-        "mode": ["A"],
-        "produces": [{"path": "data.rating", "confidence": CONFIRMED}],
-        "consumers": {"data.rating": ["m4", "m6"]},
-        "priority": P1,
-        "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["s35_research_reports", "valuation_snapshot"],   # ★顺序敏感
-        "fallback": {},
-        "cacheable": False,
-        "derived": True,
-    },
-
-    "s73_forecast": {
-        "fetcher": None,   # 回填 runner.py:2380
-        "mode": ["A"],
-        "produces": [{"path": "data", "confidence": CONFIRMED}],
-        "consumers": {"data": ["m10"]},
-        "priority": P1,
-        "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["consensus_forecast"],   # ★顺序敏感
-        "fallback": {},
-        "cacheable": False,
-        "derived": True,
-    },
 
     "s36_annual_analysis": {
         "fetcher": None,   # 回填 runner.py:2356
         "mode": ["A"],
         "produces": [
-            {"path": "data.D2_audit_opinion", "confidence": CONFIRMED},
-            {"path": "data.D3_dividend",      "confidence": CONFIRMED},
-            {"path": "data.D4_top10_holders", "confidence": CONFIRMED},
-            {"path": "data.D5_biz_breakdown", "confidence": CONFIRMED},
-            {"path": "data.D6_geo_revenue",   "confidence": CONFIRMED},
+            {"path": "data.D3_dividend",      "confidence": CONFIRMED},   # westock valuation_snapshot.dividend_history
+            {"path": "data.D4_top10_holders", "confidence": CONFIRMED},   # 东财 EH_HOLDERS 前十大（off-PDF）
+            {"path": "data.D7_custsupp",      "confidence": CONFIRMED},   # 东财 CUSTSUPP 前五客户/供应商（最新年报期，off-PDF）
+            {"path": "data.D8_staff",         "confidence": CONFIRMED},   # 东财 STAFF 员工构成（最新年报期，off-PDF）
         ],
         "consumers": {
-            "data.D2_audit_opinion": ["G23", "m9"],
             "data.D3_dividend":      ["m9"],
             "data.D4_top10_holders": ["m9"],
-            "data.D5_biz_breakdown": ["m2", "m6", "m7"],   # m9 实测零消费（用自己 D-编号 D4=分红/D5=治理/D6=审计，非主营构成），契约漂移已修；三维 zygc 为主源，PDF D5 互补
-            "data.D6_geo_revenue":   ["m2", "m6", "m7"],   # 同上；D6 地区维补 zygc.geo（缺维/陈旧时）
+            "data.D7_custsupp":      ["m9"],   # §9.4 客户/供应商集中度
+            "data.D8_staff":         ["m9"],   # §9.5 员工构成与人均效能
         },
         "priority": P1,
         "cost": {"calls": 0, "latency": "low"},
-        "depends_on": ["s3_cninfo_pdf"],   # ★顺序敏感
+        "depends_on": ["valuation_snapshot"],   # D3 分红 westock 源（D4/D7/D8 东财独立 fetch，无 scene 依赖）
         "fallback": {},
         "cacheable": False,
         "derived": True,
@@ -722,14 +687,12 @@ SCENES = {
         "fetcher": "_build_computed_metrics",    # runner.py:1659
         "mode": ["A"],
         "produces": [
-            {"path": "data.pe_ttm",          "confidence": CONFIRMED},
-            {"path": "data.pb",              "confidence": CONFIRMED},
             {"path": "data.eps_fy_consensus","confidence": CONFIRMED},
             {"path": "data.peg_forward",     "confidence": CONFIRMED},   # consensus 同源 forward PE÷netProfitYoy（四档适用性）
             {"path": "data.gross_margin_calc","confidence": CONFIRMED},
             {"path": "data.has_overseas_exposure",  "confidence": CONFIRMED},   # 海外顶层镜像（geo 派生量，G17 旧读，现 computed_metrics 内部派生 overseas.status）
             {"path": "data.reported_overseas_pct", "confidence": CONFIRMED},   # 海外占比%（m25/m35 关税情景引用）
-            {"path": "data.asset_safety",           "confidence": CONFIRMED},   # m2 §2.10 防雷（balance_sheet 派生）；G29 校验
+            {"path": "data.asset_safety",           "confidence": CONFIRMED},   # m2 §2.10 home（完整体检+level/flags）；m7 §7.1 反双渲染引用（读 level/cash_to_debt，不重渲染比率）；G29 校验
             # §1.5/§1.6 三维派生信号（zero 新 API，全从 segment_composition 派生）
             {"path": "data.overseas",                "confidence": CONFIRMED},   # §1.5 海外五态（geo 派生，降级信号）：activated/domestic_only/underivable_*；m7 §7.1 读 status/pct/as_of
             {"path": "data.concentration_composite","confidence": CONFIRMED},   # §1.6 营收复合集中度（region_cr1 × product_cr1，合取→composite_severe 单点失败跳级）
@@ -737,13 +700,12 @@ SCENES = {
             {"path": "data.risk_register",          "confidence": CONFIRMED},   # §1.6 结构化风险登记册（severity 排序；m6/m7 解耦统一接口）
         ],
         "consumers": {
-            "data.pe_ttm": ["m5"], "data.pb": ["m5"],
             "data.eps_fy_consensus": ["m5", "m6"],
             "data.peg_forward": ["m5"],        # m5 估值表 PEG 行（读 value/applicability）
             "data.gross_margin_calc": ["m2"],
             "data.has_overseas_exposure": ["computed_metrics"],   # _compute_overseas_status 内部读它派生 overseas.status（G17 Phase3 改读 tariff_vulnerability）
             "data.reported_overseas_pct": ["m25", "m35", "computed_metrics"],
-            "data.asset_safety": ["m2:246", "G29"],
+            "data.asset_safety": ["m2:246", "m7", "G29"],   # m2 §2.10 home（完整比率体检）+ m7 §7.1 反双渲染引用（读 level/cash_to_debt 出风险行，不重渲染比率）+ G29 校验
             "data.overseas":                  ["m7", "computed_metrics"],                  # m7 §7.1；tariff_vulnerability 派生读它
             "data.concentration_composite":   ["m7", "m6"],                                # m7 识别（§7.1 集中度行）+ m6 悲观引用（单点失败）
             "data.tariff_vulnerability":      ["m7", "m6", "m25", "m35", "G17"],           # m7 识别（§7.1 地缘+§7.1.1 折让）+ m6 悲观引用 + m25 T0-T4 + m35 关税情景行 + G17 三维合取触发
@@ -756,6 +718,82 @@ SCENES = {
         "fallback": {},
         "cacheable": False,
         "derived": True,
+    },
+
+    "classification": {
+        "fetcher": None,   # runner.py:7422 派生（C1 解码 + C2 静态派生 + C2.5 dominant_business + C3 is_mixed overlay），非 fetcher 产出
+        "mode": ["A"],
+        "produces": [
+            {"path": "primary_type",        "confidence": CONFIRMED},   # 分类结果（周期/成长/消费/金融/防御/多元化控股）
+            {"path": "is_mixed",            "confidence": CONFIRMED},   # 混合型 overlay（成长+周期材料，C3）
+            {"path": "secondary_type",      "confidence": CONFIRMED},   # 混合时次类型，非混合缺省
+            {"path": "valuation_framework", "confidence": CONFIRMED},   # 估值框架（C2；周期→PB/EV-EBITDA，成长→PS/PEG，金融→PB/ROE），约束下游 m5 口径
+            {"path": "macro_sensitivity",   "confidence": CONFIRMED},   # 宏观敏感度 high/medium/low（C2）；G37 宏观条件触发器
+            {"path": "forbidden_metric",    "confidence": CONFIRMED},   # 禁用主估值指标（C2；周期→"PE做主要"，成长→"PB做主要"），m0 执法依据
+            {"path": "dominant_business",   "confidence": CONFIRMED,    # C2.5 主导业务锚 {product_name,revenue_ratio,gross_margin,report_date}
+             "note": "top1 产品按营收占比最大取（修 segment 源序 latent bug）；非时间序列无 latest_period 信封；行业身份读 raw_facts.board_name_level 不在此（segment.industry 常是 CSRC 大类过宽）"},
+            {"path": "raw_facts",           "confidence": CONFIRMED,    # 原始事实 {industry_csrc,board_name_level,main_business}
+             "note": "board_name_level=具体产业链级（如'电力设备-电池-锂电池'），m1 行业身份一句话锚"},
+        ],
+        "consumers": {
+            "primary_type":        ["m0", "m1", "G39"],   # m0 类型句单一真相源 + m1 身份句 + G39 类型词三查
+            "is_mixed":            ["m0", "m1", "G39"],
+            "secondary_type":      ["m1"],                # m1 混合时次类型联动
+            "valuation_framework": ["m0", "m1"],          # m0 声明约束 + m1 类型句
+            "macro_sensitivity":   ["m0", "G39"],         # G39 宏观引用三查
+            "forbidden_metric":    ["m0", "m1", "G39"],   # m0 执法依据 + G39 禁用指标三查
+            "dominant_business":   ["m0", "m1", "m2", "m7"],  # m0 home + m1 主营锚 + m2/m7 读 gross_margin
+            "raw_facts":           ["m1"],                # m1 行业身份（board_name_level）
+        },
+        "priority": P1,
+        "cost": {"calls": 0, "latency": "low"},
+        "depends_on": [],
+        "fallback": {},
+        "cacheable": False,
+        "derived": True,
+        "note": "股票类型单一真相源（snapshot_schema.md:65，2026-07-22 约定）：所有模块读类型/估值框架/宏观敏感度/主导业务只读此处，"
+                "不再散读 segment_composition/product_industry_alignment（已退役）。顶层独立扁平 slot（runner.py:7422 snapshot['classification']=classification，"
+                "无 .data. 中缀、非时间序列、无 latest_period）。schema_coverage 方向(b) 因 classification 路径无 .data. 中缀而跳过（verify_data_contracts.py:185），"
+                "故 preferred_macro/is_cyclic/is_financial/confidence/evidence 当前无 module/gate 直读——按 orphan_produces 语义不声明 produces（不声明则不查）。"
+                "~~industry_momentum~~ 已移除（2026-07-22：s55.momentum 是日内板块涨跌幅≠景气趋势，景气改读 s6_macro 信封）。",
+    },
+
+    "governance": {
+        "fetcher": None,   # runner.py:7715 派生（东财 ORG_BASICINFO 6 字段 + classifier raw_facts board/main_business 合并），非 fetcher 产出
+        "mode": ["A"],
+        "produces": [
+            {"path": "status",              "confidence": CONFIRMED},   # 三态：ok/never_empty/failed（G23 软 presence 触发）
+            {"path": "real_controler",      "confidence": CONFIRMED},   # 实际控制人
+            {"path": "control_holder",      "confidence": CONFIRMED},   # 控股股东
+            {"path": "control_direct_ratio","confidence": CONFIRMED},   # 控股直比%（>50% 强控制）
+            {"path": "chairman",            "confidence": CONFIRMED},   # 董事长
+            {"path": "legal_person",        "confidence": CONFIRMED},   # 法定代表人
+            {"path": "area",                "confidence": CONFIRMED},   # 地区板块（如「山西板块」）
+            {"path": "board_name_level",    "confidence": CONFIRMED,    # 行业合并串（如「电力设备-电网设备-线缆部件及其他」）
+             "note": "自 classifier.raw_facts.board_name_level 复暴露（canonical produce=classification.raw_facts），m9 §9.2 单处读取"},
+            {"path": "main_business",       "confidence": CONFIRMED,    # 主营业务一句话
+             "note": "自 classifier.raw_facts.main_business 复暴露（canonical produce=classification.raw_facts），m9 §9.2 单处读取"},
+        ],
+        "consumers": {
+            "status":              ["G23"],          # 软 presence（status==ok+实控人 → 报告须消费；failed/never_empty 豁免）
+            "real_controler":      ["m9", "m1", "G23"],
+            "control_holder":      ["m9", "m1"],
+            "control_direct_ratio":["m9", "m1"],
+            "chairman":            ["m9"],
+            "legal_person":        ["m9"],
+            "area":                ["m9"],
+            "board_name_level":    ["m9"],           # §9.2 治理基本信息（复暴露自 classification.raw_facts）
+            "main_business":       ["m9"],
+        },
+        "priority": P1,
+        "cost": {"calls": 0, "latency": "low"},
+        "depends_on": ["classification"],   # board_name_level/main_business 复暴露自 raw_facts
+        "fallback": {},
+        "cacheable": False,
+        "derived": True,
+        "note": "公司治理基本信息单一读取点（runner.py:7715 snapshot['governance']）：东财 RPT_F10_ORG_BASICINFO（实控人/控股/直比/董事长/法人/地区）"
+                "+ classifier BASIC_ORGINFO（board/main_business，零重复抓取——BASIC_ORGINFO 已由 classifier 抓取）。顶层独立扁平 slot（无 .data. 中缀、非时间序列、无 latest_period）。"
+                "schema_coverage 方向(b) 因无 .data. 中缀跳过（同 classification）。不入 _INFRA_TOP（向B 由 SCENES 登记覆盖）。",
     },
 
     "s4_technical": {

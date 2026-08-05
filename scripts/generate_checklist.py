@@ -107,7 +107,6 @@ PHASE_STEPS = {
             {"id": "c13", "desc": "runner 返回的财务三表数据确认（8季度）", "agent": 2},
             {"id": "c14", "desc": "runner 返回的合同负债趋势确认", "agent": 2},
             {"id": "c15", "desc": "提取扣非净利润（从 runner snapshot）", "agent": 2},
-            {"id": "c_pdf_annual", "desc": "cninfo 年报/季报 PDF 已下载（runner fetch_cninfo_reports）", "agent": 2},
             {"id": "c_pdf_research", "desc": "东财机构研报 PDF 已下载（≥3份，runner fetch_research_reports）", "agent": 2},
             {"id": "c_analyst_forecast", "desc": "机构盈利预测已提取并展示（EPS/PE/评级分布）", "agent": 2},
             {"id": "c16", "desc": "读 risk_signals.processed（M 风险/P 利好信号，公告大全编码）→ Claude 研判重大事件", "agent": 3},

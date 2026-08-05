@@ -36,6 +36,8 @@ echo "[① 契约层] test_segment_dimensions.py（三维主营构成 + 海外�
 python3 "$HERE/test_segment_dimensions.py" 2>&1 | tail -3
 echo "[① 契约层] test_westock_integration.py（westock_client + fetcher reshape）"
 python3 -m pytest "$ROUTING/test_westock_integration.py" -q 2>&1 | tail -2
+echo "[① 契约层] test_dongcai_client.py（东财 client 三态+缓存命中/中毒双判+重试+URL 拼接）"
+python3 "$ROUTING/test_dongcai_client.py" 2>&1 | tail -3
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
 python3 "$HERE/test_lhb_northbound_processor.py" 2>&1 | tail -3
 echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术面完整性+TD 数据驱动+三态+禁编造）"
@@ -54,6 +56,10 @@ echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-r
 python3 "$HERE/test_peer_pipeline.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_g48_shareholder_programs.py（G48 待执行-FIRST 增减持计划 SOFT gate 三态+反编造）"
 python3 "$HERE/test_g48_shareholder_programs.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_m5_gates.py（m5 G58分位必写/G59结论verdict/G45目标价src/G21 m5计数 四 gate 三态+反编造）"
+python3 "$HERE/test_m5_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_m6_gates.py（m6 G60 定性三行结构化锚点+反捏造 三态+限证据全景子节防误伤）"
+python3 "$HERE/test_m6_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 
 if [ -d "$GATE_FIXTURES" ]; then
   echo
