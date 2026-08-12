@@ -326,31 +326,16 @@ SCENES = {
             # ★断链#4：细粒度子键，runner 不强制 schema
             {"path": "data.risk_signals.unlock.has_forward_pressure", "confidence": UNVERIFIED,
              "note": "runner 默认 {unlock:None,...}，子键依赖填充代码；m7:19 引用"},
-            {"path": "data.risk_signals.notice_types", "confidence": CONFIRMED,
-             "note": "公告大全官方 公告类型 tally {标签:条数}（akshare stock_individual_notice_report，全历史）；M/P 编码权威分类源（上游全量；processed 内 risk bucket/announcements 取 180 天窗口，经 notice_records 重统）"},
             {"path": "data.risk_signals.processed", "confidence": CONFIRMED,
-             "note": "重大事件编码双桶信封 {status,signal_type,severity,summary,risk[],catalyst[],signals[],aggregates,latest_period}；M 风险 / P 利好；公告事件统一 180 天窗口（M2/M3 质押解禁/M8 业绩预告/programs ST5 各走独立通道不在此窗口）"},
-            {"path": "data.risk_signals.processed.risk[].code", "confidence": CONFIRMED,
-             "note": "M1减持/M2质押/M3解禁/M4违规/M5 ST/M6增发/M7监管/M8下修/M9担保/M10异动；悲观打分+G30#1 强制 severity==critical 的 M 码（含 M2>50%/M3>10%/M9实控人/M11立案 升档）"},
-            {"path": "data.risk_signals.processed.catalyst[].code", "confidence": CONFIRMED,
-             "note": "P1增持/P2回购/P3分红/P4上修/P5激励/P6合同/P7补贴/P8重组；乐观打分（gate 不强制·门禁分级）"},
+             "note": "事件层信封 {status, latest_period, timeline, shareholder_dynamics, programs, repurchase_programs}（事件主源=东财大事提醒 timeline；severity/M-P/risk_register/announcements 体系已退役）"},
+            {"path": "data.risk_signals.processed.timeline", "confidence": CONFIRMED,
+             "note": "东财 F10 大事提醒 RPT_F10_REMIND 时间线信封 {events,future,historical,active,risk,catalyst,fatal_events,by_code{EVENT_TYPE_CODE:[events]},"
+                     "meta{body_fetch_count,unknown_codes,counts},summary,latest_period,status}；45 类 EVENT_TYPE_CODE 官方分类（risk/catalyst/forward/directional/neutral flavor），"
+                     "NOTICE_DATE≤180d 硬截断 ∨ fatal 年龄豁免（330非标/360破产/430风险警示/ST240/退市230/重大违法270）；"
+                     "event={notice_date,event_type,event_type_code,specific,belong_classif,level1_content,info_code,flavor,effective_date,validity_state[,fatal]}；"
+                     "P9 月度经营（公告大全窄源）emit 为 catalyst pseudo-code P9；m1/m4/m6/m7/m9/capstone 消费，G30#1 fatal_events surface；三态 ok(含 never_*/真空)/failed"},
             {"path": "data.risk_signals.latest_period", "confidence": CONFIRMED,
-             "note": "最新事件日信封（period_type=event，value=最新风险码；真空→None）"},
-            # v3：逐条公告登记表（material 过滤后）+ 原始 notice_records（命门：akshare 6 列铁定存在）
-            {"path": "data.risk_signals.notice_records", "confidence": CONFIRMED,
-             "note": "公告大全逐条原始 [{公告日期:str,公告标题,公告类型,网址}]（akshare stock_individual_notice_report 6 列子集）；m4 登记表渲染源；公告日期 astype(str) 保 JSON-friendly"},
-            {"path": "data.risk_signals.processed.announcements", "confidence": CONFIRMED,
-             "note": "v3 material 公告登记表 [{code,name,severity,bucket,material_subtype,machine_fields,structured_horizon,title,label,date,url}]；所有码 180 天窗口（公告事件统一近半年）；m4/m6/m9 消费，G30#4 presence 校验"},
-            {"path": "data.risk_signals.processed.announcements[].code", "confidence": CONFIRMED,
-             "note": "M1-M11/P1-P8（M11 新码：人员变动/立案；M4 拆监管类/诉讼）；加法式复用 signal 形状"},
-            {"path": "data.risk_signals.processed.announcements[].structured_horizon.reaction", "confidence": CONFIRMED,
-             "note": "immediate/latent/none（按码派生）；m6 Layer3 短/中/长动作"},
-            {"path": "data.risk_signals.processed.announcements[].material_subtype", "confidence": CONFIRMED,
-             "note": "M4 监管类/诉讼；M9 境内/境外担保；M11 离任/立案/聘任"},
-            # ST1：actor_tier（label PRIMARY + 标题细化）→ escalate 精度门（实控人/5%大股东减持升档）
-            {"path": "data.risk_signals.processed.announcements[].machine_fields.actor_tier", "confidence": CONFIRMED,
-             "note": "ST1 actor 级别中文标签（实控人/控股股东｜5%以上大股东｜董监高），label「股东/实际控制人股份减持」作 PRIMARY；"
-                     "G46 泛型校验须 surface（m4 §4.2 actor 列）；escalate→critical→G30#4 兜底"},
+             "note": "最新事件日信封（period_type=event，date=max timeline event notice_date，value=None；真空→None→gate 自动 PASS）"},
             # ST3：减持增持融合（意图×内部人×前十大）—— executive_trade/shareholder 既有 raw 激活（前十大今日 orphan）
             {"path": "data.risk_signals.executive_trade", "confidence": CONFIRMED,
              "note": "westock 董监高/实控人个人增减持 list[dict]（managerName/managerSharesChange±/managerDealPrice/managerHoldChangeDeclareDate）；M1/P1 evidence + shareholder_dynamics.insiders"},
@@ -396,9 +381,6 @@ SCENES = {
             {"path": "data.risk_signals.top10_multiperiod", "confidence": CONFIRMED,
              "note": "ST5.1 东财 datacenter RPT_F10_EH_FREEHOLDERS 前十大流通股东多期趋势 list[{period,holders[{name,delta_shares,hold_pct,qoq_pct,is_new}]}]；"
                      "多期 QoQ=真趋势（beats westock 单期快照）；_aggregate top10 趋势消费"},
-            {"path": "data.risk_signals.announcement_bodies", "confidence": CONFIRMED,
-             "note": "ST5 预披露/计划/结果 公告正文 {art_code: notice_content}（东财 np-cnotice-stock content API）；"
-                     "announced_pct_cap/窗口/截止日 唯一 REAL 来源（0 结构化源）；_assemble_programs/_parse_reduction_body 消费"},
             {"path": "data.disclosure", "confidence": CONFIRMED,
              "note": "Westock W2: 财报披露日历并入（disclosure_date/desc + latest_period event）；无未来披露日=missing 真空"},
         ],
@@ -407,12 +389,8 @@ SCENES = {
             "data.news.data_full[].新闻内容":             ["m4:166"],
             "data.risk_signals":                          ["m1", "m4", "m5", "m6", "m7", "m9"],
             "data.risk_signals.unlock.has_forward_pressure": ["m7:19"],
-            "data.risk_signals.notice_types":             ["m7"],
             "data.risk_signals.processed":                ["m6", "G30"],
-            "data.risk_signals.processed.risk":           ["m6", "m7", "G30"],
-            "data.risk_signals.processed.catalyst":       ["m4", "m6", "m9"],  # v3：catalyst 码现在 m4 登记表 surface + m6 矩阵 + m9 引用
-            "data.risk_signals.processed.announcements":  ["m4", "m6", "m9", "G30"],  # v3 登记表：m4 渲染/m6 矩阵/m9 引用/G30#4 presence
-            "data.risk_signals.processed.announcements[].machine_fields.actor_tier": ["m4", "G46"],  # ST1：m4 §4.2 actor 列 surface + G46 泛型校验
+            "data.risk_signals.processed.timeline":       ["m1", "m4", "m6", "m7", "m9", "capstone_panorama", "G30"],  # 大事提醒时间线：m1拐点锚/m4渲染/m6悲观top/m7风险行/m9 §9.2/capstone fatal+signals/G30#1 fatal surface
             "data.risk_signals.executive_trade":          ["m4", "m9", "capstone_panorama"],   # ST3 内部人执行层（既有 raw 补登 consumer）
             "data.risk_signals.shareholder":              ["m4", "m9", "capstone_panorama"],   # ST3 前十大执行层（今日 orphan 补登）
             "data.risk_signals.processed.shareholder_dynamics": ["m9", "m6", "m7", "m4", "capstone_panorama", "G47"],  # ST3+ST5 融合信封（含 %）：m9 §9.2 home + m6/m7/m4 消费 + G47 presence
@@ -421,8 +399,6 @@ SCENES = {
             "data.risk_signals.processed.buy_sell_pressure": ["m9", "m6", "m7", "m1", "capstone_panorama", "G49"],  # ST6 买卖阵营 verdict：m9 §9.2 home + m6 timing + m7 卖方 + m1 + capstone render + G49 presence
             "data.risk_signals.ths_executions": ["_assemble_programs", "_aggregate_shareholder_dynamics"],   # ST5.1 THS 执行（内部派生输入）
             "data.risk_signals.top10_multiperiod": ["_aggregate_shareholder_dynamics"],   # ST5.1 RPT 多期趋势（内部派生输入）
-            "data.risk_signals.announcement_bodies": ["_assemble_programs", "_parse_reduction_body"],   # ST5 正文 cap%/窗口 REAL 源（内部派生输入）
-            "data.risk_signals.notice_records":           ["m4"],   # v3 raw 逐条公告：m4 登记表渲染源
             "data.disclosure":                            ["m4", "G43"],   # m4 事件扫描（披露日临近=催化/风险）+ G43 消费校验
         },
         "priority": P1,
@@ -697,7 +673,6 @@ SCENES = {
             {"path": "data.overseas",                "confidence": CONFIRMED},   # §1.5 海外五态（geo 派生，降级信号）：activated/domestic_only/underivable_*；m7 §7.1 读 status/pct/as_of
             {"path": "data.concentration_composite","confidence": CONFIRMED},   # §1.6 营收复合集中度（region_cr1 × product_cr1，合取→composite_severe 单点失败跳级）
             {"path": "data.tariff_vulnerability",   "confidence": CONFIRMED},   # §1.6 关税脆弱性海外毛利率判别（fatal/partial_low_margin_export/partial_mixed/partial_unverified/none）；G17 Phase3 触发源
-            {"path": "data.risk_register",          "confidence": CONFIRMED},   # §1.6 结构化风险登记册（severity 排序；m6/m7 解耦统一接口）
         ],
         "consumers": {
             "data.eps_fy_consensus": ["m5", "m6"],
@@ -709,7 +684,6 @@ SCENES = {
             "data.overseas":                  ["m7", "computed_metrics"],                  # m7 §7.1；tariff_vulnerability 派生读它
             "data.concentration_composite":   ["m7", "m6"],                                # m7 识别（§7.1 集中度行）+ m6 悲观引用（单点失败）
             "data.tariff_vulnerability":      ["m7", "m6", "m25", "m35", "G17"],           # m7 识别（§7.1 地缘+§7.1.1 折让）+ m6 悲观引用 + m25 T0-T4 + m35 关税情景行 + G17 三维合取触发
-            "data.risk_register":             ["m7", "m6"],                                # m7 叙事+反转 / m6 悲观 top 风险（m6/m7 解耦接口）
         },
         "note": "computed_metrics 实存 snapshot['computed_metrics'][key]（无 .data. 中缀）；契约 path 用 data.X 仅为场景内符号一致，verify 不解析真实 snapshot 路径。",
         "priority": P1,
@@ -829,6 +803,44 @@ SCENES = {
         "fallback": {},
         "cacheable": True,
         "derived": True,
+    },
+
+    "s_stock_evaluation": {
+        # fetch_stock_evaluation（runner.py）：4 东财 datacenter-web 端点 + akshare 序列 + s_margin
+        # → processed.conclusions[]「结论一等公民」（券商原文一字不改，用户定调）。
+        # 三态 ok/missing(金融股·次新·非标的无千股千评,真空)/failed；G61 四段守护 fetch→store→read→consume。
+        "fetcher": "fetch_stock_evaluation",
+        "mode": ["A"],
+        "produces": [
+            {"path": "data.processed.conclusions", "confidence": CONFIRMED,
+             "note": "千股千评结论一等公民（券商原文）：控盘程度(STOCKEVALUATE.PARTICIPATE_TYPE_CN)/"
+                     "综合结论(CUSTOM_PK.WORDS_EXPLAIN 主力资金动向·severity=warning if 流出/大幅)/"
+                     "趋势量能(TRENDVOLUME.COMMENT_TXT 含支撑/压力位)/融资杠杆(s_margin+MARGIN_EXPLAIN 两融资格)。"
+                     "字段 dimension/text/severity/source_api/evidence，G61 段④ force-surface 每条 ok 结论。"},
+            {"path": "data.processed.metrics", "confidence": CONFIRMED,
+             "note": "支撑数字：control_tier/org_participate(0-1 控盘度)/prime_cost_1d·20d/prime_inflow/"
+                     "total_score/rise_prob/rank_ratio/support·resistance(券商位)/finance_value_yi/akshare(评分·关注·意愿,标延迟日期)"},
+            {"path": "data.processed.latest_period", "confidence": CONFIRMED,
+             "note": "千股千评最新交易日信封（period_type=day，value={control_tier}，summary 头条=控盘程度·主力资金动向）。"
+                     "ok→信封 / missing·failed→None；G61 段② 据此判格式完整性。"},
+            # data.raw（stockevaluate/custom_pk/trendvolume/margin_explain/s_margin 全行）加法式存储供审计追溯，
+            # 非契约 produce（无消费者，按 lhb/s1 惯例不声明，避免 orphan 误报）。
+        ],
+        "consumers": {
+            "data.processed.conclusions":   ["m4", "m6", "m7", "G61"],
+            "data.processed.metrics":       ["m4", "m7"],
+            "data.processed.latest_period": ["G61"],
+        },
+        "priority": P2,
+        "cost": {"calls": 5, "calls_worst": 9, "latency": "medium", "throttle_prone": True},
+        "depends_on": [],
+        "fallback": {},
+        "cacheable": True,
+        "note": "千股千评·主力控盘「结论一等公民」。4 东财 datacenter-web 端点(STOCKEVALUATE/CUSTOM_PK/"
+                "TRENDVOLUME 用 sort_columns=TRADE_DATE；MARGIN_EXPLAIN 用 sort_columns='')+akshare 序列+s_margin。"
+                "三坑：filter_col=SECURITY_CODE+裸码 / sort_columns 差异 / 读 r['rows']。"
+                "⚠️ 机构参与度口径冲突：STOCKEVALUATE.ORG_PARTICIPATE=0-1 控盘度 vs akshare zlkp=0-100 参与分值（同名不同物，metrics 区分标注）。"
+                "有意不进 gate _EXPECTED_SCENES（同 lhb/northbound，self-score 分母不变）。",
     },
 }
 

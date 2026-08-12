@@ -122,25 +122,38 @@ QUANT_KW = {t: kw for t, _, kw in QUANT_THEMES}
 QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
 
 
-# 信号覆盖维度（G30#1 信号驱动覆盖）：读各 signal-envelope scene 的 processed，
-# 收集达 severity 阈值的码 → present_signals（数据驱动，真空票自动豁免）。
-# 严重度驱动（非 presence）：M4 审计机构变更=warning 不当关键风险；M2/M3/M9 升档 critical 才收。
-# 每码配**精确词**（拒 K线/换手冒充）。码是否收集由数据 severity 决定，码集不硬编码。
+# M-code presence 关键词表（G30#1 信号覆盖用·精确词拒 K线/换手冒充；path-agnostic，timeline/M-code 共用）。
+_M_SIGNAL_KW = {
+    "M1": ("股东减持", ("减持", "股东减持")),
+    "M2": ("股权质押", ("质押", "质押平仓", "股权质押")),
+    "M3": ("限售解禁", ("解禁", "限售解禁", "解禁压力")),
+    "M4": ("违规/处罚", ("违规", "处罚", "立案调查", "监管处罚", "会计差错")),
+    "M5": ("ST/退市", ("ST", "退市", "*ST")),
+    "M6": ("增发稀释", ("增发", "增发稀释")),
+    "M7": ("监管函", ("监管函", "问询函", "警示函")),
+    "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值")),
+    "M9": ("对外担保", ("担保", "对外担保", "连带责任")),
+    "M10": ("交易异动", ("异动", "交易异常", "波动")),
+    "M11": ("人员变动/立案", ("被立案", "立案调查", "人员变动", "高管变动", "离任", "辞职")),
+}
+
+# 大事提醒 EVENT_TYPE_CODE → M-code（timeline 已分桶 risk/forward/fatal，故投影 M-code 无需 severity 过滤）。
+# forward 减持码(320/090/100) 仅 LV1 含减持/转让 才算 M1（增持=catalyst）；directional(002/003) 仅 risk-flavor 才算 M8。
+_TIMELINE_CODE_TO_M = {
+    "320": "M1", "090": "M1", "100": "M1",   # 股东/高管增减持
+    "160": "M2", "080": "M3",                # 质押 / 解禁
+    "270": "M4", "330": "M4",                 # 违规处罚 / 非标审计
+    "230": "M5", "240": "M5", "430": "M5",    # ST / 退市 / 风险警示
+    "180": "M6", "190": "M6",                 # 增发 / 配股
+    "340": "M7",                              # 监管问询
+    "002": "M8", "003": "M8",                 # 业绩快报/预告（减向）
+    "250": "M9", "220": "M10",                # 对外担保 / 停复牌异动
+    "380": "M11", "390": "M11", "370": "M11", # 董事长/总经理/法定代表人变更
+}
+
+# 信号覆盖维度（G30#1）：S2/S7 筹码码（severity 阈值·股东户数信号族）；M-code 由 timeline 投影（见下）。
 # (processed 路径, 取码子键, {code: (name, precise_kws)}, 收集的 severity 集)
 _SIGNAL_SOURCES = [
-    ("s5_events.data.risk_signals.processed", "risk",
-     {"M1": ("股东减持", ("减持", "股东减持")),
-      "M2": ("股权质押", ("质押", "质押平仓", "股权质押")),
-      "M3": ("限售解禁", ("解禁", "限售解禁", "解禁压力")),
-      "M4": ("违规/处罚", ("违规", "处罚", "立案调查", "监管处罚", "会计差错")),
-      "M5": ("ST/退市", ("ST", "退市", "*ST")),
-      "M6": ("增发稀释", ("增发", "增发稀释")),
-      "M7": ("监管函", ("监管函", "问询函", "警示函")),
-      "M8": ("业绩下修", ("预减", "预亏", "首亏", "续亏", "计损", "减值")),
-      "M9": ("对外担保", ("担保", "对外担保", "连带责任")),
-      "M10": ("交易异动", ("异动", "交易异常", "波动")),
-      "M11": ("人员变动/立案", ("被立案", "立案调查", "人员变动", "高管变动", "离任", "辞职"))},
-     ("critical",)),   # M 码仅 critical（warning/info 是例行，不当关键风险）
     ("s8_a_share.data.shareholder_count.processed", "signals",
      {"S2": ("高位派发", ("派发", "高位派发")),
       "S7": ("筹码急剧分散", ("筹码分散", "急剧分散", "筹码松动"))},
@@ -202,7 +215,7 @@ def _latest_annual_roe(data: dict, roe_key: str = "加权净资产收益率(%)")
     return best_roe
 
 
-def _signal_direction_tally(values: dict, data: dict, risk_register: list) -> dict:
+def _signal_direction_tally(values: dict, data: dict, fatal_events: list) -> dict:
     """Part G G-D1 —— 13 维信号方向 tally（概率判断的【参考锚】，非映射公式）。
 
     读 panorama values（+少数 raw snapshot 字段 peg/volume_state）定每维方向（偏多/偏空/中性/无数据）；
@@ -284,7 +297,10 @@ def _signal_direction_tally(values: dict, data: dict, risk_register: list) -> di
         dim("前瞻催化", seg_growth_dim, lambda x: x is not None, lambda x: False),
     ]
     cnt = Counter(d for _, d in out)
-    fatal = any(isinstance(r, dict) and r.get("severity") == "致命" for r in (risk_register or []))
+    # 致命风险 = timeline.fatal_events（公告型：330非标/360破产/430风险警示/ST/退市/重大违法）
+    # ＋ tariff_vulnerability.level=="fatal"（m7 自有关税致命，非公告派生，保留不退役）
+    _tariff_fatal = _snapshot_get(data, "computed_metrics.tariff_vulnerability.level") == "fatal"
+    fatal = bool(fatal_events) or _tariff_fatal
     bull, neutral, bear, no_data = (cnt.get("偏多", 0), cnt.get("中性", 0),
                                     cnt.get("偏空", 0), cnt.get("无数据", 0))
     advisory = f"{bull}偏多/{neutral}中性/{bear}偏空"
@@ -383,7 +399,7 @@ def panorama(data: dict) -> dict:
         except (TypeError, ValueError):
             pass
 
-    # §2.2 主营构成三维 + 跨维派生信号（m6 Layer1「主营构成」行 + m6/m7 risk_register 解耦）
+    # §2.2 主营构成三维 + 跨维派生信号（m6 Layer1「主营构成」行 + m6/m7 经 timeline 解耦）
     seg = _snapshot_get(data, "s1_financial.data.segment_composition") or {}
     if isinstance(seg, dict):
         dim_st = seg.get("dimension_status") or {}
@@ -439,26 +455,21 @@ def panorama(data: dict) -> dict:
     # product_industry_alignment 已退役（2026-07-22）：margin/momentum 并入 classification
     # 单一真相源（dominant_business.gross_margin + industry_momentum），m2/m6/m7 改读 snapshot.classification。
 
-    rr = _snapshot_get(data, "computed_metrics.risk_register") or []
-    if isinstance(rr, list) and rr:
-        out["values"]["risk_register"] = rr   # severity 排序；m6 悲观情景挑 top，m7 §7.1 叙事
-
-    # 重大事件（M 风险 / P 利好 双桶）——G30#1 信号覆盖数据层 + capstone 悲观/乐观打分素材。
+    # 重大事件 = 大事提醒时间线（单一交接结构 processed.timeline）：G30#1 信号覆盖数据层 + capstone 打分素材。
     mat = _snapshot_get(data, "s5_events.data.risk_signals.processed")
-    if isinstance(mat, dict) and mat.get("status") == "ok" and (mat.get("risk") or mat.get("catalyst")):
-        risk_sigs = mat.get("risk") or []
-        cat_sigs = mat.get("catalyst") or []
-        crit_codes = (mat.get("aggregates") or {}).get("critical_codes") or []
+    _tl = mat.get("timeline") if isinstance(mat, dict) else None
+    if isinstance(_tl, dict) and _tl.get("status") == "ok" and (_tl.get("events") or _tl.get("future")):
         out["values"]["material_events"] = {
-            "summary": mat.get("summary"), "signal_type": mat.get("signal_type"),
-            "risk": risk_sigs, "catalyst": cat_sigs, "critical_codes": crit_codes,
-            "latest_period": mat.get("latest_period"),
+            "summary": _tl.get("summary"),
+            "timeline": _tl,
+            "latest_period": _tl.get("latest_period"),
         }
-        # critical 风险（severity==critical 的 M 码）→ 前置「⚠️关键风险信号」段（经 _CRITICAL_KW 命中）
-        for s in risk_sigs:
-            if s.get("severity") == "critical":
-                out["interpretation_flags"].append(
-                    f"关键风险信号·{s.get('name')}：{s.get('evidence')} → 悲观情景核心驱动，须高亮")
+        # 致命事件（fatal_events：330非标/360破产/430风险警示/ST/退市/重大违法）→ 前置「⚠️关键风险信号」
+        for e in (_tl.get("fatal_events") or []):
+            _nd = (e.get("notice_date") or "")[:10]
+            out["interpretation_flags"].append(
+                f"关键风险信号·致命事件·{e.get('event_type')}（{_nd}）：{(e.get('level1_content') or '')[:40]}"
+                f" → 不可投/悲观核心驱动，须高亮")
         # 🆕 ST3 股东行为综合研判（融合意图×内部人×前十大；G47 presence 数据层 + Layer1 起草素材）
         sd = mat.get("shareholder_dynamics")
         if isinstance(sd, dict) and sd.get("status") == "ok":
@@ -477,9 +488,8 @@ def panorama(data: dict) -> dict:
                         f"待执行计划·{_act}{p.get('direction', '')}（{p.get('status')}）→ 决策驱动，须显眼")
                     break
 
-    # present_signals（G30#1 信号驱动覆盖）：遍历 _SIGNAL_SOURCES，按 severity 阈值收集（非 presence）。
-    # M 码仅 critical（M4 审计变更=warning 不当关键风险）；筹码码 critical+warning。
-    # 附 structured_horizon（从该 code 的 signal 取；缺失则按码派生）→ m6 Layer3 短/中/长动作提示。
+    # present_signals（G30#1 信号驱动覆盖）。
+    # ① S2/S7 筹码码（severity 阈值·股东户数信号族）：遍历 _SIGNAL_SOURCES。
     for path, subkey, code_map, sev_set in _SIGNAL_SOURCES:
         proc = _snapshot_get(data, path)
         if not isinstance(proc, dict):
@@ -498,6 +508,30 @@ def panorama(data: dict) -> dict:
             out["present_signals"].append(
                 {"source": path, "code": code, "name": name, "kws": list(kws),
                  "structured_horizon": hz or derive_horizon(code)})
+    # ② 大事提醒 timeline → M-code presence（timeline 已分桶，无 severity 过滤；severity 体系已退役）。
+    # 候选 = fatal_events（致命红牌必 surface）∪ risk（risk-flavor 事件）∪ active（forward 减持计划·决策驱动）。
+    # forward 减持码(320/090/100) 仅 LV1 含减持/转让 才算 M1（增持=catalyst）；directional(002/003) 仅 risk-flavor 才算 M8。
+    _tl = _snapshot_get(data, "s5_events.data.risk_signals.processed.timeline")
+    if isinstance(_tl, dict) and _tl.get("status") == "ok":
+        _seen_m = set()
+        _cands = list(_tl.get("fatal_events") or []) + list(_tl.get("risk") or []) + list(_tl.get("active") or [])
+        for e in _cands:
+            if not isinstance(e, dict):
+                continue
+            code = e.get("event_type_code")
+            mcode = _TIMELINE_CODE_TO_M.get(code)
+            if not mcode or mcode in _seen_m:
+                continue
+            if code in ("320", "090", "100") and not any(
+                    w in (e.get("level1_content") or "") for w in ("减持", "转让")):
+                continue
+            if code in ("002", "003") and e.get("flavor") != "risk":
+                continue
+            _seen_m.add(mcode)
+            name, kws = _M_SIGNAL_KW[mcode]
+            out["present_signals"].append(
+                {"source": "timeline", "code": mcode, "name": name, "kws": list(kws),
+                 "structured_horizon": derive_horizon(mcode)})
 
     vs = _snapshot_get(data, "valuation_snapshot.data") or {}
     if isinstance(vs, dict):
@@ -584,9 +618,10 @@ def panorama(data: dict) -> dict:
     if isinstance(repos, list) and repos:
         out["values"]["repurchase_programs"] = repos
 
-    # 🆕 Part G G-D1：信号方向 tally（概率判断的参考锚，非映射公式；fatal 风险单独标注）
-    _rr = out["values"].get("risk_register") or _snapshot_get(data, "computed_metrics.risk_register") or []
-    out["tally"] = _signal_direction_tally(out["values"], data, _rr)
+    # 🆕 Part G G-D1：信号方向 tally（概率判断的参考锚，非映射公式；fatal 风险单独标注）。
+    # fatal 取自 timeline.fatal_events（公告型 330/360/430/ST/退市/重大违法）。
+    _fe = _snapshot_get(data, "s5_events.data.risk_signals.processed.timeline.fatal_events") or []
+    out["tally"] = _signal_direction_tally(out["values"], data, _fe)
 
     # ---- 渲染证据全景草稿表（Layer1）----
     _render_draft(out, data)
@@ -750,25 +785,50 @@ def _render_buy_sell_pressure(L, v):
 
 
 def _render_material_events(L, v):
-    """重大事件（M 风险 / P 利好 双桶）——G30#1 信号覆盖数据层 + capstone 悲观/乐观打分素材。
+    """重大事件 = 大事提醒时间线（risk/catalyst/fatal/active 投影）——G30#1 信号覆盖数据层 + capstone 打分素材。
 
-    数据驱动：悲观情景读风险桶（减持/违规/ST/下修…），乐观情景读利好桶（增持/回购/分红/上修…），
-    取代散文脑补。严重风险经 interpretation_flags→_CRITICAL_KW 前置「⚠️关键风险信号」段。
+    风险事件投影到 M-code name（presence 词与 present_signals 一致，G30#1 覆盖闭环）；
+    致命事件计入「致命N（不可投）」并经 interpretation_flags 前置「⚠️关键风险信号」段。
     """
     m = v.get("material_events")
     if not m:
         return
-    risk = m.get("risk") or []
-    cat = m.get("catalyst") or []
+    tl = m.get("timeline") or {}
+    # 风险 M-code（risk ∪ active-forward减持 ∪ fatal），保留首次出现顺序
+    risk_mcodes = []
+    def _add_mc(e):
+        code = e.get("event_type_code")
+        if code in ("320", "090", "100") and not any(
+                w in (e.get("level1_content") or "") for w in ("减持", "转让")):
+            return
+        if code in ("002", "003") and e.get("flavor") != "risk":
+            return
+        mc = _TIMELINE_CODE_TO_M.get(code)
+        if mc and mc not in risk_mcodes:
+            risk_mcodes.append(mc)
+    for e in (tl.get("risk") or []):
+        _add_mc(e)
+    for e in (tl.get("active") or []):
+        _add_mc(e)
+    for e in (tl.get("fatal_events") or []):
+        _add_mc(e)
+    fatal_ev = tl.get("fatal_events") or []
     parts = []
-    if risk:
-        crit = [f"{s.get('name')}({(s.get('evidence') or '')[:14]})" for s in risk
-                if s.get("severity") == "critical"]
-        parts.append(f"风险{len(risk)}类" + (f"，高危：{'、'.join(crit[:3])}" if crit else ""))
+    if risk_mcodes:
+        names = [_M_SIGNAL_KW[mc][0] for mc in risk_mcodes if mc in _M_SIGNAL_KW]
+        fatal_txt = f"，致命{len(fatal_ev)}（不可投）" if fatal_ev else ""
+        parts.append(f"风险{len(risk_mcodes)}类：{'、'.join(names)}{fatal_txt}")
+    cat = tl.get("catalyst") or []
     if cat:
-        parts.append(f"利好{len(cat)}类：{'、'.join(s.get('name', '') for s in cat[:4])}")
+        cat_names = []
+        for e in cat:
+            nm = (e.get("event_type") or "").strip()
+            if nm and nm not in cat_names:
+                cat_names.append(nm)
+        if cat_names:
+            parts.append(f"利好{len(cat)}类：{'、'.join(cat_names[:4])}")
     if parts:
-        L.append("- 重大事件：" + "；".join(parts) + "。（悲观读风险桶、乐观读利好桶）")
+        L.append("- 重大事件：" + "；".join(parts) + "。（悲观读风险、乐观读利好）")
 
 
 def _render_shareholder_count(L, v):

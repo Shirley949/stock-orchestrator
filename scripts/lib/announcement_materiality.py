@@ -1,76 +1,92 @@
 # -*- coding: utf-8 -*-
-"""公告重要性矩阵 v3 —— material 过滤 / horizon 派生 / title 派生 machine_fields / M4 拆分。
+"""大事提醒事件分类（RPT_F10_REMIND · 45 码）+ fatal / horizon / actor 派生纯函数。
 
-**单一真相源（NEW 逻辑）**。加法式：不动 runner 既有的 _SIG_NAME/_SIG_ACTION/_RISK_REG/
-_CAT_REG/_reg_sev（M11 在 runner 内就地加行）。本模块只提供 NEW 的 materiality 纯函数，
-runner._process_material_signals 调用。设计见 plan: 公告重要性矩阵 v3。
+事件层主源：东财 F10 大事提醒。`_EVENT_FLAVOR` 45 码表（名称 + flavor）→ frozenset 派生
+（`_RISK/_CATALYST/_FORWARD/_FATAL_CODES`）。本模块提供分类/派生纯函数，runner._build_timeline
+与 capstone.fatal 共用。纯函数无 IO，可单测。
 
-为什么是独立模块：
-  - 矩阵（码→material子类/horizon/machine_field）与 label→code 映射（_NOTICE_MAP）解耦；
-  - 纯函数无 IO，可单测；
-  - gate_definitions / capstone 可复用同一 MATRIX（机判谓词一致）。
-
-断言必验数据基线（/tmp/notices_33d.json 59185 条，2026-07-26）：
-  - M11「高管人员任职变动」3303 条（第 3 高频 label，原完全未映射）；
-  - M2「股份质押、冻结」1069 条（M2 原零 label 映射）；
-  - 标题含 machine_field 的高密度码：M11 角色 ~88% / M9 被担保方 ~52% / M1 占比 ~36%；
-  - 金额/股数/认购方 在标题里 ~0% → depth_fields 不机判（走 LLM「⚠️ 注」）。
+  - `is_fatal`：公司级致命缺陷（330/360/430 代码级 ∪ 230退市/240新名ST/270重大违法 条件升级）；
+  - `directional_flavor`：002 业绩快报 / 003 业绩预告 方向派生（LV1 关键词）；
+  - `derive_horizon`：按码派生 {reaction, overhang, proximity_days}（capstone present_signals 用）；
+  - `detect_actor_tier`：label PRIMARY + 标题细化 → actor 级别中文标签（programs / shareholder_dynamics 用）。
 """
 import re
 from datetime import date, datetime, timezone
 
 # ============================================================
-# M4 拆分：监管类(regulatory) vs 诉讼仲裁(litigation)——子类标签（material_subtype）。
+# 大事提醒时间线事件分类（RPT_F10_REMIND · 45 码 · 事件层主源）
 # ============================================================
-# ⚠️ severity 不在此定——以 runner._NOTICE_MAP(:2772) 为准：
-#    处罚/违法违规/会计差错更正=critical；审计机构变更/诉讼仲裁=warning。
-# 本函数返回的 severity[1] 仅对称参考、不参与定级（derive_material_subtype 只取 [0] 子类）。
-_M4_REGULATORY_LABELS = {
-    "处罚", "违法违规", "会计差错更正", "审计机构变更",
+# 东财 F10 大事提醒 EVENT_TYPE_CODE → (名称, flavor)。flavor∈{risk,catalyst,forward,
+# neutral,directional}。45 码经 65+ 票（含科创/北交/B股/新股/退市）多深页穷尽实测，
+# 完整性扫描「45 码外无新增」。directional（002 业绩快报 / 003 业绩预告）由 LV1 关键词
+# 定方向（directional_flavor）。官方码上扁平查表（无三档 severity/escalate/R-C-register）。
+# runner._build_timeline + capstone.fatal 共用。
+_EVENT_FLAVOR = {
+    "001": ("报表披露", "neutral"), "002": ("业绩快报", "directional"), "003": ("业绩预告", "directional"),
+    "004": ("分红送转", "catalyst"), "005": ("股东大会", "neutral"), "006": ("龙虎榜", "neutral"),
+    "070": ("沪深港通", "neutral"), "080": ("限售解禁", "risk"), "090": ("股东增减持", "forward"),
+    "100": ("高管及关联方增减持", "forward"), "110": ("股票回购", "catalyst"), "120": ("新增概念", "neutral"),
+    "130": ("机构调研", "neutral"), "140": ("资本运作", "neutral"), "150": ("股权激励", "catalyst"),
+    "160": ("股权质押", "risk"), "170": ("解除质押", "catalyst"), "180": ("增发", "risk"), "190": ("配股", "risk"),
+    "200": ("申购提示", "neutral"), "210": ("可转债", "catalyst"), "220": ("停复牌", "risk"),
+    "230": ("上市状态变动", "risk"), "240": ("名称变动", "risk"), "250": ("对外担保", "risk"),
+    "260": ("诉讼仲裁", "risk"), "270": ("违规处罚", "risk"), "280": ("股东户数", "neutral"),
+    "290": ("融资融券", "neutral"), "300": ("大宗交易", "neutral"), "310": ("项目投资", "catalyst"),
+    "320": ("增减持计划", "forward"), "330": ("非标审计意见", "risk"), "340": ("监管问询", "risk"),
+    "350": ("风险提示", "risk"), "360": ("破产重整", "risk"), "370": ("法定代表人变更", "neutral"),
+    "380": ("董事长变更", "neutral"), "390": ("总经理变更", "neutral"), "400": ("投资互动", "neutral"),
+    "410": ("项目中标", "catalyst"), "420": ("重要合同", "catalyst"), "430": ("风险警示", "risk"),
+    "450": ("吸收合并", "risk"), "460": ("股权转让", "neutral"),
 }
-# 诉讼仲裁 label → 'litigation' 子类（severity=warning，_NOTICE_MAP:2823）
-_M4_LITIGATION_LABELS = {"诉讼仲裁"}
+# flavor 派生 frozenset（_build_timeline 分桶用；110 回购 catalyst 亦是 forward 装配源，故 _FORWARD 含 110）
+_RISK_CODES = frozenset(c for c, (_, fl) in _EVENT_FLAVOR.items() if fl == "risk")
+_CATALYST_CODES = frozenset(c for c, (_, fl) in _EVENT_FLAVOR.items() if fl == "catalyst")
+_FORWARD_CODES = frozenset({"090", "100", "110", "320"})
+# 代码级自动 fatal（公司致命缺陷：非标审计 / 破产重整 / 风险警示ST）。条件升级见 is_fatal()。
+_FATAL_CODES = frozenset({"330", "360", "430"})
 
 
-def m4_subtype_severity(label):
-    """M4 拆分。返回 (子类, severity) 或 None（非 M4 子类）。
+def is_fatal(code, level1_content="", specific=""):
+    """大事提醒事件是否构成公司级致命缺陷（capstone fatal=True 不可投的唯一源）。
 
-    子类[0]（material_subtype 用，唯一被消费项）：监管类→'regulatory'，诉讼→'litigation'。
-    severity[1] 仅供对称、不参与定级——实际 announcement severity 以 _NOTICE_MAP 为准：
-    处罚/违法违规/会计差错更正=critical；审计机构变更/诉讼仲裁=warning。
+    - 代码级：{330 非标审计, 360 破产重整, 430 风险警示} → True
+    - 条件升级（LV1/SPECIFIC 关键词）：
+      · 230 上市状态变动 & SPECIFIC 含「退市」→ True（新股上市 SPECIFIC="新股上市"→False）
+      · 240 名称变动 & 新名(→右侧)以 ST/*ST 开头 → True（去ST/摘帽→False；5 向判定见下）
+      · 270 违规处罚 & LV1 含「重大违法|立案调查|强制退市」→ True（轻量信披违规→False）
+    - 080 大额解禁**不**升级 fatal（供给压力=m6 悲观核心 risk，非公司致命缺陷）。
     """
-    if label in _M4_REGULATORY_LABELS:
-        return ("regulatory", "critical")
-    if label in _M4_LITIGATION_LABELS:
-        return ("litigation", "warning")
-    return None
+    if code in _FATAL_CODES:
+        return True
+    s = f"{level1_content or ''}{specific or ''}"
+    if code == "230" and "退市" in s:
+        return True
+    if code == "240":
+        # 旧名→新名(ST/*ST+公司名)；5 向：加*ST→fatal / 加ST(旧名无*)→fatal /
+        # 去*ST(旧名带*)→降级risk / 摘帽→catalyst。实测校正：旧「LV1含ST」误判去ST为fatal。
+        m = re.match(r"(.+?)→\s*(\*?ST)\s*(\S*)", s)
+        if m:
+            old, new_pref = m.group(1), m.group(2)
+            if new_pref == "*ST":
+                return True
+            return not old.startswith("*ST")
+        return False
+    if code == "270" and re.search(r"重大违法|立案调查|强制退市", s):
+        return True
+    return False
 
 
-# ============================================================
-# material 子类过滤：routine 子类不进 announcements[] 登记表（致命缺陷2）
-# ============================================================
-# code → [(drop_regex, reason)]：title 命中任一 pattern → 剔除（routine 备案）。
-# 设计：M9 剔境内子公司担保（境外保留）/ M6 剔预案获准提示 / P5 剔行权归属调整 /
-#       P8 剔设立子公司。P3 分红整体不进 critical（已 info，m9.1 详述）。
-_ROUTINE_DROP = {
-    "M9": [(r"境内|为全资子公司|为控股子公司|为子公司", "境内子公司担保（境外担保保留）")],
-    "M6": [(r"预案|获准|提示性|进展|方案修订", "增发预案/获准/提示（routine 备案）")],
-    "P5": [(r"行权|归属|对象名单|激励进展|行权价|数量调整", "行权归属/调整（routine）")],
-    "P8": [(r"设立.*公司|增资扩股", "设立子公司/增资（routine）")],
-    "P3": [],  # 分红整体不进 critical 表（已 info；m9.1 详述，登记表只留 flag）
-}
+def directional_flavor(level1_content=""):
+    """002 业绩快报 / 003 业绩预告 的方向派生（LV1 关键词）。→catalyst/risk/neutral。
 
-
-def is_material(code, label, title):
-    """routine 子类过滤。True=material（进登记表），False=routine（剔除）。
-
-    机判谓词：title 正则匹配 _ROUTINE_DROP[code] 任一 → False。
+    实测：003「业绩预增…同比上升50%」→catalyst；预减/亏损→risk。
     """
-    t = title or ""
-    for pat, _reason in _ROUTINE_DROP.get(code, []):
-        if re.search(pat, t):
-            return False
-    return True
+    s = level1_content or ""
+    if re.search(r"预增|扭亏|续盈|上升|增长|盈利", s):
+        return "catalyst"
+    if re.search(r"预减|亏损|下滑|下降|转亏|减少", s):
+        return "risk"
+    return "neutral"
 
 
 # ============================================================
@@ -146,125 +162,6 @@ def derive_horizon(code, event_date=None, today=None):
 
 
 # ============================================================
-# title 派生 machine_fields（高密度码，10x 实证标题高频含此信息）
-# ============================================================
-# depth_fields（金额/股数/认购方/破发）标题 ~0%，不在本函数——走 LLM「⚠️ 注」，gate 不校验。
-
-_M11_ROLES = ["实际控制人", "实控人", "董事长", "总经理", "首席执行官", "CEO", "首席",
-              "财务总监", "CFO", "董事会秘书", "董秘", "副总经理", "总经理助理", "独立董事"]
-
-
-def extract_machine_fields(code, title):
-    """从公告标题抽高密度码的 machine_field（机判可校验）。返回 dict（空=抽不到）。
-
-    - M11: role（角色名）+ change（离任/聘任/被立案）
-    - M9:  guarantee_party（被担保方）
-    - M1:  无（占比由 programs.announced_pct_cap 提供，登记表只 presence）
-    - M5:  st_action（实施/撤销/破产）
-    - P7:  subject（专利/认证/补贴项目名）
-    - P8:  target（重组标的）
-    """
-    t = title or ""
-
-    if code == "M11":
-        out = {}
-        roles = [kw for kw in _M11_ROLES if kw in t]
-        if roles:
-            # 去重保序（实际控制人/实控人 同义，取首现）
-            seen, uniq = set(), []
-            for r in roles:
-                key = "实控人" if r in ("实际控制人", "实控人") else r
-                if key not in seen:
-                    seen.add(key)
-                    uniq.append(key)
-            out["role"] = "、".join(uniq)
-        if any(k in t for k in ["离职", "辞职", "离任", "免去", "免职", "辞任"]):
-            out["change"] = "离任"
-        elif any(k in t for k in ["立案", "调查", "留置", "监察"]):
-            out["change"] = "被立案/调查"
-        elif any(k in t for k in ["聘任", "选举", "任命", "上任", "继任"]):
-            out["change"] = "聘任"
-        return out
-
-    if code == "M9":
-        m = re.search(r"(?:为|对|向)([一-龥A-Za-z（）()]{2,12}?)(?:提供)?(?:担保|质押|保证)", t)
-        return {"guarantee_party": m.group(1).strip("的之提供")} if m else {}
-
-    if code == "M1":
-        # M1 占比不在此 title 派生（ratio_pct 已退役）：无下游消费者，且 title 近似值与 programs
-        # 权威占比数字不一致会致 G46 误判。权威上限% 由 body-parse → programs[].announced_pct_cap
-        # 提供（ST5.1）；登记表 M1 只 presence（近一年 N 条 + actor_tier），占比/窗口详见 m9 §9.2。
-        return {}
-
-    if code == "M5":
-        if "破产" in t or "清算" in t:
-            return {"st_action": "破产清算"}
-        if "实施" in t and "退市" in t:
-            return {"st_action": "实施退市风险警示"}
-        if "终止上市" in t:
-            return {"st_action": "终止上市风险"}
-        if "撤销" in t:
-            return {"st_action": "撤销风险警示（摘帽）"}
-        return {}
-
-    if code == "P7":
-        m = re.search(r"(?:获得|取得|通过)([一-龥A-Za-z0-9]{2,20})(?:认证|专利|补贴|资助)", t)
-        return {"subject": m.group(1)} if m else {}
-
-    if code == "P8":
-        # 标的全名：贪婪 ≤40（治 SJSEMICONDUCTORCORPORATION 类长名截断），在「第一个
-        # 非名称边界词」处截断。原则：标的名是紧实体（公司/集团/资产名），其后的一切
-        # （连词/instrument/登记/文档/法律词）都是噪声——在第一个边界词切断即得干净名。
-        #   ① 剥评估报告书前缀噪声「(股权|股份|资产)?所?涉及的」；
-        #   ② 在第一个边界词截断（暨/及/并｜instrument 股权/股东/股份｜登记/文档/法律词）；
-        #      股份用负向先行保护「股份有限公司」（股份不在名内时才切）；
-        #   ③ rstrip 尾 的/之/数字/%。**不截 资产**（存货资产/无形资产 是名一部分）。
-        # 实测 2605 material 标题：0 真回退（V0 干净实体 12 例全保住）、G46 可用 +186
-        # （1490→1676）、股份有限公司名 27/27 保留（V2 裸切股份会误截）；修 SJSE 长名。
-        # G46 子串校验天然兼容过截（更短仍是子串），故优先保证「无尾噪声」而非「最长」。
-        m = re.search(r"(?:收购|购买|出售|受让|转让|并购|重组)([一-龥A-Za-z0-9]{2,40})", t)
-        if not m:
-            return {}
-        x = re.sub(r"^(?:股权|股份|资产)?所?涉及[的之]?", "", m.group(1))
-        x = re.split(
-            r"暨|及|并|股权|股东|股份(?!有限|公司)|"
-            r"免于|完成|过户|登记|结果|进展|提示|说明|报告|确认|签署|问询|草案|预案|"
-            r"摘要|事项|权益|配套|募集|审计|备考|增资|解禁|复牌|过渡|减值|承诺|投资者|"
-            r"签字|更正|询价|核查|法律|自查|预披露|要约|持有|部分|摊薄|召开|解除|终止|"
-            r"停牌|意向|协议|框架",
-            x, maxsplit=1)[0]
-        x = x.rstrip("的之0123456789%")
-        return {"target": x} if len(x) >= 2 else {}
-
-    return {}
-
-
-# ============================================================
-# material_subtype 派生（code + label/title → 子类标签，登记表/machine_field 用）
-# ============================================================
-def derive_material_subtype(code, label, title):
-    """返回人类可读 material 子类标签（登记表 surface / signal.material_subtype 用）。
-
-    M4 → 监管类/诉讼；M9 → 境内/境外担保；其余用 label 原文。
-    """
-    t = title or ""
-    if code == "M4":
-        sub = m4_subtype_severity(label)
-        if sub:
-            return sub[0]  # 'regulatory' / 'litigation'
-    if code == "M9":
-        if re.search(r"境外|海外|海外子公司", t):
-            return "境外担保"
-        if re.search(r"境内|为.*子公司", t):
-            return "境内担保"
-    if code == "M11":
-        mf = extract_machine_fields("M11", t)
-        if mf.get("change"):
-            return mf["change"]
-    return label or ""
-
-
-# ============================================================
 # ST1 actor 级别检测（label PRIMARY + 标题细化）→ actor_tier 中文标签
 # ============================================================
 # 10x 实证（59185 条）：减持族 855 条，"控股股东/实控人"关键词仅覆盖 16.7%，5%以上/特定/大股东占 27.8%。
@@ -281,7 +178,7 @@ def detect_actor_tier(label, title):
     """label PRIMARY + 标题细化 → actor 级别中文标签。
 
     返回 "实控人" / "5%以上股东" / "董监高" / None（未明，omit 避免 G46 误校验）。
-    标签值同时供 escalate() 逻辑判断 + m4 §4.2 actor 列 surface（G46 泛型校验须 verbatim 出现）。
+    标签值供 m4 §4.2 actor 列 surface（G46 泛型校验须 verbatim 出现）。
 
     优先级（硬规则②：官方结构化分类器 PRIMARY，regex SECONDARY）：
       1. 标题含 实际控制人/实控人/控股股东 → "实控人"（最强信号，标题点名）
@@ -300,36 +197,3 @@ def detect_actor_tier(label, title):
     if any(k in t for k in _EXECUTIVE_KEYWORDS):
         return "董监高"
     return None
-
-
-# ============================================================
-# severity 三态升档（actor/金额确认才升；供 announcements[] 渲染）
-# ============================================================
-def escalate(code, base_severity, machine_fields=None, depth_fields=None, title="", label=""):
-    """ST1 actor 级别 → severity 升档（**UP-ONLY**，门禁分级）。
-
-    10x 统计（59185 条/5775 票）修正的精度门（防关键词误报）：
-      · M1 减持 + 实控人 → critical（股权转让/询价转让 base warning → 升 critical；主 label 已 critical 确认）；
-      · M2 质押 + 实控人 + **非解押** → **warning**（ratio>50% 才 critical，由 runner 比例块 A 独立主导；
-        M2 base=info，故实控人 escalate info→warning 才在 caller `if _esc != _sev` guard 下生效；
-        解押=利好，regex 排除「解押/解除质押」，M2 解押占 48%）；
-      · M9 担保 + 实控人 → critical（境内担保已在 is_material 剔除，余为境外）；
-      · major5pct / executive / P1 增持 → **不升**（门禁分级：5%减持重大但非治理变更，靠 m4 actor 列 surface）。
-
-    **UP-ONLY 设计**（保守，勿降级）：actor_tier 未检出(None)→保持 base（主 label 保守留 critical）；
-    检出 major5pct/executive→保持 base（透明不门禁）。实控人确认才升档——M1/M9→critical（稀有但致命），
-    M2→warning（治理关注层，强制平仓临界 50% 由 ratio 块 A 量化判定，不与 actor 口径叠加为 critical）。
-    """
-    mf = machine_fields or {}
-    tier = mf.get("actor_tier") or ""
-    is_ctrl = "实控人" in tier            # detect_actor_tier controller 标签
-    if not is_ctrl:
-        return base_severity              # major5pct/executive/未检出 → 不升（m4 actor 列透明）
-    t = title or ""
-    if code == "M1":
-        return "critical"                 # 实控人减持/股权转让 → critical
-    if code == "M2" and not re.search(r"解押|解除质押", t):
-        return "warning"                  # 实控人质押（非解押）→ warning；critical 仅 ratio>50%（runner block A 主导，不与 actor 叠加）
-    if code == "M9":
-        return "critical"                 # 实控人对外担保（境内已剔）→ critical
-    return base_severity

@@ -149,14 +149,14 @@ def get_staleness_threshold(api_name: str) -> int:
         "stock_financial_report_sina", "stock_financial_abstract",
         "stock_financial_abstract_ths",
     }:
-        return 120
+        return 180  # 财报间歇期（Q1→中报约 150 天）覆盖；统一 180d 口径（2026-08-09 用户拍板，原 120 会系统性误报）
     elif api_name in {
         "stock_zh_a_gdhs_detail_em",   # 季度数据（每季度公布一次）
         "stock_fhps_detail_em",        # 分红数据（不定期）
         "stock_yjyg_em",               # 业绩预告（不定期）
         "stock_shareholder_change_ths",# 增减持（不定期）
     }:
-        return 120  # 季度/不定期数据，允许 120 天（4 个月）
+        return 180  # 季度/不定期数据（统一 180d 口径，原 120）
     elif api_name.startswith("macro_"):
         return 60
     return 7

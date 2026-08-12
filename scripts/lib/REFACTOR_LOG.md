@@ -6,6 +6,25 @@
 
 ---
 
+## 2026-08-09 新鲜度阈值统一 180d（120 → 180）
+
+### 动机
+用户拍板「删掉所有的 120d，统一口径 180d」：事件层时间线（大事提醒）已定 180d 硬截断，而
+staleness 告警（financial/季度不定期）与 G33 北向 freshness 仍用 120，两套口径并存易混淆。
+且 120 本身就是已定位 bug（[[staleness-threshold-120-bug]]：Q1→中报间歇期约 150 天，120 阈值
+系统性误报 10 条）。
+
+### 变更
+- `quality_checks.py:152,159`：financial + 季度/不定期 `return 120` → `180`（覆盖财报间歇期）
+- `gate_definitions.py:1638`：G33 northbound freshness `>120d` → `>180d`（SOFT warning 上浮线）
+- 文档同步：`m11-gates.md` G33 行；事件层 plan 内 P9 单期 fallback 120d → 180d
+- REFACTOR_LOG 历史条目（lhb>90d/nb>120d）不改写——那是当时真实设计，新口径记录在本条
+
+### 验证
+回归 exit 0（改 `.py` 必跑）；grep 全仓 120d 天数残留 = 0（120 仅剩 EVENT_TYPE_CODE 码值，非天数）。
+
+---
+
 ## 2026-07-21 Gate 数值新鲜度框架（plan Step 5：helper + G30#1 + G37/G38）
 
 ### 动机

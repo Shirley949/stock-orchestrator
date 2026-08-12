@@ -61,8 +61,11 @@ class CheckG58(unittest.TestCase):
         rep = "### 模块五\nPE(TTM) 21.52。估值偏低。"
         self.assertTrue(check_g58(rep, _snap_pct(has_vp=False)))
 
-    def test_no_m5_section_exempt(self):
-        self.assertTrue(check_g58("无 m5 段的报告", _snap_pct()))
+    def test_no_m5_section_with_applicable_fail(self):
+        # Fix A 3 态：有 applicable 分位数据 + 报告无估值段（found=False）= 漏报 FAIL。
+        # G58 是 profile_full/mode-A gate，全量报告必有估值段；无段 + applicable = 结构缺陷。
+        # （修复前 `模块五` 关键词太窄 + `if not m: return True` 逃逸致永远 PASS——本测试原编码旧 bug 行为）
+        self.assertFalse(check_g58("无估值段的报告", _snap_pct()))
 
 
 # ---------- G59 ----------

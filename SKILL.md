@@ -144,7 +144,7 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
     ↓
 并行 4 路 explore subagent：
   ├─ Agent 1: s2 行情 + s3 资金流
-  ├─ Agent 2: s5 事件扫描（公告大全→processed M 风险/P 利好信号）
+  ├─ Agent 2: s5 事件扫描（东财大事提醒→processed.timeline）
   ├─ Agent 3: s7/s8 周期/A 股专属（按分类）
   └─ Agent 4: s9 新闻 + s11 可比公司
     ↓

@@ -77,7 +77,7 @@ Phase 1 (串行):
 
 Phase 2 (并行 4 路 explore subagent):
 ├─ Agent 1: s2 行情 + s3 资金流
-├─ Agent 2: s5 事件扫描（processed M 风险/P 利好信号）
+├─ Agent 2: s5 事件扫描（东财大事提醒→processed.timeline）
 ├─ Agent 3: s7/s8 周期/A 股专属（按模块零分类结果）
 └─ Agent 4: s9 新闻 + s11 可比公司
 

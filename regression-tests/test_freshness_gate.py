@@ -200,6 +200,11 @@ class TestG38DividendValidity(unittest.TestCase):
         """stale 值 + [src:] → 豁免。"""
         self.assertTrue(gd.check_g38("每股股利 0.05 元 [src: snapshot]", self._div(0.12)))
 
+    def test_negation_pass(self):
+        """否定=有效「无分红」结论（如「几乎不分红」），非 stale 旧值 → 放行。"""
+        self.assertTrue(gd.check_g38("股息率 0.147%（几乎不分红）。", self._div(0.12)))
+        self.assertTrue(gd.check_g38("公司近年未分红。", self._div(0.12)))
+
 
 # ============================================================
 # 注册完整性（防 G37/G38/G39 注册漏项）

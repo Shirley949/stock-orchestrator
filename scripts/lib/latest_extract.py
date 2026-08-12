@@ -215,6 +215,33 @@ def days_old(sort_key: int, as_of: Optional[str] = None) -> Optional[int]:
     return (ref_date - sk_date).days
 
 
+def get_evaluation(snapshot: dict, dimension: str = None) -> dict:
+    """千股千评·主力控盘结论统一读取（check_g61 / capstone 抽证据 / m6 helper 共用，无痛读取所有内容）。
+
+    双兜底 data/data_full 防 never-match（读三表范式硬规则：THS/EM 填 .data、Sina 填 .data_full，
+    单读任一键 = 静默 never-match）。LLM 模块（m4/m6/m7 .md）不 import 本函数，用统一路径表达
+    ``[src: snapshot.s_stock_evaluation.data.processed.conclusions]``。
+
+    返回 ``{status, conclusions, by_dimension, metrics, latest_period}``；传 dimension 额外加 ``hit``
+    （该维度结论 dict 或 None）。status 三态：ok/missing(金融股·次新无千股千评,真空)/failed。
+    """
+    se = (snapshot or {}).get("s_stock_evaluation") or {}
+    sed = se.get("data") or se.get("data_full") or {}        # 双兜底
+    processed = sed.get("processed", {}) or {}
+    conclusions = processed.get("conclusions", []) or []
+    by_dim = {}
+    for c in conclusions:
+        d = c.get("dimension")
+        if d and d not in by_dim:
+            by_dim[d] = c
+    base = {"status": sed.get("status"), "conclusions": conclusions,
+            "by_dimension": by_dim, "metrics": processed.get("metrics", {}) or {},
+            "latest_period": processed.get("latest_period")}
+    if dimension:
+        return {**base, "hit": by_dim.get(dimension)}
+    return base
+
+
 if __name__ == "__main__":
     # 烟囱测试：6 形态 sort_key 跨形态可比拟 + 信封构造
     import json
