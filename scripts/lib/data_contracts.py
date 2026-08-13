@@ -515,11 +515,11 @@ SCENES = {
     },
 
     "s11_peer": {
-        "fetcher": "fetch_peer_comparison",      # runner.py（target + ≤3 peer）
+        "fetcher": "fetch_peer_comparison_em",   # runner.py（东财 F10 行业自动，target + 同业）
         "mode": ["A"],
         "produces": [
             # 伞路径 data（同 s55_industry/s36_annual_analysis 范式）：覆盖 status/target_metrics/
-            # items[].metrics(核心6)/items[].gsjj_yw 等全部子字段（_path_matches 前缀匹配）。
+            # items[].metrics(核心6)/target_rank 等全部子字段（_path_matches 前缀匹配）。
             # 核心 6（gate 强制）vs 富字段（不计 gate）的区分见 schema.md 散文 + 下方 note。
             {"path": "data", "confidence": CONFIRMED},
         ],
@@ -527,23 +527,22 @@ SCENES = {
             "data.status":           ["G15"],                  # 三态(ok/degraded/missing)判定
             "data.target_metrics":  ["m5", "G15"],             # m5 同业对比(§5.2) + G15 核心6计数
             "data.items[].metrics": ["m5", "G15", "m6"],       # m6 capstone 引用 peer 指标
-            "data.items[].gsjj_yw": ["m1", "m5"],              # 主营相近度佐证
+            "data.target_rank":     ["m1"],                    # m1 差异化定位（行业排名位置）
         },
         "priority": P1,
-        "cost": {"calls": 8, "latency": "medium"},   # target(1 jiankuang+1 sina) + ≤3 peer×2 + 0.6s 节流
-        "depends_on": [],                             # peer_codes 由 LLM websearch 外部给出，非 scene 依赖
+        "cost": {"calls": 6, "latency": "medium"},   # 东财 5 维度(GROWTH/CVALUE/DBFX/MARKETPER/INDUSTRY_MARKET) + sina 毛利率
+        "depends_on": [],                             # peer 由东财行业分类自动发现，无外部依赖
         "fallback": {},
-        "cacheable": True,                            # jiankuang(curl)+sina(akshare) 均经 DataSnapshot 缓存
-        "note": "同业对比（F3 端到端重建）：target + ≤3 peer，核心 6 字段（rev_yoy/np_yoy/pe/pb/roe/gross_margin）"
-                "经 腾讯 jiankuang(curl,[1,3,6]退火+fail_cache) + akshare sina 利润表(毛利率) 真实拉取。"
-                "⚠️ peer 码由 LLM websearch 主营业务相近度给出（本环境无可靠'拉竞争对手'API：sina 无清单/"
-                "东财限流/申万 SSL 封，实测）；runner 纯机械化拉取，全参数化，换码即跑。"
-                "三态：ok(≥2家核心齐全)/degraded(部分缺)/missing(全限流或未拉取)；反编造（拉不到不填词）。"
-                "金融股豁免 gross_margin（真无营业成本，数据现实——非假设；core_fields 动态裁为 5）。"
-                "调用：① mode A 带 peer_codes 一次性拉取；② `python runner.py peer <target> <c1,c2,c3> [stock_type]`"
-                "（LLM websearch 后单独拉取，LLM 合并入 snapshot.s11_peer）。"
-                "research_notes（全球份额/认证等定性）为 LLM websearch 补充字段（_source:llm_web_research），"
-                "非 runner 产出——gate 只校验 metrics（API 层），不校验 research_notes（仿 G26 富字段原则）。"
+        "cacheable": True,                            # 东财 datacenter-web + sina(akshare) 均经 DataSnapshot 缓存
+        "note": "同业对比（东财 F10 行业自动）：target + 同业，核心 6 字段（rev_yoy/np_yoy/pe/pb/roe/gross_margin）"
+                "经东财 datacenter-web 5 维度（GROWTH/CVALUE/DBFX=target core5+行业中值+维度 top5 peer；"
+                "MARKETPER=target 市场表现 4 窗口；INDUSTRY_MARKET=peer 发现+规模排名）+ akshare sina 利润表(毛利率补全) 真实拉取。"
+                "行身份=CORRE_SECUCODE（SECUCODE 因 filter 固定为 target，不可作身份）；peer=3 维度 top 并集（跨多维度者 core5 更全）。"
+                "三态：ok(≥2家核心齐全)/degraded(部分缺)/missing(防御性)；em 恒回填 discovered_peer_codes（东财发现的行业 peer 码 list，"
+                "非 None=已跑）作为 G15 never-run 信号——根治零数据假 PASS。反编造（拉不到不填词）。"
+                "金融股豁免 gross_margin（真无营业成本；core_fields 动态裁为 5）。"
+                "research_notes（全球份额/认证等定性）为 LLM web_research 补充字段，非 runner 产出——"
+                "gate 只校验 metrics（API 层），不校验 research_notes（仿 G26 富字段原则）。"
                 "有意不进 gate _EXPECTED_SCENES（同 lhb/northbound；peer 非每票必有，进清单会误伤独家/次新）。",
     },
 

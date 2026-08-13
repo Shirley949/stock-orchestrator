@@ -112,8 +112,7 @@ PHASE_STEPS = {
             {"id": "c16", "desc": "读 risk_signals.processed（M 风险/P 利好信号，公告大全编码）→ Claude 研判重大事件", "agent": 3},
             {"id": "c17", "desc": "runner 返回的公告标题 → Claude 筛选中标/重大合同", "agent": 3},
             {"id": "c18", "desc": "snapshot 海外派生（D6_geo_revenue + segment_composition.geo）确认 + Claude 判断间接出海", "agent": 4},
-            {"id": "c19", "desc": "Claude 选择可比公司（runner 返回候选池）", "agent": 4},
-            {"id": "c19a", "desc": "跑 `python runner.py peer <target> <p1,p2,p3> --snapshot <快照>` 拉取同业对比（websearch 定 peer 码后跑；占位 missing 时 _llm_fallback_tasks 会提示此命令，G15 校验是否执行）", "agent": 4},
+            {"id": "c19", "desc": "同业对比 s11_peer 由 runner mode A 东财行业自动注入（fetch_peer_comparison_em 自动发现 peer，无需单独命令）；确认在位 → m5§5.2 消费 items[].metrics 并 [src: snapshot.s11_peer]，G15 校验核心6计数", "agent": 4},
             {"id": "c19b", "desc": "Claude 判断期货品种（如用户提到期货）", "agent": 4},
         ],
         "phase_1_skipped": [

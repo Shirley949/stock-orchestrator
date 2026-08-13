@@ -444,7 +444,7 @@ def check_g15(report: str, data: dict) -> bool:
     """G15: 同业对比（核心 6 计数 + src 溯源 + stock_type 适配 + 三态 + 反编造）。SOFT(weight 2)。
 
     v3 数据层重设计（F3 端到端；根治旧"正文 ≥4 指标词"橡皮章——只验词出现，不验数据真/是
-    API/是 peer）。计数对象 = snapshot.s11_peer.items[].metrics 核心 6（jiankuang+sina 真实拉取）：
+    API/是 peer）。计数对象 = snapshot.s11_peer.items[].metrics 核心 6（东财 F10 5 维度 + sina 毛利率补全）：
       1. 三态：status∈{ok,degraded} 且 ≥2 家 peer 核心 6 齐全（金融股 5）→ 进入溯源检查；
               status==missing（全限流/独家/次新/未拉取）→ 豁免，但反编造（见 4）。
       2. 核心 6 计数：遍历 items 实际长度（不硬编码下标），每 peer metrics 核心 6 non-null。
@@ -470,26 +470,26 @@ def check_g15(report: str, data: dict) -> bool:
         # 完整性矛盾：status=ok 却无 items（声明有数据实际没有）
         if status == "ok" and not items:
             return False
-        websearch_codes = peer.get("websearch_peer_codes")
-        # L0（600584 bug 根治）：占位 missing 且无 websearch_peer_codes 键（→ None）=
-        # peer 子命令从未跑（两段式 runner 设计下 LLM 漏步）。须诚实披露「无适用同业」
-        # （独家/垄断/次新/无可比/行业唯一），否则 = 静默漏步零数据假 PASS → FAIL。
-        # None（占位无键）与 []/非空 list（跑了）严格可区分：runner.fetch_peer_comparison 总回填此键。
-        if websearch_codes is None:
+        discovered_codes = peer.get("discovered_peer_codes")
+        # L0（600584 bug 根治）：占位 missing 且无 discovered_peer_codes 键（→ None）=
+        # 从未跑（em 恒回填此键；None 是防御性 never-run 信号）。须诚实披露「无适用同业」
+        # （独家/垄断/次新/无可比/行业唯一），否则 = 零数据假 PASS → FAIL。
+        # None（占位无键）与 []/非空 list（跑了）严格可区分：runner.fetch_peer_comparison_em 总回填此键。
+        if discovered_codes is None:
             disclosed = any(kw in report for kw in (
                 "无适用同业", "无可比", "独家", "垄断", "次新", "无同业",
                 "尚无可比", "行业唯一", "无可比标的"))
             return bool(disclosed)
         has_peer_phrasing = any(kw in report for kw in ("同业", "可比公司", "对比", "竞品", "同行", "对标"))
         has_peer_number = bool(re.search(r"(毛利率|PE|PB|ROE)\s*[:：]\s*[\d.]+", report))
-        # F2: peer 子命令回填了 websearch_peer_codes 却仍 missing/空 items → 调子命令但合并失败/拉取失败；
-        #     须诚实披露限流（限流/不可得/失败/缺失），否则 FAIL（根治「调了子命令但 LLM 漏合并→空 stub 假 PASS」）
-        if websearch_codes:
+        # F2: 回填了 discovered_peer_codes 却仍 missing/空 items → 拉取失败/全限流；
+        #     须诚实披露限流（限流/不可得/失败/缺失），否则 FAIL（根治「空 stub 假 PASS」）
+        if discovered_codes:
             honest = any(kw in report for kw in ("限流", "不可得", "未能获取", "拉取失败", "数据缺失", "未获取"))
             if not honest:
                 return False
         # F2: 删旧 "s11_peer" not in report 逃生口——无 peer 数据时报告同业措辞+peer 财务数字 = 编造
-        #     （即使有 websearch_codes 限流披露，也不能编造具体 peer 财务数字）
+        #     （即使有 discovered_codes 限流披露，也不能编造具体 peer 财务数字）
         if has_peer_phrasing and has_peer_number:
             return False
         return True
@@ -859,9 +859,7 @@ def check_g23(report: str, data: dict) -> bool:
     ok_count = sum(1 for m in dims if _ok(m))
     threshold = 3 if (prod_ok or ind_ok) else 2
     if ok_count < threshold:
-        llm_tasks = data.get("_llm_fallback_tasks", [])
-        if not llm_tasks:
-            return False
+        return False
 
     # (b) segment dimension_status.{product,industry,geo} 不全 fetch_failed，镜像 G22 路径
     statuses = [(dim_status.get(d) or {}).get("status") for d in ("product", "industry", "geo")]

@@ -20,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
@@ -56,6 +57,37 @@ TIMEOUT_MAP = {
     "stock_lhb_stock_detail_em": 15,        # 龙虎榜个股席位明细（中 2-4s）
     "stock_lhb_stock_detail_date_em": 10,   # 龙虎榜个股上榜日期（快 0.5-1s）
 }
+
+
+def _run_with_timeout(func, kwargs, timeout):
+    """跑 func(**kwargs)，timeout 秒未返回抛 TimeoutError。
+
+    ★ 防 akshare 裸调 df=func(**params) 的 socket 永久挂死（_invoke_akshare 唯一致命缺口，
+    可从"慢"升级为"真·死"）。TIMEOUT_MAP 给 per-API 超时，调用方传入。
+    实现：daemon 工作线程 + t.join(timeout)。
+      - 不用 ThreadPoolExecutor 的 `with`——其 __exit__→shutdown(wait=True) 会等待泄漏的
+        hung worker，反而永久阻塞（fully-test 推翻 plan 原 ThreadPoolExecutor 方案的坑）。
+      - 超时后 worker 泄漏（线程不可中断，见 verify_thread_timeout.py 实测 socket/sleep 均泄漏），
+        但 daemon=True 保证不阻塞进程退出；单次 analysis akshare 调用有限，进程退出即回收。
+        治标——彻底方案（akshare subprocess 化、进程可 SIGKILL）列为备选，非长驻服务当前可接受。
+    """
+    box = {}
+
+    def _runner():
+        try:
+            box["value"] = func(**kwargs)
+        except BaseException as e:  # 含 KeyboardInterrupt 等，全部转交主线程重抛
+            box["error"] = e
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+    if t.is_alive():
+        raise TimeoutError(f"akshare 调用超过 {timeout}s 未返回（疑似限流/挂死，worker 泄漏为 daemon）")
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
 
 # ============================================================
 # 数据源评级映射（来自 data-source-registry）
@@ -152,6 +184,11 @@ class DataSnapshot:
         # 失败记忆（仅运行期，不落盘）：避免同一限流 API 在一次 run 内被多调用点重打
         self._fail_cache: dict[str, dict] = {}
 
+        # 共享态锁（RLock 可重入）：scene 并发(step2)下保护 _mem_cache/_fail_cache/
+        # _fetch_log/_warnings 的读改写临界区。细粒度——只包缓存命中检查与写回，
+        # 绝不包网络调用(_call_akshare/_call_curl)，否则并发被串行化、白做。
+        self._lock = threading.RLock()
+
         # 从磁盘加载已有缓存
         self._load_disk_cache()
 
@@ -162,6 +199,14 @@ class DataSnapshot:
         try:
             import westock_client
             westock_client.set_logger(self._fetch_log.append)
+        except ImportError:
+            pass
+        # 镜像挂 dongcai fetch_log 钩子（原 __init__ 漏挂→dongcai 调用不进 fetch_log，
+        # get_summary 看不到东财调用记录）。dongcai_client 与 westock_client 同目录，
+        # runner 已把该目录加进 sys.path；独立测试无该模块时静默跳过。
+        try:
+            import dongcai_client
+            dongcai_client.set_logger(self._fetch_log.append)
         except ImportError:
             pass
 
@@ -203,20 +248,21 @@ class DataSnapshot:
             self._warnings.append(f"[cache] 加载磁盘缓存失败: {e}")
 
     def save(self):
-        """持久化缓存到磁盘"""
-        payload = {
-            "stock_code": self.stock_code,
-            "date": self._today,
-            "updated_at": datetime.now().isoformat(),
-            "entries": self._mem_cache,
-            "warnings": self._warnings,
-            "fetch_log": self._fetch_log,
-        }
-        try:
-            with open(self._cache_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-        except OSError as e:
-            self._warnings.append(f"[cache] 写入磁盘缓存失败: {e}")
+        """持久化缓存到磁盘（临界区：json.dump 迭代活跃 dict 时并发 mutate 会撕裂）"""
+        with self._lock:
+            payload = {
+                "stock_code": self.stock_code,
+                "date": self._today,
+                "updated_at": datetime.now().isoformat(),
+                "entries": self._mem_cache,
+                "warnings": self._warnings,
+                "fetch_log": self._fetch_log,
+            }
+            try:
+                with open(self._cache_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+            except OSError as e:
+                self._warnings.append(f"[cache] 写入磁盘缓存失败: {e}")
 
     # --------------------------------------------------------
     # 核心接口: fetch_or_cache
@@ -277,24 +323,27 @@ class DataSnapshot:
         """
         key = self._cache_key(api_name, params)
 
-        # 1a. 成功缓存命中（含时效性二次检查；仅 ok 落盘，逻辑不变）
-        if key in self._mem_cache:
-            cached = self._mem_cache[key].copy()
-            if self._is_data_stale(api_name, cached):
-                del self._mem_cache[key]  # 删除过期缓存，重新拉取
-            else:
-                cached["status"] = "cached"
+        # 1. 缓存命中检查（临界区：并发下 check→copy→delete 必须原子，否则 TOCTOU——
+        #    A 删除过期项时 B 的 copy 会 KeyError；锁只护命中检查，网络调用在锁外）
+        with self._lock:
+            # 1a. 成功缓存命中（含时效性二次检查；仅 ok 落盘，逻辑不变）
+            if key in self._mem_cache:
+                cached = self._mem_cache[key].copy()
+                if self._is_data_stale(api_name, cached):
+                    del self._mem_cache[key]  # 删除过期缓存，重新拉取
+                else:
+                    cached["status"] = "cached"
+                    cached["_warnings"] = []
+                    return cached
+
+            # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_akshare 内耗尽，
+            #     同一 run 内同 key 不再重打限流 API（"调用都要存 snapshot"）
+            if key in self._fail_cache:
+                cached = self._fail_cache[key].copy()
                 cached["_warnings"] = []
                 return cached
 
-        # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_akshare 内耗尽，
-        #     同一 run 内同 key 不再重打限流 API（"调用都要存 snapshot"）
-        if key in self._fail_cache:
-            cached = self._fail_cache[key].copy()
-            cached["_warnings"] = []
-            return cached
-
-        # 2. 调用 API（_call_akshare 内含退火重试 [1,3,6]）
+        # 2. 调用 API（_call_akshare 内含退火重试 [1,3,6]）——网络调用在锁外，保持并发
         result = self._call_akshare(api_name, params, empty_is_ok=empty_is_ok)
 
         # 3. 交叉验证
@@ -308,33 +357,34 @@ class DataSnapshot:
             result.setdefault("_warnings", []).extend(auto_warnings)
             self._warnings.extend(auto_warnings)
 
-        # 4. 缓存（含时效性检查，拒绝缓存过期数据）
-        if result.get("status") == "ok":
-            if self._is_data_stale(api_name, result):
-                result["status"] = "stale"
-                result.setdefault("_warnings", []).append(
-                    f"[stale] {api_name} 数据过期，拒绝缓存"
-                )
+        # 4. 缓存写回（临界区：_mem_cache/_fail_cache 写 + _fetch_log 追加原子化）
+        with self._lock:
+            if result.get("status") == "ok":
+                if self._is_data_stale(api_name, result):
+                    result["status"] = "stale"
+                    result.setdefault("_warnings", []).append(
+                        f"[stale] {api_name} 数据过期，拒绝缓存"
+                    )
+                else:
+                    self._mem_cache[key] = result.copy()
+                self._fetch_log.append({
+                    "api": api_name,
+                    "params": params,
+                    "status": "ok",
+                    "source": "akshare",
+                    "time": datetime.now().isoformat(),
+                })
             else:
-                self._mem_cache[key] = result.copy()
-            self._fetch_log.append({
-                "api": api_name,
-                "params": params,
-                "status": "ok",
-                "source": "akshare",
-                "time": datetime.now().isoformat(),
-            })
-        else:
-            # 失败也记忆（运行期，不落盘）—— 退火重试已在 _call_akshare 内耗尽
-            self._fail_cache[key] = result.copy()
-            self._fetch_log.append({
-                "api": api_name,
-                "params": params,
-                "status": result.get("status", "unknown"),
-                "source": "akshare",
-                "error": result.get("error", ""),
-                "time": datetime.now().isoformat(),
-            })
+                # 失败也记忆（运行期，不落盘）—— 退火重试已在 _call_akshare 内耗尽
+                self._fail_cache[key] = result.copy()
+                self._fetch_log.append({
+                    "api": api_name,
+                    "params": params,
+                    "status": result.get("status", "unknown"),
+                    "source": "akshare",
+                    "error": result.get("error", ""),
+                    "time": datetime.now().isoformat(),
+                })
 
         return result
 
@@ -385,19 +435,21 @@ class DataSnapshot:
         """
         cache_key = self._cache_key(f"curl_{label}", {"url": url})
 
-        # 1a. 成功缓存命中
-        if cache_key in self._mem_cache:
-            cached = self._mem_cache[cache_key].copy()
-            cached["status"] = "cached"
-            cached["_warnings"] = []
-            return cached
+        # 1. 缓存命中检查（临界区：check→copy 原子化，镜像 fetch_or_cache）
+        with self._lock:
+            # 1a. 成功缓存命中
+            if cache_key in self._mem_cache:
+                cached = self._mem_cache[cache_key].copy()
+                cached["status"] = "cached"
+                cached["_warnings"] = []
+                return cached
 
-        # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_curl 内耗尽，
-        #     同一 run 内同 key 不再重打限流端点（fail_cache 不重试）
-        if cache_key in self._fail_cache:
-            cached = self._fail_cache[cache_key].copy()
-            cached["_warnings"] = []
-            return cached
+            # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_curl 内耗尽，
+            #     同一 run 内同 key 不再重打限流端点（fail_cache 不重试）
+            if cache_key in self._fail_cache:
+                cached = self._fail_cache[cache_key].copy()
+                cached["_warnings"] = []
+                return cached
 
         result = self._call_curl(url, label)
 
@@ -408,26 +460,27 @@ class DataSnapshot:
                 result.setdefault("_warnings", []).extend(encoding_warnings)
                 self._warnings.extend(encoding_warnings)
 
-        # 缓存成功 / 记忆失败（运行期，镜像 fetch_or_cache）
-        if result.get("status") == "ok":
-            self._mem_cache[cache_key] = result.copy()
-            self._fetch_log.append({
-                "api": f"curl_{label}",
-                "params": {"url": url},
-                "status": "ok",
-                "source": "curl",
-                "time": datetime.now().isoformat(),
-            })
-        else:
-            self._fail_cache[cache_key] = result.copy()
-            self._fetch_log.append({
-                "api": f"curl_{label}",
-                "params": {"url": url},
-                "status": result.get("status", "unknown"),
-                "source": "curl",
-                "error": result.get("error", ""),
-                "time": datetime.now().isoformat(),
-            })
+        # 缓存写回（临界区：镜像 fetch_or_cache 的写回锁）
+        with self._lock:
+            if result.get("status") == "ok":
+                self._mem_cache[cache_key] = result.copy()
+                self._fetch_log.append({
+                    "api": f"curl_{label}",
+                    "params": {"url": url},
+                    "status": "ok",
+                    "source": "curl",
+                    "time": datetime.now().isoformat(),
+                })
+            else:
+                self._fail_cache[cache_key] = result.copy()
+                self._fetch_log.append({
+                    "api": f"curl_{label}",
+                    "params": {"url": url},
+                    "status": result.get("status", "unknown"),
+                    "source": "curl",
+                    "error": result.get("error", ""),
+                    "time": datetime.now().isoformat(),
+                })
 
         return result
 
@@ -616,7 +669,7 @@ class DataSnapshot:
         empty_is_ok=True 时，空 DataFrame 视为真·无数据（ok+[]），与限流/异常失败(failed)
         区分——用于「从不上榜」「无北向持仓」等合法空值场景。默认 False 保留旧行为。"""
         try:
-            df = func(**params)
+            df = _run_with_timeout(func, params, TIMEOUT_MAP.get(api_name, 20))
 
             if df is None:
                 return {"status": "failed", "error": f"{api_name} 返回 None"}

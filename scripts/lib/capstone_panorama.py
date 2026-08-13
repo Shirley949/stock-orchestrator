@@ -380,6 +380,11 @@ def panorama(data: dict) -> dict:
             "items": peer.get("items") or [],
             "peers_count": peer.get("peers_count", 0),
             "latest_period": peer.get("latest_period"),
+            # 东财同业 5 维度富字段（一等公民）
+            "target_rank": peer.get("target_rank"),
+            "industry_median": peer.get("industry_median"),
+            "industry_count": peer.get("industry_count"),
+            "market_performance": peer.get("market_performance"),
         }
 
     am = _snapshot_get(data, "computed_metrics.asset_safety")
@@ -1077,21 +1082,59 @@ def _render_quality(L, v):
 
 
 def _render_peer(L, v):
-    """同业对比（s11_peer：target + ≤3 peer 核心6）——G30#1 反片面硬维度·同业对比。
+    """同业对比（s11_peer：东财 F10 行业自动，target + 同业核心6）——G30#1 反片面硬维度。
 
-    横截面·各股取各自最新报告期（jiankuang date，如 '2026一季报'）；peer 由独立
-    `runner.py peer` 模式拉取后合并，A 模式快照常缺 → status=missing 时提示先跑 peer 模式。
+    em 路径恒 ok/degraded（东财 5 维度 + sina 毛利率补全）；status/peers_count/target_report_period
+    取自 s11_peer 信封。富字段 target_rank/industry_median/market_performance 为东财同业一等公民。
     """
     p = v.get("peer")
     if not p:
         return
     st = p.get("status")
-    if st == "missing":
-        L.append("- 同业对比：未拉取（status=missing）。⚠️ 须先 websearch 定 peer 码、跑 "
-                 "`runner.py peer` 模式合并，再写本维度（防 G30#1 反片面遗漏）。")
-        return
     rp = p.get("target_report_period")
     L.append(f"- 同业对比（status={st}，{p.get('peers_count', 0)} 家）{f'（{rp}）' if rp else ''}：")
+    # 东财 F10 同业 5 维度一等公民（target_rank/industry_median/market_performance）。
+    rank = p.get("target_rank") or {}
+    med = p.get("industry_median") or {}
+    ic = p.get("industry_count")
+    if rank or med:
+        rank_parts = []
+        for k, lbl in (("dupont", "ROE"), ("growth", "成长"), ("valuation", "估值")):
+            r = rank.get(k)
+            if r is not None:
+                rank_parts.append(f"{lbl}第{r}/{ic}" if ic else f"{lbl}第{r}")
+        med_parts = []
+        for k, lbl in (("pe", "PE中值"), ("pb", "PB中值"), ("roe", "ROE中值")):
+            mv = med.get(k)
+            if mv is not None:
+                try:
+                    med_parts.append(f"{lbl} {float(mv):.2f}{'%' if k == 'roe' else ''}")
+                except (TypeError, ValueError):
+                    med_parts.append(f"{lbl} {mv}")
+        _pos = ""
+        if rank_parts:
+            _pos = "行业排名：" + "｜".join(rank_parts)
+        if med_parts:
+            _pos += ("；行业基准：" if _pos else "行业基准：") + "｜".join(med_parts)
+        if _pos:
+            L.append(f"  ⭐ 行业位置（东财同业，样本{ic or '?'}家）：{_pos}。")
+    mp = p.get("market_performance") or {}
+    mp_wins = mp.get("windows") or {}
+    if mp_wins:
+        board = mp.get("board_name") or "板块"
+        _mparts = []
+        for _lbl in ("近1月", "近3月", "近6月", "YTD"):
+            w = mp_wins.get(_lbl) or {}
+            ch, hs = w.get("change"), w.get("hs300")
+            if ch is not None and hs is not None:
+                try:
+                    _exc = float(ch) - float(hs)
+                    _mparts.append(f"{_lbl} 个股{float(ch):+.1f}%/沪深300{float(hs):+.1f}%("
+                                   f"{'跑赢' if _exc > 0 else '跑输'}{abs(_exc):.1f}pct)")
+                except (TypeError, ValueError):
+                    pass
+        if _mparts:
+            L.append(f"  📈 市场表现（vs 沪深300，{board}）：{'；'.join(_mparts)}。")
     for it in [{"name": "目标", "metrics": p.get("target_metrics")}] + list(p.get("items") or []):
         m = it.get("metrics") or {}
         if not m:
@@ -1102,24 +1145,9 @@ def _render_peer(L, v):
             val = m.get(k)
             if val is not None:
                 parts.append(f"{lbl} {val}{'%' if k in ('roe','rev_yoy','np_yoy','gross_margin') else ''}")
-        # 富字段次行（eps/营收/净利/资产负债率/每股净资产；jiankuang 直供，gate 不校验，
-        # capstone 是草稿预填——浮出才被 LLM 消化引用，仿 G26 富字段原则）
-        rich = []
-        for k, lbl in (("eps", "EPS"), ("rev", "营收"), ("np", "净利"),
-                       ("debt_ratio", "资产负债率"), ("nav_per_share", "每股净资产")):
-            rv = m.get(k)
-            if rv is not None:
-                if k in ("rev", "np"):
-                    rich.append(f"{lbl} {float(rv) / 1e8:.2f}亿")   # 复用 capstone L149 亿元范式
-                elif k == "debt_ratio":
-                    rich.append(f"{lbl} {rv}%")
-                else:
-                    rich.append(f"{lbl} {rv}")
         if parts:
             name = it.get("name") or it.get("code")
             L.append(f"  - {name}：" + "｜".join(parts) + "。")
-            if rich:
-                L.append(f"      （富：{'｜'.join(rich)}）")
 
 
 # 证据全景草稿渲染器注册表（决策D：新增主题=加一项，不动 _render_draft）
