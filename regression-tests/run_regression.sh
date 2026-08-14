@@ -60,6 +60,8 @@ echo "[① 契约层] test_m6_gates.py（m6 G60 定性三行结构化锚点+反�
 python3 "$HERE/test_m6_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组保真+KEEP 截断+by_code 投影闭合+三态 离线纯函数）"
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
+python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
 if [ -d "$GATE_FIXTURES" ]; then
   echo
