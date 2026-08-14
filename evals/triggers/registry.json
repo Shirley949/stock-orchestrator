@@ -83,5 +83,50 @@
     "query": "股票分析报告要写哪些模块",
     "should_trigger": false,
     "reason": "quality 域"
+  },
+  {
+    "query": "新浪财经的数据源评级是多少",
+    "should_trigger": true,
+    "reason": "窄：评级查询"
+  },
+  {
+    "query": "腾讯行情源和东财源哪个是 A 级",
+    "should_trigger": true,
+    "reason": "窄：评级对比"
+  },
+  {
+    "query": "akshare 龙虎榜接口的数据质量怎么样",
+    "should_trigger": true,
+    "reason": "窄：接口质量"
+  },
+  {
+    "query": "千股千评的数据可信吗",
+    "should_trigger": true,
+    "reason": "窄：数据可信度"
+  },
+  {
+    "query": "最近哪些数据源被降级了",
+    "should_trigger": true,
+    "reason": "窄：动态降级状态"
+  },
+  {
+    "query": "帮我看看 600036",
+    "should_trigger": false,
+    "reason": "模式A关键词「帮我看看」→orchestrator 正控成对"
+  },
+  {
+    "query": "今天买不买 京东方",
+    "should_trigger": false,
+    "reason": "模式B关键词「今天买不买」→defer 到 orchestrator"
+  },
+  {
+    "query": "002594 现在能加仓吗",
+    "should_trigger": false,
+    "reason": "模式B关键词「能加仓」→defer 到 orchestrator"
+  },
+  {
+    "query": "贵州茅台最近有什么事件面的变化",
+    "should_trigger": false,
+    "reason": "事件面综合→defer 到 orchestrator"
   }
 ]

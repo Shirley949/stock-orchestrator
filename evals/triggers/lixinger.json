@@ -83,5 +83,45 @@
     "query": "理杏仁和 Wind 哪个好",
     "should_trigger": false,
     "reason": "源对比→registry"
+  },
+  {
+    "query": "查一下 600036 的 PB 分位（用理杏仁）",
+    "should_trigger": true,
+    "reason": "窄：明确点名理杏仁查指标"
+  },
+  {
+    "query": "用理杏仁拉一下五粮液的股息率分位",
+    "should_trigger": true,
+    "reason": "窄：明确点名理杏仁查指标"
+  },
+  {
+    "query": "理杏仁支持查港股估值吗",
+    "should_trigger": true,
+    "reason": "窄：API 能力问答（desc 优化靶）"
+  },
+  {
+    "query": "理杏仁的请求频率限制是多少",
+    "should_trigger": true,
+    "reason": "窄：API 限制问答（desc 优化靶）"
+  },
+  {
+    "query": "帮我看看 600036",
+    "should_trigger": false,
+    "reason": "模式A关键词「帮我看看」→orchestrator 正控成对"
+  },
+  {
+    "query": "今天买不买 京东方",
+    "should_trigger": false,
+    "reason": "模式B关键词「今天买不买」→defer 到 orchestrator"
+  },
+  {
+    "query": "002594 现在能加仓吗",
+    "should_trigger": false,
+    "reason": "模式B关键词「能加仓」→defer 到 orchestrator"
+  },
+  {
+    "query": "贵州茅台最近有什么事件面的变化",
+    "should_trigger": false,
+    "reason": "事件面综合→defer 到 orchestrator"
   }
 ]

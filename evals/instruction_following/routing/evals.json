@@ -1,0 +1,29 @@
+{
+  "skill_name": "financial-data-routing",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我要拉一只 A 股的数据，需要三块：① 当日资金流快照（含大单小单净流入） ② 最近 8 个季度的财务三表 ③ 股东户数变化。请分别给出：该用哪个 API/数据源、主源失败后的降级路径。只回答路由方案（API 选择 + 降级链），不要实际拉数据。",
+      "expected_output": "① 当日资金流 = westock 腾讯源 fetch_fund_flow（无限流，含趋势）或 Sina 备选，明确不用东财个股资金流历史接口当当日快照；② 三表 = 主路径（THS/EM）+ Sina 降级，读时 data/data_full 双键；③ 股东户数 = s8 场景，processed 信号层（趋势/拐点）。",
+      "files": [],
+      "expectations": [
+        "当日资金流快照指定 westock 腾讯源（fetch_fund_flow 封装）作为主源，而非把东财个股历史资金流接口当作当日快照入口",
+        "财务三表给出主源与降级链（主路径失败后切换到 Sina 等备选源），降级后数据仍以三表口径可用",
+        "股东户数指到对应场景（s8）并提及其 processed 信号层（户数趋势/拐点信号），而非只给原始行数",
+        "没有推荐已移除或已知不可用的 API（如 stock_gdfx_free_holding_detail_em）"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "拉某只股票的龙虎榜席位数据时接口返回了空。怎么区分「这只票近 90 天没上过榜」和「接口拉取失败」？请给出明确的判定方法（看什么字段、什么值、各代表什么结论），以及两种情况下分别该怎么写入快照和向用户报告。",
+      "expected_output": "三态语义：never_listed（从未上榜，日期列表空）→ status=ok 的有效结论；event_only（上榜过但窗口外）→ ok；fetch_failed → status=failed。gate/报告只读 status 字段，不查行数是否为零；90 天窗口；空 ≠ 失败。",
+      "files": [],
+      "expectations": [
+        "给出三态区分：从未上榜/仅历史事件 与 拉取失败 是不同结论，判定依据是 status 字段（ok vs failed），而非「行数是否为零」",
+        "「90 天内没上过榜」被表述为有效结论（数据为空但拉取成功），写入快照按 ok 语义而非报错",
+        "拉取失败（fetch_failed / status=failed）时如实标记失败并交上层决策，不与「无数据」混同",
+        "提及 90 天窗口（龙虎榜席位数据的观察窗）"
+      ]
+    }
+  ]
+}

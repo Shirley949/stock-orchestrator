@@ -1,0 +1,28 @@
+{
+  "skill_name": "data-source-registry",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我在写一个 A 股数据拉取方案，需要三块数据的可靠数据源：① 实时行情快照（价格/成交量） ② 财务三表 ③ 龙虎榜个股席位明细。请对每个候选数据源给出质量评级和使用建议，包括主源挂了之后的降级考虑。不要实际拉数据。",
+      "expected_output": "使用 registry 的 A/B/C/D 评级体系（单一真相源）：行情 = 腾讯/新浪等 A 级；三表 = 东财 datacenter / THS 主 + Sina 降级；龙虎榜 = 东财 stock_lhb_stock_detail_em（90 天窗，元单席）+ 同花顺 daily 摘要降级。评级引用 registry 而非自评。",
+      "files": [],
+      "expectations": [
+        "采用 A/B/C/D（或等价分级）评级体系评估数据源，且说明评级来自 data-source-registry 单一真相源，而非自己临场评估",
+        "对三块数据分别给出明确的主源选择与降级备选（而不是只说「主流财经网站都比较可靠」类泛泛结论）",
+        "提及动态降级机制（运行时探针 / API 失败时的 session override，静态评级可被运行时实测覆盖）",
+        "龙虎榜部分提到东财个股席位接口与其 90 天窗口语义（或等价的具体接口知识）"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "帮我设计股东持仓数据的拉取方案。我想用 akshare 的 stock_gdfx_free_holding_detail_em 这个接口拉十大流通股东持仓明细，可行吗？如果不可行，股东相关信息该走什么路径获取？",
+      "expected_output": "该 API 已移除（实测返回 None，不可用），不能纳入方案；替代路径 = 股东户数派发信号（s8 processed）、龙虎榜席位（lhb）、北向资金（northbound，仅最新季度水平信号）、前十大流通股东季度信封（top10_quarterly）。",
+      "files": [],
+      "expectations": [
+        "明确指出 stock_gdfx_free_holding_detail_em 已移除/不可用（API 返回 None），不将其纳入拉取方案",
+        "给出股东信息的替代路径（如股东户数信号/龙虎榜席位/北向持仓/前十大流通股东等至少两条具体路径）",
+        "替代路径的口径说明具体（如北向仅最新季度水平信号、龙虎榜 90 天窗口），而非笼统「用其他接口查」"
+      ]
+    }
+  ]
+}

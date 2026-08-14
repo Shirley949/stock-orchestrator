@@ -98,5 +98,60 @@
     "query": "美联储最近加息了吗",
     "should_trigger": false,
     "reason": "宏观非个股"
+  },
+  {
+    "query": "帮我看看 600036",
+    "should_trigger": true,
+    "reason": "D1 表例句：模式A关键词「帮我看看」宽泛分析"
+  },
+  {
+    "query": "600036",
+    "should_trigger": true,
+    "reason": "裸代码极简宽泛分析"
+  },
+  {
+    "query": "盘中 京东方现在能加仓吗",
+    "should_trigger": true,
+    "reason": "模式B关键词「盘中/能加仓」"
+  },
+  {
+    "query": "今天买不买 中国中免",
+    "should_trigger": true,
+    "reason": "模式B关键词「今天买不买」"
+  },
+  {
+    "query": "隆基绿能的财报里有没有什么雷",
+    "should_trigger": true,
+    "reason": "「有没有雷」风险宽泛"
+  },
+  {
+    "query": "洋河股份和泸州老窖哪个更值得长期持有",
+    "should_trigger": true,
+    "reason": "对比+持有宽泛"
+  },
+  {
+    "query": "帮我翻译一段英文邮件",
+    "should_trigger": false,
+    "reason": "非股票：翻译"
+  },
+  {
+    "query": "这道 LeetCode 题怎么解",
+    "should_trigger": false,
+    "reason": "非股票：算法题"
+  },
+  {
+    "query": "帮我写一封辞职信",
+    "should_trigger": false,
+    "reason": "非股票：写作"
+  },
+  {
+    "query": "NBA 总决赛谁赢了",
+    "should_trigger": false,
+    "reason": "非股票：体育"
+  },
+  {
+    "query": "推荐一本机器学习的书",
+    "should_trigger": false,
+    "reason": "非股票：荐书"
   }
 ]

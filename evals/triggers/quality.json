@@ -83,5 +83,50 @@
     "query": "verify_gates 怎么跑",
     "should_trigger": false,
     "reason": "引擎操作→orchestrator 上下文"
+  },
+  {
+    "query": "m6 决策模块应该怎么写",
+    "should_trigger": true,
+    "reason": "窄：模块写作规范"
+  },
+  {
+    "query": "报告的免责声明模块有什么要求",
+    "should_trigger": true,
+    "reason": "窄：模块要求"
+  },
+  {
+    "query": "gate 自评分的打分标准是什么",
+    "should_trigger": true,
+    "reason": "窄：Gate 自评分"
+  },
+  {
+    "query": "m3 技术面模块必须包含哪些指标",
+    "should_trigger": true,
+    "reason": "窄：模块指标清单"
+  },
+  {
+    "query": "报告里换手率漏写会触发哪个 gate",
+    "should_trigger": true,
+    "reason": "窄：gate 触发条件"
+  },
+  {
+    "query": "帮我看看 600036",
+    "should_trigger": false,
+    "reason": "模式A关键词「帮我看看」→orchestrator 正控成对"
+  },
+  {
+    "query": "今天买不买 京东方",
+    "should_trigger": false,
+    "reason": "模式B关键词「今天买不买」→defer 到 orchestrator"
+  },
+  {
+    "query": "002594 现在能加仓吗",
+    "should_trigger": false,
+    "reason": "模式B关键词「能加仓」→defer 到 orchestrator"
+  },
+  {
+    "query": "贵州茅台最近有什么事件面的变化",
+    "should_trigger": false,
+    "reason": "事件面综合→defer 到 orchestrator"
   }
 ]

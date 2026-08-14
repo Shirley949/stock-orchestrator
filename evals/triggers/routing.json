@@ -83,5 +83,50 @@
     "query": "帮我分析一下 601138",
     "should_trigger": false,
     "reason": "宽泛"
+  },
+  {
+    "query": "帮我拉 000988 最近的龙虎榜席位原始数据",
+    "should_trigger": true,
+    "reason": "窄：lhb 场景直接拉数据不写分析"
+  },
+  {
+    "query": "北向资金对贵州茅台的持股数据怎么拉",
+    "should_trigger": true,
+    "reason": "窄：northbound 场景数据路由"
+  },
+  {
+    "query": "s2 行情场景该用哪个 API",
+    "should_trigger": true,
+    "reason": "窄：场景→API 路由问题"
+  },
+  {
+    "query": "伊利股份 最近90天有没有上过龙虎榜？只要数据不用分析",
+    "should_trigger": true,
+    "reason": "窄：只要数据不分析"
+  },
+  {
+    "query": "东财三表接口挂了，降级链是什么",
+    "should_trigger": true,
+    "reason": "窄：降级链问题"
+  },
+  {
+    "query": "帮我看看 600036",
+    "should_trigger": false,
+    "reason": "模式A关键词「帮我看看」→orchestrator 正控成对"
+  },
+  {
+    "query": "今天买不买 京东方",
+    "should_trigger": false,
+    "reason": "模式B关键词「今天买不买」→defer 到 orchestrator"
+  },
+  {
+    "query": "002594 现在能加仓吗",
+    "should_trigger": false,
+    "reason": "模式B关键词「能加仓」→defer 到 orchestrator"
+  },
+  {
+    "query": "贵州茅台最近有什么事件面的变化",
+    "should_trigger": false,
+    "reason": "事件面综合→defer 到 orchestrator"
   }
 ]
