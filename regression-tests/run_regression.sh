@@ -38,6 +38,10 @@ echo "[① 契约层] test_westock_integration.py（westock_client + fetcher res
 python3 -m pytest "$ROUTING/test_westock_integration.py" -q 2>&1 | tail -2
 echo "[① 契约层] test_dongcai_client.py（东财 client 三态+缓存命中/中毒双判+重试+URL 拼接）"
 python3 "$ROUTING/test_dongcai_client.py" 2>&1 | tail -3
+echo "[① 契约层] test_sina_client.py（S8 sina_client：行情 GBK 快照解析+杜邦 SSR HTML 切期/闭合校验 冻结响应 golden）"
+python3 "$ROUTING/test_sina_client.py" 2>&1 | tail -1
+echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"
+python3 "$ROUTING/test_lixinger_client.py" 2>&1 | tail -1
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
 python3 "$HERE/test_lhb_northbound_processor.py" 2>&1 | tail -3
 echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术面完整性+TD 数据驱动+三态+禁编造）"
