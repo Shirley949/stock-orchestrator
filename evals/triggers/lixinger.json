@@ -1,0 +1,87 @@
+[
+  {
+    "query": "帮我分析一下贵州茅台",
+    "should_trigger": false,
+    "reason": "宽泛分析→defer 到 orchestrator"
+  },
+  {
+    "query": "002130 买不买",
+    "should_trigger": false,
+    "reason": "决策→defer 到 orchestrator"
+  },
+  {
+    "query": "全面分析 601138 工业富联",
+    "should_trigger": false,
+    "reason": "深度→defer 到 orchestrator"
+  },
+  {
+    "query": "华友钴业现在估值贵不贵",
+    "should_trigger": false,
+    "reason": "估值判断→defer 到 orchestrator"
+  },
+  {
+    "query": "宁德时代最近有什么风险事件",
+    "should_trigger": false,
+    "reason": "风险/事件→defer 到 orchestrator"
+  },
+  {
+    "query": "直接查一下贵州茅台的 EV/EBITDA（理杏仁）",
+    "should_trigger": true,
+    "reason": "窄：理杏仁指标直查"
+  },
+  {
+    "query": "帮我取 600519 的估值分位数据",
+    "should_trigger": true,
+    "reason": "窄：估值分位直查"
+  },
+  {
+    "query": "理杏仁 API 怎么调？日期范围有什么限制",
+    "should_trigger": true,
+    "reason": "窄：理杏仁 API 用法"
+  },
+  {
+    "query": "用理杏仁拉一下腾讯控股的股本结构",
+    "should_trigger": true,
+    "reason": "窄：理杏仁港股数据"
+  },
+  {
+    "query": "理杏仁 403 是什么原因",
+    "should_trigger": true,
+    "reason": "窄：理杏仁额度语义"
+  },
+  {
+    "query": "帮我写一份贵州茅台的深度分析报告",
+    "should_trigger": false,
+    "reason": "完整分析→orchestrator"
+  },
+  {
+    "query": "帮我拉一下 600519 的财报数据（用东财）",
+    "should_trigger": false,
+    "reason": "非理杏仁源→routing"
+  },
+  {
+    "query": "哪个数据源查估值靠谱",
+    "should_trigger": false,
+    "reason": "源对比→registry"
+  },
+  {
+    "query": "市盈率是什么意思",
+    "should_trigger": false,
+    "reason": "概念科普"
+  },
+  {
+    "query": "今天天气怎么样",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "帮我分析一下 601138",
+    "should_trigger": false,
+    "reason": "宽泛"
+  },
+  {
+    "query": "理杏仁和 Wind 哪个好",
+    "should_trigger": false,
+    "reason": "源对比→registry"
+  }
+]

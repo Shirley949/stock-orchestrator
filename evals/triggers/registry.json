@@ -1,0 +1,87 @@
+[
+  {
+    "query": "帮我分析一下贵州茅台",
+    "should_trigger": false,
+    "reason": "宽泛分析→defer 到 orchestrator"
+  },
+  {
+    "query": "002130 买不买",
+    "should_trigger": false,
+    "reason": "决策→defer 到 orchestrator"
+  },
+  {
+    "query": "全面分析 601138 工业富联",
+    "should_trigger": false,
+    "reason": "深度→defer 到 orchestrator"
+  },
+  {
+    "query": "华友钴业现在估值贵不贵",
+    "should_trigger": false,
+    "reason": "估值判断→defer 到 orchestrator"
+  },
+  {
+    "query": "宁德时代最近有什么风险事件",
+    "should_trigger": false,
+    "reason": "风险/事件→defer 到 orchestrator"
+  },
+  {
+    "query": "拉财报数据哪个源最靠谱？",
+    "should_trigger": true,
+    "reason": "窄：数据源质量直问"
+  },
+  {
+    "query": "AkShare 和东财 datacenter 哪个数据质量好",
+    "should_trigger": true,
+    "reason": "窄：源对比"
+  },
+  {
+    "query": "新浪 K 线 API 有什么坑",
+    "should_trigger": true,
+    "reason": "窄：已知坑点"
+  },
+  {
+    "query": "哪个网站查股东户数比较准",
+    "should_trigger": true,
+    "reason": "窄：源选择"
+  },
+  {
+    "query": "data source 哪个好",
+    "should_trigger": true,
+    "reason": "窄：英文直问"
+  },
+  {
+    "query": "为什么东财资金流接口被限流了",
+    "should_trigger": true,
+    "reason": "窄：源可用性"
+  },
+  {
+    "query": "帮我写一份贵州茅台的深度分析报告",
+    "should_trigger": false,
+    "reason": "报告→orchestrator"
+  },
+  {
+    "query": "帮我拉一下 600519 的财报数据",
+    "should_trigger": false,
+    "reason": "拉数→routing"
+  },
+  {
+    "query": "理杏仁 token 怎么配",
+    "should_trigger": false,
+    "reason": "lixinger 域"
+  },
+  {
+    "query": "MACD 金叉是什么意思",
+    "should_trigger": false,
+    "reason": "概念科普"
+  },
+  {
+    "query": "今天天气怎么样",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "股票分析报告要写哪些模块",
+    "should_trigger": false,
+    "reason": "quality 域"
+  }
+]

@@ -1,0 +1,102 @@
+[
+  {
+    "query": "帮我分析一下贵州茅台",
+    "should_trigger": true,
+    "reason": "分析动词+股票名"
+  },
+  {
+    "query": "002130 买不买",
+    "should_trigger": true,
+    "reason": "代码+决策动词"
+  },
+  {
+    "query": "601138.SS 怎么样",
+    "should_trigger": true,
+    "reason": "后缀代码+询问"
+  },
+  {
+    "query": "帮我深度分析一下中兴通讯的财报",
+    "should_trigger": true,
+    "reason": "深度+财报"
+  },
+  {
+    "query": "恒瑞医药估值多少",
+    "should_trigger": true,
+    "reason": "估值"
+  },
+  {
+    "query": "今天买不买京东方",
+    "should_trigger": true,
+    "reason": "模式B触发词"
+  },
+  {
+    "query": "宁德时代最近有什么风险事件",
+    "should_trigger": true,
+    "reason": "风险/事件"
+  },
+  {
+    "query": "002594 现在能加仓吗",
+    "should_trigger": true,
+    "reason": "模式B"
+  },
+  {
+    "query": "对比一下比亚迪和长城汽车",
+    "should_trigger": true,
+    "reason": "对比请求"
+  },
+  {
+    "query": "腾讯控股(0700.HK) 估值贵不贵",
+    "should_trigger": true,
+    "reason": "港股也在 scope"
+  },
+  {
+    "query": "帮我看看这只股票 SH600519",
+    "should_trigger": true,
+    "reason": "SH 前缀码"
+  },
+  {
+    "query": "中国平安有没有雷",
+    "should_trigger": true,
+    "reason": "排雷意图"
+  },
+  {
+    "query": "今天天气怎么样",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "帮我写个 Python 脚本解析 JSON",
+    "should_trigger": false,
+    "reason": "编程"
+  },
+  {
+    "query": "推荐几部科幻电影",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "什么是市盈率",
+    "should_trigger": false,
+    "reason": "概念科普非个股分析"
+  },
+  {
+    "query": "帮我订机票",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "分析一下这段代码的复杂度",
+    "should_trigger": false,
+    "reason": "代码分析非股票"
+  },
+  {
+    "query": "上证指数今天涨了多少",
+    "should_trigger": false,
+    "reason": "大盘指数非个股（边界：无个股无分析动词组合）"
+  },
+  {
+    "query": "美联储最近加息了吗",
+    "should_trigger": false,
+    "reason": "宏观非个股"
+  }
+]

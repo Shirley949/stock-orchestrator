@@ -79,7 +79,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 以下条件满足任一即触发（OR 关系）：
 
 - 股票代码（6 位数字 / SH·SZ 前缀 / .SS·.SZ 后缀）
-- 分析动词："分析 / 看看 / 买不买 / 估值 / 风险 / 事件 / 财报 / 怎么样"
+- 分析动词（代表例："分析 / 看看 / 买不买 / 估值 / 风险 / 事件"）——**全量权威清单见 `scripts/generate_checklist.py` 的 `detect_mode`（`mode_a_triggers` / `mode_b_triggers`）**，此处不另抄全集（手抄副本 = 漂移源）
 
 **兜底规则：** 无股票代码时，只要有分析动词就触发。opencode 用 `websearch` 搜索确认股票代码后继续执行。
 
@@ -90,10 +90,12 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 > **⚠️ Phase 0 的第一个动作必须是运行 `generate_checklist.py`（见约束 1）。**
 > 脚本会自动判定模式、映射用户问题、解析 Skill 依赖图，输出完整执行清单。
 
-| 触发关键词 | 模式 | 后续 Phase 加载 |
+| 触发关键词（代表例） | 模式 | 后续 Phase 加载 |
 |-----------|-----|----------------|
-| 深度分析/帮我看看/买不买/估值/财报分析/全面分析/风险/事件/贵不贵 | **A：完整** | Phase 1 + 2 + 3 + 4 |
-| 今天买不买/盘中/能加仓/要不要卖 | **B：当日** | Phase 1 + 2 |
+| 深度分析 / 帮我看看 / 买不买 / 估值 / 风险 / 事件（全量见 `generate_checklist.py` `detect_mode` 的 `mode_a_triggers`） | **A：完整** | Phase 1 + 2 + 3 + 4 |
+| 今天买不买 / 盘中 / 能加仓 / 要不要卖（全量见 `mode_b_triggers`） | **B：当日** | Phase 1 + 2 |
+
+> **模式判定权威 = `generate_checklist.py:detect_mode`（代码）**；本表仅代表例 + 指针，禁手抄全集（第三份手抄 = 漂移源）。
 
 ### Phase 0 执行步骤
 1. 运行 `generate_checklist.py` → 生成 `/tmp/analysis_checklist_*.md`

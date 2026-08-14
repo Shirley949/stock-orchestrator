@@ -1,0 +1,87 @@
+[
+  {
+    "query": "帮我分析一下贵州茅台",
+    "should_trigger": false,
+    "reason": "宽泛分析→defer 到 orchestrator"
+  },
+  {
+    "query": "002130 买不买",
+    "should_trigger": false,
+    "reason": "决策→defer 到 orchestrator"
+  },
+  {
+    "query": "全面分析 601138 工业富联",
+    "should_trigger": false,
+    "reason": "深度→defer 到 orchestrator"
+  },
+  {
+    "query": "华友钴业现在估值贵不贵",
+    "should_trigger": false,
+    "reason": "估值判断→defer 到 orchestrator"
+  },
+  {
+    "query": "宁德时代最近有什么风险事件",
+    "should_trigger": false,
+    "reason": "风险/事件→defer 到 orchestrator"
+  },
+  {
+    "query": "直接帮我拉一下 600519 最近 8 个季度的财务三表数据，不用写分析",
+    "should_trigger": true,
+    "reason": "窄：明确只要数据"
+  },
+  {
+    "query": "用 runner 拉一下 002130 的行情和 K 线",
+    "should_trigger": true,
+    "reason": "窄：runner 取数"
+  },
+  {
+    "query": "帮我取京东方最近 60 日的日 K 线原始数据",
+    "should_trigger": true,
+    "reason": "窄：K 线原始数据"
+  },
+  {
+    "query": "拉一下贵州茅台的资金流向数据",
+    "should_trigger": true,
+    "reason": "窄：单类数据"
+  },
+  {
+    "query": "财报数据一般从哪里拉？降级链是什么",
+    "should_trigger": true,
+    "reason": "窄：路由方法论咨询"
+  },
+  {
+    "query": "帮我写一份贵州茅台的深度分析报告",
+    "should_trigger": false,
+    "reason": "要报告→orchestrator"
+  },
+  {
+    "query": "东财 API 又限流了怎么办",
+    "should_trigger": false,
+    "reason": "源质量→registry"
+  },
+  {
+    "query": "技术指标 MACD 怎么算",
+    "should_trigger": false,
+    "reason": "指标计算非拉数"
+  },
+  {
+    "query": "理杏仁的 EV/EBITDA 怎么查",
+    "should_trigger": false,
+    "reason": "lixinger 域"
+  },
+  {
+    "query": "今天天气怎么样",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "股票分析报告要写哪些模块",
+    "should_trigger": false,
+    "reason": "报告规范→quality"
+  },
+  {
+    "query": "帮我分析一下 601138",
+    "should_trigger": false,
+    "reason": "宽泛"
+  }
+]

@@ -1,0 +1,87 @@
+[
+  {
+    "query": "帮我分析一下贵州茅台",
+    "should_trigger": false,
+    "reason": "宽泛分析→defer 到 orchestrator"
+  },
+  {
+    "query": "002130 买不买",
+    "should_trigger": false,
+    "reason": "决策→defer 到 orchestrator"
+  },
+  {
+    "query": "全面分析 601138 工业富联",
+    "should_trigger": false,
+    "reason": "深度→defer 到 orchestrator"
+  },
+  {
+    "query": "华友钴业现在估值贵不贵",
+    "should_trigger": false,
+    "reason": "估值判断→defer 到 orchestrator"
+  },
+  {
+    "query": "宁德时代最近有什么风险事件",
+    "should_trigger": false,
+    "reason": "风险/事件→defer 到 orchestrator"
+  },
+  {
+    "query": "股票分析报告应该包含哪些模块",
+    "should_trigger": true,
+    "reason": "窄：报告规范直问"
+  },
+  {
+    "query": "[src:] 溯源标记的格式规范是什么",
+    "should_trigger": true,
+    "reason": "窄：写作规范"
+  },
+  {
+    "query": "G21 校验什么内容",
+    "should_trigger": true,
+    "reason": "窄：Gate 规范"
+  },
+  {
+    "query": "报告自评分低于 80 怎么处理",
+    "should_trigger": true,
+    "reason": "窄：自评分规则"
+  },
+  {
+    "query": "港股分析报告有什么不同",
+    "should_trigger": true,
+    "reason": "窄：规范咨询（A/港/美均适用）"
+  },
+  {
+    "query": "帮我写一份贵州茅台的深度分析报告",
+    "should_trigger": false,
+    "reason": "执行分析→orchestrator"
+  },
+  {
+    "query": "帮我拉一下 600519 的财报数据",
+    "should_trigger": false,
+    "reason": "拉数→routing"
+  },
+  {
+    "query": "哪个源拉财报靠谱",
+    "should_trigger": false,
+    "reason": "源质量→registry"
+  },
+  {
+    "query": "PE 分位怎么算",
+    "should_trigger": false,
+    "reason": "计算概念"
+  },
+  {
+    "query": "今天天气怎么样",
+    "should_trigger": false,
+    "reason": "无关"
+  },
+  {
+    "query": "帮我分析一下 601138",
+    "should_trigger": false,
+    "reason": "宽泛"
+  },
+  {
+    "query": "verify_gates 怎么跑",
+    "should_trigger": false,
+    "reason": "引擎操作→orchestrator 上下文"
+  }
+]
