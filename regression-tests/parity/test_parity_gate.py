@@ -14,6 +14,7 @@
 用法：python3 test_parity_gate.py [--quick]   # --quick 只跑首票
 退出码：unittest（0=全绿）；语料缺失 print 提示后 exit 2
 """
+import copy
 import gzip
 import json
 import os
@@ -109,14 +110,16 @@ class ParityGateTest(unittest.TestCase):
         for p in patches:
             p.start()
         try:
-            # 纯度证明：封 socket 后 process 必须成功（任何网络调用→AssertionError）
+            # 纯度证明：封 socket 后 process 必须成功（任何网络调用→AssertionError）。
+            # ⚠️ process_snapshot 就地修改 raw["snapshot"]（与原 fetch_for_mode 同语义），
+            # 同一 raw 复用两次会双重累积（如 _warnings）——每次调用必须深拷贝输入。
             with mock.patch.object(socket, "socket", _BlockedSocket), \
                  mock.patch.object(socket, "create_connection",
                                    side_effect=AssertionError("network")), \
                  mock.patch.object(socket, "getaddrinfo",
                                    side_effect=AssertionError("network")):
-                out1 = runner.process_snapshot(raw)
-                out2 = runner.process_snapshot(raw)
+                out1 = runner.process_snapshot(copy.deepcopy(raw))
+                out2 = runner.process_snapshot(copy.deepcopy(raw))
         finally:
             for p in patches:
                 p.stop()
