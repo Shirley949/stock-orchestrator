@@ -9,7 +9,7 @@
 #        · test_lhb_northbound_processor.py  LHB/北向 processed 纯函数四情境（never_listed/event_only/fetch_failed/正常）
 #   ② 运行时层（gate-audit 工作区存在时跑）：runner/westock_client/gate 的离线回归
 #        · test_westock_integration（westock_client 解析 + 三 fetcher reshape 形状）
-#        · gate_fixture_test  29-gate 漏报=0 总闸
+#        · gate_fixture_test  全 Gate 漏报=0 总闸（gate 集 = gate_definitions.py 的 check_g*）
 #
 # ▶ 何时跑：改了 stock-analysis 任何 .py（runner/westock_client/gate_definitions/
 #   data_contracts/verify_data_contracts/各 fetcher）之后。CLAUDE.md / AGENTS.md
@@ -65,7 +65,7 @@ if [ -d "$GATE_FIXTURES" ]; then
   echo
   echo "[② 运行时层] gate-audit fixtures 在线，串跑："
   cd "$GATE_FIXTURES/.."
-  echo "  · gate_fixture_test (32-gate 漏报=0；含 G34/G35/G36 三维对称)"
+  echo "  · gate_fixture_test (全 Gate 漏报=0；含 G34/G35/G36 三维对称)"
   python3 fixtures/gate_fixture_test.py 2>&1 | grep -E "漏报.*共" | tail -1
   echo "  · test_gate_throttled"
   python3 -m unittest fixtures.test_gate_throttled 2>&1 | tail -2

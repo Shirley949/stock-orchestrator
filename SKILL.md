@@ -7,13 +7,13 @@ description: >
 
 # Stock Orchestrator（主控 Skill，永远全量加载）
 
-> **本 Skill 是股票分析的唯一入口。** 加载后，禁止 Skill 系统自动加载其他 4 个股票相关 Skill——它们的加载由本 Skill 通过 Read 显式触发。
+> **本 Skill 是股票分析的唯一入口。** 加载后，禁止 Skill 系统自动加载其他股票相关 Skill——它们的加载由本 Skill 通过 Read 显式触发（核心清单见 `skill_dep_graph.py` `MODE_FORCED_SKILLS`；数据源 skill 经引擎 client 集成）。
 
 ---
 
 ## 🔴 强制约束（违反则质量无法保证）
 
-> **以下 4 条约束是脚本工件驱动的硬性协议，不是建议。**
+> **以下强制约束是脚本工件驱动的硬性协议，不是建议。**
 
 ### 约束 1：执行清单必须首先生成
 收到任何股票分析请求 → **第一个动作**必须是运行 `generate_checklist.py`：
@@ -140,7 +140,7 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
 强制：s1 内部已自动执行以下步骤（runner 已实现）：
   ├─ 步骤3: fetch_cninfo_reports() → cninfo 年报/季报 PDF 下载+解析
   ├─ 步骤3.5: fetch_research_reports() → 东财机构研报 PDF 下载+解析
-  └─ 步骤3.6: fetch_annual_report_analysis() → 年报 6 维度数据提取（D2-D6）
+  └─ 步骤3.6: fetch_annual_report_analysis() → 年报维度数据提取（D3 分红 / D4 股东 / D7 客户供应商 / D8 员工）
     ↓
 并行 4 路 explore subagent：
   ├─ Agent 1: s2 行情 + s3 资金流
