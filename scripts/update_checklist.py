@@ -20,7 +20,7 @@ from pathlib import Path
 # 清单项 → snapshot 路径的映射表
 CHECKID_TO_SNAPSHOT_PATH = {
     "c04": "_top_level",  # 检查 _critical_failure 不存在
-    "c05": "s1_financial.data.balance_sheet.合同负债",
+    "c05": "s1_financial.data.balance_sheet.data.合同负债",
     "c10": "s2_quote_kline.data.realtime_quote",
     "c11": "s3_fund_flow.data.fund_flow",
     "c12": "_top_level",  # 检查 _warnings
@@ -59,11 +59,20 @@ def validate_evidence(snapshot_path: str, evidence_path: str) -> tuple:
         return True, "无 critical_failure"
 
     # 解析嵌套路径: "s1_financial.data.income_statement"
+    # 列表行兼容：时序 scene（如 balance_sheet）的字段在 .data 行列表内（路径形如
+    # "...balance_sheet.data.合同负债"），walk 到 list 时在各行 dict 中找该字段（rows[0]=最新）
     parts = evidence_path.split(".")
     current = snapshot
     for part in parts:
         if isinstance(current, dict):
             current = current.get(part)
+        elif isinstance(current, list):
+            hit = None
+            for row in current:
+                if isinstance(row, dict) and row.get(part) is not None:
+                    hit = row.get(part)
+                    break
+            current = hit
         else:
             return False, f"路径 {evidence_path} 不存在"
 
@@ -136,10 +145,10 @@ def update_checklist(
     content = path.read_text(encoding="utf-8")
     original = content
 
-    # 打勾: [ ] <!--c01--> → [x] <!--c01-->
-    for cid in check_ids:
-        # PR 7: evidence 校验
-        if evidence_from:
+    # PR 7: evidence 校验（两段式：先全部校验再打勾——任一失败即中止且零写入，
+    # 防止批量中途失败丢弃内存中已勾项、同时输出误导性 "已打勾"）
+    if evidence_from:
+        for cid in check_ids:
             if cid == "c70":
                 # c70 特例: evidence-from 是 verify_gates sidecar（单一出口契约，
                 # 非 snapshot）。verdict==PASS + self_score>=80 + 新鲜度由代码强制。
@@ -159,6 +168,8 @@ def update_checklist(
                     else:
                         print(f"🔍 {cid}: evidence 校验通过 — {msg}")
 
+    # 打勾: [ ] <!--c01--> → [x] <!--c01-->
+    for cid in check_ids:
         pattern = rf'\[ \] <!--{re.escape(cid)}-->'
         replacement = f'[x] <!--{cid}-->'
         new_content = re.sub(pattern, replacement, content)
