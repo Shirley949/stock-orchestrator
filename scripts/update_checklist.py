@@ -222,14 +222,14 @@ def update_checklist(
 
 def main():
     parser = argparse.ArgumentParser(description="执行清单打勾工具（PR 7: 增加 evidence 校验）")
-    parser.add_argument("--check", required=True, help="要打勾的 check_id，逗号分隔（如 c01,c02,c10）")
+    parser.add_argument("--check", help="要打勾的 check_id，逗号分隔（如 c01,c02,c10）")
     parser.add_argument("--uncheck", help="要取消打勾的 check_id，逗号分隔")
     parser.add_argument("--file", required=True, help="清单文件路径")
     parser.add_argument("--evidence-from", help="snapshot JSON 路径（PR 7: 打勾前校验数据）")
     parser.add_argument("--evidence-path", help="snapshot 中的路径（覆盖自动映射）")
     args = parser.parse_args()
 
-    check_ids = [c.strip() for c in args.check.split(",") if c.strip()]
+    check_ids = [c.strip() for c in (args.check or "").split(",") if c.strip()]
     uncheck_ids = [c.strip() for c in args.uncheck.split(",") if c.strip()] if args.uncheck else []
 
     if not check_ids and not uncheck_ids:
