@@ -137,6 +137,24 @@ class CheckG21M5(unittest.TestCase):
         snap = {"valuation_snapshot": {"data": {"quote": {"peTtm": 21.52}, "targetPrice": {"average": 543}}}}
         self.assertTrue(check_g21(rep, snap))
 
+    def test_m5_subsection_src_counts(self):
+        # R1（2026-08-16）：m5 段切片统一 _module_section（level-aware）——
+        # 修复前内联切片停在任意级别 header，#### 子节内的锚被截丢 → 误 FAIL。
+        # 导语 0 锚、锚全在 #### 子节 → 修复后 PASS（修复前 FAIL）。
+        m5 = ("估值导语。\n"
+              "#### 5.1 横向对比\n"
+              "PE 21.52 [src: snapshot.valuation_snapshot.data.quote.peTtm]\n"
+              "#### 5.2 结论\n"
+              "PB 4.82 [src: snapshot.valuation_snapshot.data.quote.pbRatio]")
+        self.assertTrue(check_g21(self._rep(m5), _snap_full_m5_src()))
+
+    def test_m5_subsection_thin_src_still_fail(self):
+        # 反例：子节内也只 1 锚 → 仍 FAIL（放宽的只是切片范围，不是计数标准）
+        m5 = ("估值导语。\n"
+              "#### 5.1 横向对比\n"
+              "PE 21.52 [src: snapshot.valuation_snapshot.data.quote.peTtm]")
+        self.assertFalse(check_g21(self._rep(m5), _snap_full_m5_src()))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

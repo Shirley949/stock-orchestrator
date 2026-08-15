@@ -797,12 +797,10 @@ def check_g21(report: str, data: dict) -> bool:
         return False
 
     # F-G3: m5（估值模块）verified [src:] 计数（实现 docstring 承诺）。
-    # 定位「模块五」段，计 snapshot./bare-scene src（上述已通过路径验证，非 None），<2→FAIL。
-    m5m = re.search(r'^#{1,4}\s.*模块五', report, re.MULTILINE)
-    if m5m:
-        _rest = report[m5m.end():]
-        _nxt = re.search(r'^#{1,4}\s', _rest, re.MULTILINE)
-        _m5sec = _rest[:(_nxt.start() if _nxt else len(_rest))]
+    # 定位「模块五」段（level-aware 切片=统一 _module_section，#### 子节内锚计入；
+    # 修复前内联切片停在任意级别 header，子节内锚被截丢），计 snapshot./bare-scene src，<2→FAIL。
+    _found, _m5sec = _module_section(report, r'^#{1,4}\s.*模块五', full_report_fallback=False)
+    if _found:
         _m5_verified = re.findall(r'\[src:\s*snapshot\.[^\]]+\]', _m5sec) + \
                        re.findall(r'\[src:\s*(?:s\d+_\w+|valuation_\w+|consensus_forecast|computed_metrics|s36_\w+|s55_\w+|web_research_findings)\.[^\]]+\]', _m5sec)
         if len(_m5_verified) < 2:
