@@ -37,7 +37,6 @@ CHECKID_TO_SNAPSHOT_PATH = {
     "c_d3_growth": "s36_annual_analysis.data",
     "c_d4_dividend": "s36_annual_analysis.data",
     "c_d5_governance": "s36_annual_analysis.data",
-    "c_d6_audit": "s36_annual_analysis.data",
 }
 
 
