@@ -58,7 +58,7 @@ verify_gates.py 返回 failed_gates → 分类处理
 | 含义 | ✅ 是 | ❌ 不是 |
 |------|------|---------|
 | 范围 | 重拉失败 Gate 对应的数据场景 | 从头跑 Phase 0-4 全部流程 |
-| 数据 | 仅失败 Gate 对应的 scene | 所有 14 个 scene |
+| 数据 | 仅失败 Gate 对应的 scene | 全部 scene（= `len(SCENES)`） |
 | 报告 | 仅重写失败 Gate 对应的模块 | 整个报告重新生成 |
 
 ### Gate → 数据场景映射
@@ -66,9 +66,8 @@ verify_gates.py 返回 failed_gates → 分类处理
 | 失败 Gate | 需要重拉的数据 | 需要重写的模块 |
 |----------|--------------|--------------|
 | G6~G9 | 重拉 s1_financial | 补写 m2 |
-| G10 | 重拉 s5_events | 补写 m4 |
 | G14 | 重拉 s2_quote_kline | 补写 m3 |
-| G15, G18 | 重拉 s11_peer | 补写 m5 |
+| G15 | 重拉 s11_peer | 补写 m5 |
 | G16, G17, G19 | 重拉 s12_orders | 补写 m25 |
 | G1, G30, G11~G13, G20, G21 | **不重拉数据** | 补写 m6 capstone / 对应模块 |
 

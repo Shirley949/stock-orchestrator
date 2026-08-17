@@ -177,8 +177,8 @@ _EXECUTIVE_KEYWORDS = ("董监高", "董事", "监事", "高级管理人员", "�
 def detect_actor_tier(label, title):
     """label PRIMARY + 标题细化 → actor 级别中文标签。
 
-    返回 "实控人" / "5%以上股东" / "董监高" / None（未明，omit 避免 G46 误校验）。
-    标签值供 m4 §4.2 actor 列 surface（G46 泛型校验须 verbatim 出现）。
+    返回 "实控人" / "5%以上股东" / "董监高" / None（未明，omit）。
+    标签值供 m4 §4.2 actor 列 surface（须 verbatim 出现，便于报告对拍）。
 
     优先级（硬规则②：官方结构化分类器 PRIMARY，regex SECONDARY）：
       1. 标题含 实际控制人/实控人/控股股东 → "实控人"（最强信号，标题点名）

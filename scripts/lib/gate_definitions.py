@@ -122,10 +122,8 @@ PROFILES = {
         "name": "full",
         "description": "深度分析/整体分析/买不买/估值 → 全部活跃 Gate 实跑（= ALL_GATES，见本文件；勿硬编码计数）",
         "gates": ALL_GATES,
-        # Step 2 (2026-07-01): 翻 auto_pass=[] — Soft Gates 也实跑。
-        # Step 0 已修 G17/G18 checker 误判（去"海外"词触发 + 同业关键词），
-        # 故翻 [] 不再误阻塞。HARD_GATES/SOFT_GATES 仅作 Python-vs-LLM 分层文档保留，
-        # 不再决定 auto_pass。LLM 自评分 = compute_self_score（三维，独立于 Gate 通过）。
+        # Soft Gates 也实跑（auto_pass=[]）；HARD_GATES/SOFT_GATES 仅作分层文档保留，
+        # 不决定 auto_pass。LLM 自评分 = compute_self_score（三维，独立于 Gate 通过）。
         "auto_pass": [],
         "fail_threshold": 3,
     },
@@ -2313,7 +2311,7 @@ def check_g56(report: str, data: dict) -> bool:
 
 
 def check_g57(report: str, data: dict) -> bool:
-    """G57: m4 growth_tier 消费一致性 + 反编造（m4 §4.1.1 P4 责任）。SOFT(weight1)，mirror G50 三态+反编造。
+    """G57: m4 growth_tier 消费一致性 + 反编造（m4 §4.1.1 P4 责任）。SOFT(weight1)，三态+反编造范式。
     snapshot 路径 consensus_forecast.data.company_guidance.latest_period.value.growth_tier
     （runner _fetch_company_guidance:6638 派生；仅 predict_type=='预增' 按 INCREASE_JZ 分档：
     >50%→high / 20-50%→moderate / 其余·非预增·缺字段→None）。
@@ -2342,7 +2340,7 @@ def check_g57(report: str, data: dict) -> bool:
 
 
 def check_g58(report: str, data: dict) -> bool:
-    """G58: m5 估值分位必写+反编造（F-G1）。SOFT(weight1)，mirror G57/G50 三态+反编造。
+    """G58: m5 估值分位必写+反编造（F-G1）。SOFT(weight1)，mirror G57 三态+反编造。
     valuation_snapshot.data.valuation_percentile.{pe_ttm,pb,ev_ebitda}：每项 applicable=true 且有 pct_5y 时，
     m5 段须 surface 分位（_check_value_freshness 判 grounded——行带 [src:] 或 pct 值×0.01 对齐 snapshot）。
     applicable=false（亏损 EV-EBITDA≤0）/无分位数据→PASS（三态豁免）。
