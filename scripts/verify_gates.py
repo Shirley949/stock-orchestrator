@@ -34,7 +34,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from gate_definitions import (
-    ALL_GATES, GATE_CHECKERS, GATE_DESCS, GATE_WEIGHTS,
+    ALL_GATES, GATE_CHECKERS, GATE_DESCS, GATE_WEIGHTS, GATE_REGISTRY,
     PROFILES, compute_score, get_profile, compute_self_score
 )
 
@@ -151,7 +151,12 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
                 gate_reasons = ret.get("reasons") or []
             else:
                 ok = bool(ret)
-                gate_reasons = []
+                # 薄壳兜底（B1）：bool 门 FAIL 无原生 reasons → 上浮注册表 fail_hint
+                #（比裸 desc 可执行；原生 reasons 的门如 G30 不受影响）
+                if not ok:
+                    gate_reasons = [GATE_REGISTRY[gate]["fail_hint"]]
+                else:
+                    gate_reasons = []
             if ok:
                 passed.append(gate)
                 detail = {"gate": gate, "status": "pass", "desc": desc, "weight": weight}
@@ -270,6 +275,71 @@ def print_report(result: dict):
     print("-" * 60)
 
 
+def _preflight_value_preview(data: dict, dim: str) -> str:
+    """preflight 真值预览：按注册表 data_dim 路径解析 snapshot 值，渲染 ≤1 行紧凑预览。
+
+    dict → 最多 4 个标量键值对；list → 长度+首行摘要；标量 → 原值。解析不到 → ''（豁免提示由调用方渲染）。
+    """
+    cur = data
+    for part in dim.split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return ""
+    if cur is None:
+        return ""
+    if isinstance(cur, dict):
+        scal = {k: v for k, v in list(cur.items())
+                if isinstance(v, (int, float, str, bool)) and not str(k).startswith("_")}
+        if not scal:
+            return f"{{{len(cur)} 键}}"
+        return "{" + ", ".join(f"{k}={v}" for k, v in list(scal.items())[:4]) + \
+               (f" …(+{len(scal)-4})" if len(scal) > 4 else "") + "}"
+    if isinstance(cur, list):
+        return f"[{len(cur)} 行]"
+    return str(cur)[:90]
+
+
+def run_preflight(data: dict, profile_name: str) -> None:
+    """B4 preflight 模式：写作前从 GATE_REGISTRY + 活 snapshot 生成逐门写作要求清单。
+
+    与执法同源零漂移（三消费方单一真相源）：清单的 requires/fail_hint/weight 直接读注册表，
+    真值预览按 data_dim 路径解析活 snapshot——LLM 写报告**前**读它，round-1「要求不明」类
+    FAIL（603986 六败/600703 结构败）结构性消失。写作后 verify 不变。
+    """
+    profile = get_profile(profile_name)
+    active = profile["gates"]
+    print("=" * 72)
+    print(f"Gate Preflight 写作要求清单 | Profile: {profile_name}（写报告前读，与执法同源）")
+    print("=" * 72)
+    with_data = without_data = 0
+    for gate in ALL_GATES:
+        if gate not in active:
+            continue
+        row = GATE_REGISTRY[gate]
+        preview = _preflight_value_preview(data, row.get("data_dim") or "")
+        mark = "🟢" if preview else "⚪"
+        if preview:
+            with_data += 1
+        else:
+            without_data += 1
+        owners = "/".join(row.get("owner") or [])
+        print(f"{mark} {gate} [{owners}] w{row['weight']}: {row['requires']}")
+        if preview:
+            print(f"      真值 {row.get('data_dim')} = {preview}")
+        else:
+            print(f"      （snapshot 无 {row.get('data_dim')} → 三态豁免路径，禁编造该维数值）")
+        # preview_dims：执法真值在别处叶子（如 G54 的 ADX 在 dmi、G55 的 VWAP 在 s2）→ 一并渲染
+        for extra in row.get("preview_dims") or []:
+            pv = _preflight_value_preview(data, extra)
+            if pv:
+                print(f"      真值 {extra} = {pv}")
+    print("-" * 72)
+    print(f"共 {with_data + without_data} 门：{with_data} 门有数据（须消费/对齐真值），"
+          f"{without_data} 门无数据（三态豁免，禁编造）")
+    print("写作完成后运行 verify_gates.py（不带 --preflight）执法校验。")
+
+
 def check_pointer(report_path: str):
     """只读校验模式：不重跑 Gate，只确认报告出口契约成立。
 
@@ -322,7 +392,7 @@ def check_pointer(report_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Gate 硬关卡校验脚本")
-    parser.add_argument("--report", required=True, help="报告文件路径（.md）")
+    parser.add_argument("--report", required=False, help="报告文件路径（.md；--preflight 模式免填）")
     parser.add_argument("--data-snapshot", help="数据快照文件路径（.json，可选）")
     parser.add_argument("--profile", default="full",
                          choices=["full", "quick"],
@@ -337,9 +407,28 @@ def main():
                         help="只读校验模式：不重跑 Gate，只确认报告出口契约"
                              "（指针行 + sidecar 有效 + PASS + self_score≥80 + 新鲜）。"
                              "c70 打勾前的强制关卡。")
+    parser.add_argument("--preflight", action="store_true",
+                        help="写作前模式：不跑 Gate，从 GATE_REGISTRY + 活 snapshot 生成"
+                             "逐门写作要求清单（要求与执法同源，LLM 写报告前读它）。"
+                             "须配 --data-snapshot，免 --report。")
     parser.add_argument("--no-sidecar", action="store_true",
                         help="禁用 sidecar 自动写入（默认写 <report>.verified.json）")
     args = parser.parse_args()
+
+    # preflight 模式：写作前要求清单，独立分支（先例 --check-pointer），不跑 Gate 不写 sidecar
+    if args.preflight:
+        if not args.data_snapshot:
+            parser.error("--preflight 须配 --data-snapshot（要求清单要解析活 snapshot 真值）")
+        data = load_data_snapshot(args.data_snapshot)
+        if not data:
+            print("❌ 数据快照不存在或为空，preflight 无法生成真值要求")
+            sys.exit(1)
+        run_preflight(data, f"profile_{args.profile}")
+        sys.exit(0)
+
+    # 非 preflight 模式 --report 必填（手动校验维持原 required=True 行为，向后兼容）
+    if not args.report:
+        parser.error("以下参数是必需的: --report（或改用 --preflight 模式免 report）")
 
     # 指针校验模式：只读，独立分支，不重跑 Gate
     if args.check_pointer:

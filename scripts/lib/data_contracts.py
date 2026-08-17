@@ -224,6 +224,18 @@ SCENES = {
             {"path": "data.targetPrice.average",  "confidence": CONFIRMED},
             {"path": "data.targetPrice.highest",  "confidence": CONFIRMED},
             {"path": "data.targetPrice.lowest",   "confidence": CONFIRMED},
+            # targetPrice 四级链（plan A-Step2b）：T1 westock → T2a EM 研报 180d 聚合 → T2b futu → 占位
+            {"path": "data.targetPrice.source",   "confidence": CONFIRMED,
+             "note": "四级链溯源标记 westock|eastmoney_report_180d|futu|none；占位(none)时引擎推算锚见 computed_metrics.fair_value_estimate"},
+            {"path": "data.targetPrice.as_of",    "confidence": CONFIRMED,
+             "note": "目标价数据日期（T2a=最新报告日 / T2b=futu updateTime；T1 westock 无此键）"},
+            # analystRating EM fallback（westock rating 无覆盖时，plan A-Step2c）
+            {"path": "data.analystRating.source", "confidence": CONFIRMED,
+             "note": "westock|eastmoney；EM fallback 时 ratio 镜像 westock 语义（buy=(买入+增持)/ORG）"},
+            {"path": "data.analystRating.em_counts", "confidence": CONFIRMED,
+             "note": "东财 5 档计数 {buy,add,neutral,reduce,sell}（仅 source=eastmoney 时有）"},
+            {"path": "data.analystRating.em_compre_rating", "confidence": CONFIRMED,
+             "note": "东财综合评级原文（如'买入'；仅 source=eastmoney 时有）"},
             # ST2 估值分位（近五年 baidu 序列自算，零增量调用）：pe_ttm/pb 双窗口分位 + 适用性/history_sufficient
             {"path": "data.valuation_percentile", "confidence": CONFIRMED,
              "note": "ST2 估值分位 {pe_ttm,pb}，每项 {pct_5y,pct_all,current,median_5y,min_5y,max_5y,window_5y,window_all,applicable,history_sufficient,as_of}；"
@@ -256,6 +268,11 @@ SCENES = {
             "data.targetPrice.average":  ["m10:55"],   # m10 §10A 渲染目标价（m4 收敛后不再读）
             "data.targetPrice.highest":  ["m10:55"],
             "data.targetPrice.lowest":   ["m10:55"],
+            "data.targetPrice.source":   ["m10:10A.2"],   # 目标价行高亮渲染（来源标注，plan A 链）
+            "data.targetPrice.as_of":    ["m10:10A.2"],
+            "data.analystRating.source":     ["m10:10A.1"],   # 评级行来源标注（westock|eastmoney）
+            "data.analystRating.em_counts":  ["m10:10A.1"],   # 5 档计数渲染（source=eastmoney 时）
+            "data.analystRating.em_compre_rating": ["m10:10A.1"],
             "data.valuation_percentile": ["m5", "m6", "capstone_panorama"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull（含 ev_ebitda 子键）
             "data.ev_metrics":           ["m5", "m6"],   # F-D1/D2 lixinger EV/EBITDA：m5 企业价值锚 + m6 Layer1 估值锚
         },
@@ -289,6 +306,11 @@ SCENES = {
              "note": "最新实绩锚点信封（period_type=year，value=actual；runner.py:6900）；G30#1 数值新鲜度（同 s1/s2/s8 latest_period 范式）"},
             {"path": "data.annual_latest_period", "confidence": CONFIRMED,
              "note": "最近预测年信封（period_type=year，value=forecast；runner.py:6901）；m10 §10A 年度预测表读最近预测年"},
+            # 东财年度一致预期（westock annual 交叉/兜底源，plan A-Step2d；emweb PageAjax yctj_list E 行）
+            {"path": "data.em_annual", "confidence": CONFIRMED,
+             "note": "dict[year→{eps,net_profit 亿,net_profit_count,revenue 亿,revenue_count,roe}]；EPS 口径常低于 westock=机构分歧信号；加法式不动 annual"},
+            {"path": "data.em_annual_latest_period", "confidence": CONFIRMED,
+             "note": "东财最近预测年信封（make_latest_envelope period_type=year）；T3 推算锚 eps 候选1 入口"},
         ],
         "consumers": {
             "data.eps":       ["m10:10A.3", "m6:81", "m5:35", "computed_metrics:eps_fy_consensus"],
@@ -303,6 +325,8 @@ SCENES = {
             "data.company_guidance.latest_period.value.growth_tier": ["m4-sentiment", "G57"],
             "data.latest_period": ["G30"],                # 数值新鲜度（_g30_value_freshness_findings，同 s1/s2/s8 范式）
             "data.annual_latest_period": ["m10"],         # m10 §10A 年度预测表（最近预测年）
+            "data.em_annual": ["m5", "m10", "computed_metrics:fair_value_estimate"],   # EPS/净利口径对照 + T3 推算锚 eps 候选
+            "data.em_annual_latest_period": ["computed_metrics:fair_value_estimate"],  # 最近预测年选取依据
         },
         "priority": P1,
         # westock consensus + finance 各 1 次 npx（腾讯源无限流）。
@@ -556,12 +580,16 @@ SCENES = {
             # ★断链#5：.current.mean 子路径形状未在 runner 显式确认
             {"path": "data.layer1.eps_consensus.current.mean", "confidence": UNVERIFIED,
              "note": "_compute_eps_consensus(runner.py:1946) 返回结构未确认含 .current.mean；m5:33/m6:83/m10:11 引用"},
+            # 研报逐条目标价（plan A-Step2a；indvAimPriceT 字符串需 float 守卫，''→None）
+            {"path": "data.layer1.reports_meta[].aim_price", "confidence": CONFIRMED,
+             "note": "180d 窗内每篇研报的目标价（float 或 None）；T2a 聚合（avg/high/low）与 reports_meta 同源（_fetch_em_reports）"},
         ],
         "consumers": {
             "data.layer1.em_reports_count":                   ["m10:105", "m4"],   # m4 §4.1 机构关注度代理（P1-9：研报覆盖数=机构关注度；P2-10 补登 m4 consumer）
             "data.layer1.em_rating_distribution":             ["m10:10A.1"],   # m4 §4.3 收敛后评级分布→m10 §10A.1；删 m4:112 + ghost s4_rating_backfill
             "data.layer1.eps_consensus":                      ["m5:33", "m6:83", "m10:11"],
             "data.layer1.eps_consensus.current.mean":         ["m5:33", "m6:83", "m10:11"],
+            "data.layer1.reports_meta[].aim_price":           ["m5", "m10"],   # 逐篇目标价明细（m10 §10A.2 研报目标价表原料 + T2a 聚合同源）
         },
         "priority": P1,
         "cost": {"calls": 2, "latency": "medium"},
@@ -672,6 +700,9 @@ SCENES = {
             {"path": "data.overseas",                "confidence": CONFIRMED},   # §1.5 海外五态（geo 派生，降级信号）：activated/domestic_only/underivable_*；m7 §7.1 读 status/pct/as_of
             {"path": "data.concentration_composite","confidence": CONFIRMED},   # §1.6 营收复合集中度（region_cr1 × product_cr1，合取→composite_severe 单点失败跳级）
             {"path": "data.tariff_vulnerability",   "confidence": CONFIRMED},   # §1.6 关税脆弱性海外毛利率判别（fatal/partial_low_margin_export/partial_mixed/partial_unverified/none）；G17 Phase3 触发源
+            {"path": "data.fair_value_estimate",   "confidence": CONFIRMED,
+             "note": "T3 公允价值推算锚 {value,eps,eps_year,eps_source,multiple,multiple_source,formula='eps×industry_median_pe',status,note}（fetch 期算好，LLM 直读禁现场算）；"
+                     "eps 优先 em_annual 最近预测年>westock annual；multiple=s11_peer.industry_median.pe；缺任一→unavailable；措辞钉死「推算锚（仅供参考），非机构目标价」"},
         ],
         "consumers": {
             "data.eps_fy_consensus": ["m5", "m6"],
@@ -683,6 +714,7 @@ SCENES = {
             "data.overseas":                  ["m7", "computed_metrics"],                  # m7 §7.1；tariff_vulnerability 派生读它
             "data.concentration_composite":   ["m7", "m6"],                                # m7 识别（§7.1 集中度行）+ m6 悲观引用（单点失败）
             "data.tariff_vulnerability":      ["m7", "m6", "m25", "m35", "G17"],           # m7 识别（§7.1 地缘+§7.1.1 折让）+ m6 悲观引用 + m25 T0-T4 + m35 关税情景行 + G17 三维合取触发
+            "data.fair_value_estimate":       ["m10:10A.2", "m5"],   # targetPrice 四级链 T3：m10 §10A.2 推算锚渲染（source=none 时）+ m5 §5.2 估值参照
         },
         "note": "computed_metrics 实存 snapshot['computed_metrics'][key]（无 .data. 中缀）；契约 path 用 data.X 仅为场景内符号一致，verify 不解析真实 snapshot 路径。",
         "priority": P1,

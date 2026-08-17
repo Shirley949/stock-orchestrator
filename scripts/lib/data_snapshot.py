@@ -209,6 +209,20 @@ class DataSnapshot:
             dongcai_client.set_logger(self._fetch_log.append)
         except ImportError:
             pass
+        # 镜像挂 futu fetch_log 钩子（targetPrice T2b 直拉，source="futu"）。
+        # futu_client 与 westock_client 同目录，同上独立测试静默跳过。
+        try:
+            import futu_client
+            futu_client.set_logger(self._fetch_log.append)
+        except ImportError:
+            pass
+        # 镜像挂 sina fetch_log 钩子（curl_sina_hq 实时行情补救 + 杜邦 SSR，source="sina"）。
+        # sina_client 在 financial-data-routing 目录（runner 已加 sys.path），独立测试静默跳过。
+        try:
+            import sina_client
+            sina_client.set_logger(self._fetch_log.append)
+        except ImportError:
+            pass
 
     # --------------------------------------------------------
     # 缓存键生成
@@ -334,6 +348,10 @@ class DataSnapshot:
                 else:
                     cached["status"] = "cached"
                     cached["_warnings"] = []
+                    self._fetch_log.append({          # 命中也留痕（S3：cached 可见于 get_summary）
+                        "api": api_name, "params": params, "status": "cached",
+                        "source": "akshare", "time": datetime.now().isoformat(),
+                    })
                     return cached
 
             # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_akshare 内耗尽，
@@ -442,6 +460,10 @@ class DataSnapshot:
                 cached = self._mem_cache[cache_key].copy()
                 cached["status"] = "cached"
                 cached["_warnings"] = []
+                self._fetch_log.append({          # 命中也留痕（S3，镜像 fetch_or_cache）
+                    "api": f"curl_{label}", "params": {"url": url}, "status": "cached",
+                    "source": "curl", "time": datetime.now().isoformat(),
+                })
                 return cached
 
             # 1b. 失败记忆命中（运行期，不落盘）：退火重试已在 _call_curl 内耗尽，
@@ -497,8 +519,15 @@ class DataSnapshot:
         记 fetch_log（source=llm_web_research, grade=C）让 get_summary 可见——「死映射
         web_search→C（SOURCE_GRADE:81）终于活路径」。
         """
+        # dict 包裹（{"items":[...]}）解包兜底——CLI 层已提示；非 list 直接 raise（早失败优于静默 missing）
+        if isinstance(items, dict) and isinstance(items.get("items"), list):
+            items = items["items"]
+        if not isinstance(items, list):
+            raise ValueError(
+                f"fetch_web_research items 必须是 list[dict]，收到 {type(items).__name__}"
+                "（dict 包裹请传 items['items']）")
         norm = []
-        for it in (items or []):
+        for it in items:
             if not isinstance(it, dict):
                 continue
             norm.append({
@@ -520,6 +549,21 @@ class DataSnapshot:
             "data": {"status": "ok" if norm else "missing", "source": "llm_web_research", "items": norm},
             "_warnings": [] if norm else ["[web_research] 空 items——LLM 未提供 websearch 发现"],
         }
+
+    def log_fetch(self, source: str, api: str, status: str,
+                  params: dict = None, error: str = "", ms: float = None) -> None:
+        """外部拉取通道记录 fetch_log（腾讯 qt / baidu / lixinger 等不经 fetch_or_cache 的调用）。
+        持锁追加，并发 scene 安全；ms 有值时附带耗时。"""
+        with self._lock:
+            entry = {
+                "api": api, "params": params or {}, "status": status,
+                "source": source, "time": datetime.now().isoformat(),
+            }
+            if error:
+                entry["error"] = error
+            if ms is not None:
+                entry["ms"] = round(ms, 1)
+            self._fetch_log.append(entry)
 
     def get_warnings(self) -> list:
         """返回所有累积告警"""

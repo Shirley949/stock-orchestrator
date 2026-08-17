@@ -21,6 +21,19 @@ from capstone_panorama import panorama as _cap_panorama  # noqa: E402
 from capstone_panorama import QUAL_KW as _CAP_QUAL_KW  # noqa: E402
 from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
 
+
+class GateResult(dict):
+    """checker 返回壳（B2 原生 reasons）：FAIL 分支返 GateResult(passed=False, reasons=[...])。
+
+    兼容双管道：isinstance(ret, dict) 命中 verify_gates/gate_fixture_test 的 reasons 上浮；
+    __bool__ = passed 保持裸 bool 断言（assertFalse(check_gXX(...))）零破坏——
+    普通 dict 恒真值会把「FAIL」变「PASS」，这是不用裸 dict 的原因。
+    PASS 路径照旧返回 True（bool），最小改动面。
+    """
+
+    def __bool__(self):
+        return bool(self.get("passed", False))
+
 # ============================================================
 # Gate 定义
 # ============================================================
@@ -31,7 +44,6 @@ GATE_DESCS = {
     "G7": "扣非对比（净利润/扣非/差额%三列已展示）",
     "G8": "现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）",
     "G9": "利润归因闭合（ΔNetProfit四项分解闭合）",
-    "G10": "事件扫描完成（高优8类+低优10类，每类有状态标记）",
     "G11": "数据时效性声明（报告开头声明数据截止时间；表格仅在数据来源不同时标注日期）",
     "G12": "局限性披露（≥3条具体局限）",
     "G13": "持仓↔决策一致（若用户提供持仓信息，操作建议应考虑持仓语境）",
@@ -39,7 +51,6 @@ GATE_DESCS = {
     "G15": "同业对比（snapshot.s11_peer 核心6计数≥2家齐全+src溯源；金融股豁免毛利率/必PB；missing反编造）",
     "G16": "订单Layer6核对（合同负债核对偏差≤15%；销量/海外收入核对已跳过）",
     "G17": "关税/地缘风险完整（m7 责任；tariff_vulnerability fatal∪partial_* 时须有地缘/关税风险行+估值折让区间）",
-    "G18": "竞品对标（已并入 G15；本 gate 恒 PASS 占位，强制力收归 G15）",
     "G19": "营收预测区间（Layer8给区间或标注'无法量化'）",
     "G20": "口径一致（Layer0口径=Layer8输出）",
     "G21": "SOURCE溯源（报告[src:]标记→snapshot路径验证）",
@@ -66,11 +77,9 @@ GATE_DESCS = {
     "G43": "财报披露日历消费（m4；s5_events.disclosure ok→须含披露/财报词、无数据编造具体预计披露日=FAIL）",
     "G44": "ESG 评级治理维度消费（m9.2/m7；s_esg ok→须含 ESG/评级词(不含裸治理)、无数据编造 ESG 评级=FAIL）",
     "G45": "目标价口径溯源（m5；目标价数字须 [src:] 溯源或不确定性标注；websearch vs API-grade 混用无 src=FAIL）",
-    "G46": "占位（事件层重建：severity/M-code 体系退役并入大事提醒时间线；致命事件 surface 由 G30#1 timeline.fatal_events 负责；checker 恒 PASS，保留以维持 gate 计数分母）",
     "G47": "股东行为综合研判消费（m9.2/m7；ST3 shareholder_dynamics 融合 意图×内部人×前十大，有材料级方向须 surface 内部人/董监高/前十大/增持/减持/净买/净卖/港资/言行合一；空/中性/failed 豁免；反编造 FAIL）",
     "G48": "待执行/进行中增减持计划消费（m9.2/m7/m1；ST5 programs[] forward 信封，有 planned/ongoing 须 surface 待执行/进行中/拟减持/拟增持/窗口/计划；无活跃/failed 豁免；反编造 FAIL）",
     "G49": "买卖力量 verdict 消费（m9.2/m7/m6/m1/capstone；ST6 buy_sell_pressure 信封，verdict∈{buy_dominant,sell_dominant,balanced} 须 surface 买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓；unclear/failed/空 豁免；反编造 FAIL）",
-    "G50": "占位（事件层重建：severity 体系退役，时间线用官方 EVENT_TYPE_CODE 分类，无三档 severity 可校验一致性；数字/编造由 G16/G29 兜底；checker 恒 PASS，保留以维持 gate 计数分母）",
     "G51": "m2 §2.13 SGR 全链路（computed_metrics.sgr；ok+适用→须消费+三件套(ROE/派息率/留存率)+进度条+数值对齐；不适用→写不适用禁编值；assumed_no_dividend→⚠️/上限脚注；无 sgr→禁编 SGR 值）",
     "G52": "m3 ATR 波动/破位全链路（s4_technical.data.atr；ok+atr14→须消费+止损/破位段+数值对齐；缺→禁编 ATR 值；never_traded 豁免）",
     "G53": "m3 换手率自身分位全链路（s4_technical.data.turnover.pct_250；高换手↔pct≥70/低换手↔pct≤30 enforcement；报告分位数须==snapshot；never_traded 豁免）",
@@ -81,58 +90,16 @@ GATE_DESCS = {
     "G58": "m5 估值分位必写+反编造（§5.1/§5.3；valuation_percentile pe_ttm/pb/ev_ebitda applicable=true 须 surface 分位[pct×0.01对齐或src]；applicable=false/无数据豁免；无数据却写分位%=FAIL）",
     "G59": "m5 §5.3 估值结论 verdict presence（必含偏贵/偏贱/高估/低估/估值合理/估值适中/估值偏低/估值偏高 判定词；无 §5.3 豁免）",
     "G60": "m6 定性三行结构化锚点+反捏造（Layer1 ⑪护城河/⑫治理战略/⑬前瞻催化 各须含 ≥1 [src:] 锚点或标「无源」；研发强度X%须≈snapshot；裸奔或捏造=FAIL；限证据全景子节防投资建议叙事误伤）",
+    "G62": "m6 tally 跨章一致（正文「N偏多/N中性/N偏空」自称数 == 证据表第2列裸方向词实数；治自称 7/5/1 实际 5/6/4；无自称/无表 no-op）",
+    "G63": "m3 技术位数值对拍（fib/S&R/成本位数值 == snapshot levels ±0.5%；转录错区间 (0.5%,5%]=FAIL；治 666→662；无 m3/无真值豁免）",
+    "G64": "资金流术语口径（「大单」行数值禁命中主力 trend_5/10/20d / 全单 net_flow 真值——万/亿双刻度；治主力误标大单；无 fund_flow/无提及豁免）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
-GATE_WEIGHTS = {
-    "G1": 2,
-    "G6": 2, "G7": 2, "G8": 2, "G9": 2, "G10": 2,
-    "G11": 1, "G12": 2, "G13": 2, "G14": 2, "G15": 3,
-    "G16": 2, "G17": 3, "G18": 2, "G19": 3,     "G20": 2,
-    "G21": 3,  # PR 8: 高权重
-    "G22": 3,  # 分业务数据完整性
-    "G23": 3,  # 年报数据完整性
-    "G25": 2,  # 新闻分析流程完整性
-    "G26": 2,  # 资金流向完整性
-    "G27": 1,  # 财务指标+同比预计算一致性（Soft，单独不阻塞）
-    "G28": 1,  # 杜邦三因子闭合（Soft，单独不阻塞；硬校验失败=真FAIL）
-    "G29": 2,  # 资产安全完整性（Soft，单独不阻塞；有数据漏写/无数据编造=FAIL）
-    "G30": 4,  # 综合研判完整性（capstone 硬关卡，weight≥3 → FAIL 阻塞输出）
-    "G31": 1,  # 估值数据有效性（Soft，单独不阻塞；覆盖率<2/3 仅扣 gate_pass 分）
-    "G32": 1,  # 龙虎榜信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
-    "G33": 1,  # 北向资金信号完整性（Soft，单独不阻塞；failed/缺失=真FAIL）
-    "G34": 1,  # 分产品维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
-    "G35": 1,  # 分行业维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
-    "G36": 1,  # 分地区维完整性（Soft；三维对称，fetch_failed/degraded=FAIL）
-    "G37": 1,  # 宏观数据有效性 PMI/PPI/M2（Soft；presence<2/3 或 PMI stale-value=FAIL）
-    "G38": 1,  # 分红有效性 每股股利（Soft；有分红历史且引旧值=FAIL；不分红真空豁免）
-    "G39": 1,  # 分类单源执法 report-layer（Soft；类型词/估值框架/宏观引用三查；classification 真空豁免）
-    "G40": 1,  # 技术信号信封消费（Soft；signals ok→须含 state 词、fib→须渲染、support_resistance→止损禁 xx元空位、degraded→禁编造 DIF）
-    "G41": 1,  # 筹码成本位消费（Soft；chipAvgCost 非空→须含成本位词、cost_pressure→须 surface 套牢、无 chip 编造成本=FAIL）
-    "G42": 1,  # 融资融券杠杆情绪消费（Soft；s_margin ok→须含两融词、无数据编造亿数=FAIL）
-    "G43": 1,  # 财报披露日历消费（Soft；disclosure ok→须含披露词、无数据编造日期=FAIL）
-    "G44": 1,  # ESG 评级治理维度消费（Soft；s_esg ok→须含 ESG 词、无数据编造评级=FAIL）
-    "G45": 1,  # 目标价口径溯源（Soft；目标价数字须 src 或不确定性标注；websearch vs API-grade 混用=FAIL）
-    "G46": 2,  # 占位（Soft；severity/M-code 退役，恒 PASS，保留 gate 计数分母）
-    "G47": 1,  # 股东行为综合研判消费（Soft；ST3 shareholder_dynamics 有方向须 surface presence 词）
-    "G48": 1,  # 待执行/进行中增减持计划消费（Soft；ST5 programs[] 有 active 须 surface presence 词）
-    "G49": 1,  # 买卖力量 verdict 消费（Soft；ST6 buy_sell_pressure 有 verdict 须 surface 阵营词）
-    "G50": 1,  # 占位（Soft；severity 退役，恒 PASS，保留 gate 计数分母）
-    "G51": 2,  # m2 §2.13 SGR 全链路（Soft；ok→须消费+数值对齐，不适用→禁编值，assumed→⚠️上限脚注）
-    "G52": 2,  # m3 ATR 波动/破位全链路（Soft；ok→须消费+止损段+数值对齐，缺→禁编值）
-    "G53": 2,  # m3 换手率自身分位（Soft；自身分位法 enforcement+反捏造分位数）
-    "G54": 2,  # m3 技术环境正交信号 ADX/BIAS/OBV（Soft；ADX 数值对齐+环境段）
-    "G55": 2,  # m3 golden 结构+边界+VWAP（Soft；六维读数+诊断段+禁打分/仓位+VWAP 对齐）
-    "G56": 2,  # m1 golden 收敛+边界+反捏造（Soft；五块结构+类型词/占比对齐+禁 ST5/ST6 量化越界）
-    "G57": 1,  # m4 growth_tier 消费一致性+反编造（Soft；growth_tier=high/moderate 须 surface；None 豁免+禁编造；info/利好不 HARD 强制）
-    "G58": 1,  # m5 估值分位必写+反编造（Soft；applicable 分位须 surface+对齐；无数据禁编造）
-    "G59": 1,  # m5 §5.3 估值结论 verdict presence（Soft；必含贵贱判定词）
-    "G60": 1,  # m6 定性三行结构化锚点+反捏造（Soft；⑪⑫⑬ 各须 [src:] 锚点或标无源；研发强度对齐）
-    "G61": 1,  # 千股千评结论一等公民完整性（Soft；四段闭环仿G1，根治只拉不用；每ok结论维度强制surface+反编造）
-}
+# GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
 
-# 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61
-ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i != 24] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G46", "G47", "G48", "G49", "G50", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61"]
+# 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -143,7 +110,8 @@ HARD_GATES = ["G6", "G7", "G8", "G9", "G11", "G16", "G21", "G22", "G23", "G25", 
 
 # Tier 2: Soft Gates — 内容质量, 仅 LLM 可评估, 正则只能检查格式
 # 这些 Gate 在 profile_full 中 auto_pass (不阻塞输出), LLM 在 Phase 4 自评 1-5 分
-SOFT_GATES = ["G1", "G10", "G12", "G13", "G14", "G15", "G17", "G18", "G19", "G20", "G27", "G28", "G29", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G46", "G47", "G48", "G49", "G50", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61"]
+# 从 ALL_GATES − HARD_GATES 派生（B1 单一来源；外部消费者 test_freshness_gate 断言存在性继续成立）
+SOFT_GATES = [g for g in ALL_GATES if g not in HARD_GATES]
 
 # ============================================================
 # Gate Profiles（与 m11-gates.md Layer 2 严格对齐）
@@ -165,8 +133,8 @@ PROFILES = {
         "name": "quick",
         "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
         "gates": ["G1", "G30", "G11", "G13"],
-        "auto_pass": ["G6", "G7", "G8", "G9", "G10", "G12",
-                      "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G21", "G22", "G25", "G26", "G27", "G28"],
+        "auto_pass": ["G6", "G7", "G8", "G9", "G12",
+                      "G14", "G15", "G16", "G17", "G19", "G20", "G21", "G22", "G25", "G26", "G27", "G28"],
         "fail_threshold": 2,
     },
 }
@@ -355,13 +323,6 @@ def check_g9(report: str, data: dict) -> bool:
     # 降级：纯文本匹配
     return "利润归因" in report or ("归因" in report and "净利润" in report)
 
-
-def check_g10(report: str, data: dict) -> bool:
-    """G10: 事件扫描完成（已退役，恒 PASS 占位）。事件完整性 surface 已由 G30#1
-    timeline.fatal_events + present_signals 接管（数据驱动读 s5_events.processed.timeline）；
-    内容质量密度（quant/src/detail 计数）属报告作者 LLM 责任（同 G1/G8/G9，不在 gate 层强制）。
-    保留注册以维持 gate 计数分母（mirror check_g46/check_g50）。"""
-    return True
 
 
 def check_g11(report: str, data: dict) -> bool:
@@ -708,16 +669,6 @@ def check_g17(report: str, data: dict) -> bool:
     return has_risk_row and has_haircut
 
 
-def check_g18(report: str, data: dict) -> bool:
-    """G18: 竞品对标（已并入 G15，本 checker 保留为占位以维持 gate 计数）。
-
-    v3 合并：G18 原"≥3 家可比公司"机械计数（公司名形态多变不可靠）已被 G15 核心 6 计数
-    （snapshot.s11_peer.items[].metrics 真实 API 数据）取代。同业对比措辞底线亦由 G15
-    src 溯源分支覆盖。故 G18 不再独立强制——恒 PASS，强制力全部收归 G15（详见 G15 docstring）。
-    删除原因见 financial-data-routing/REFACTOR_LOG.md。GATE_REGISTRY 保留条目维持 self_score 分母。
-    """
-    return True
-
 
 def check_g19(report: str, data: dict) -> bool:
     """G19: 营收预测区间（Layer8给区间或标注'无法量化'）"""
@@ -960,9 +911,11 @@ def check_g27(report: str, data: dict) -> bool:
                         return v
         return None
 
+    # B2 原生 reasons：三查累积（任一失败即 FAIL，全部原因一次性上浮给作者）
+    _reasons = []
     # ① 最新期含加权ROE 或 摊薄ROE
     if not any(_latest(n) not in (None, "", "nan") for n in ("加权净资产收益率", "净资产收益率")):
-        return False
+        _reasons.append("financial_indicators 最新期无 ROE（加权/摊薄均缺）——检查 s1_financial.data.financial_indicators 拉取")
 
     # ② income 最新期行含至少一个预计算同比键且非 None
     inc = _snapshot_get(data, "s1_financial.data.income_statement")
@@ -970,24 +923,28 @@ def check_g27(report: str, data: dict) -> bool:
     if isinstance(inc, dict):
         inc_rows = inc.get("data", inc.get("data_full"))
     if not isinstance(inc_rows, list) or not inc_rows:
-        return False
-    latest = inc_rows[0] or {}
-    if not any(latest.get(k) is not None for k in latest if str(k).endswith("_同比%")):
-        return False
+        _reasons.append("income_statement 无行数据（data/data_full 双兜底均空）")
+    else:
+        latest = inc_rows[0] or {}
+        if not any(latest.get(k) is not None for k in latest if str(k).endswith("_同比%")):
+            _reasons.append("income 最新期无预计算同比键（*_同比% 全 None）——报告同比数将无源可引")
 
     # ③ mainfinadata 指标层（东财 MAINFINADATA）：status==ok 且最新期有偿债能力指标
     mf = _snapshot_get(data, "s1_financial.data.mainfinadata")
     if not isinstance(mf, dict):
-        return False
-    mf_status = mf.get("status")
-    if mf_status == "failed":
-        return False
-    if mf_status == "ok":
-        mf_rows = mf.get("data") or []
-        latest_mf = mf_rows[0] if isinstance(mf_rows, list) and mf_rows else {}
-        if not any(latest_mf.get(k) not in (None, "", "nan") for k in ("ZCFZL", "LD", "SD")):
-            return False
+        _reasons.append("mainfinadata 层缺失（非 dict）")
+    else:
+        mf_status = mf.get("status")
+        if mf_status == "failed":
+            _reasons.append("mainfinadata status=failed（限流/网络）——偿债能力指标无源")
+        elif mf_status == "ok":
+            mf_rows = mf.get("data") or []
+            latest_mf = mf_rows[0] if isinstance(mf_rows, list) and mf_rows else {}
+            if not any(latest_mf.get(k) not in (None, "", "nan") for k in ("ZCFZL", "LD", "SD")):
+                _reasons.append("mainfinadata ok 但最新期无 ZCFZL/LD/SD（资产负债率/流动/速动比率）")
     # never_empty（真无指标，极少）→ 放行
+    if _reasons:
+        return GateResult(passed=False, reasons=_reasons)
     return True
 
 
@@ -1939,18 +1896,13 @@ def check_g45(report: str, data: dict) -> bool:
         if any(kw in ln for kw in ("目标价", "目标位", "合理估值", "合理价")) and \
                 re.search(r'\d+(\.\d+)?\s*元', ln):
             if "[src:" not in ln and not any(kw in ln for kw in _UNC):
-                return False   # 目标价 N元 行无 src/不确定性标注 → FAIL（防 websearch 冒充 API-grade）
+                # B2 原生 reasons：目标价 N元 行无 src/不确定性标注 → FAIL（防 websearch 冒充 API-grade）
+                return GateResult(passed=False, reasons=[
+                    f"目标价语境行缺 [src:] 且无不确定性标注：『{ln.strip()[:60]}』——"
+                    "每条「目标价/合理估值 N元」行须行内带 [src: 源] 或不确定性词"
+                    "（数据不足/仅供参考等），禁 websearch 数值冒充 API-grade"])
     return True
 
-
-def check_g46(report: str, data: dict) -> bool:
-    """G46: 公告登记表 machine_field 消费（已并入大事提醒时间线，本 checker 保留为占位以维持 gate 计数）。
-
-    事件层重建：机器字段（主体/金额/股数/窗口）现由 m4 时间线 LEVEL1_CONTENT 原样 surface，
-    致命事件 surface 由 G30#1 timeline.fatal_events 检查负责。故 G46 不再独立强制——恒 PASS。
-    GATE_REGISTRY 保留条目维持 self_score 分母。
-    """
-    return True
 
 
 def check_g47(report: str, data: dict) -> bool:
@@ -2056,15 +2008,6 @@ def check_g49(report: str, data: dict) -> bool:
     return True
 
 
-def check_g50(report: str, data: dict) -> bool:
-    """G50: 公告登记表 severity 一致性（已并入大事提醒时间线，本 checker 保留为占位以维持 gate 计数）。
-
-    事件层重建：severity 体系退役，时间线用官方 EVENT_TYPE_CODE 分类（无三档 severity 可校验一致性）。
-    致命事件 surface 由 G30#1 timeline.fatal_events 检查负责；数字/编造由 G16/G29 兜底。故 G50 恒 PASS。
-    GATE_REGISTRY 保留条目维持 self_score 分母。
-    """
-    return True
-
 
 def _sgr_numeric_claim(report):
     """报告是否给出了具体 SGR 数值（反捏造用）。
@@ -2087,7 +2030,9 @@ def check_g51(report: str, data: dict) -> bool:
     # ① 未拉到：禁编造（无数据却报 SGR 数值 → FAIL）
     if not isinstance(sgr, dict):
         if _sgr_numeric_claim(report):
-            return False
+            return GateResult(passed=False, reasons=[
+                "computed_metrics.sgr 信封缺失，报告却报 SGR 数值（无中生有）——"
+                "无 sgr 数据时禁编 SGR 值，只能写「不适用/未计算」"])
         return True
     status = sgr.get("status")
     applic = str(sgr.get("applicability") or "")
@@ -2096,24 +2041,34 @@ def check_g51(report: str, data: dict) -> bool:
     # ok + 有值 + 适用 → 须消费 + 三件套结构 + 进度条 + 数值对齐
     if status == "ok" and val is not None and "不适用" not in applic:
         if not has_sgr_line:
-            return False   # 有数据报告没提
+            return GateResult(passed=False, reasons=[
+                f"computed_metrics.sgr 有数据（SGR={val}，status=ok）但报告未提 SGR/可持续增长——"
+                "m2 §2.13 须 surface 该读数"])
         if not any(k in report for k in ("ROE", "派息率", "留存率")):
-            return False   # 三件套缺
+            return GateResult(passed=False, reasons=[
+                "SGR 三件套缺——报告须含 ROE/派息率/留存率（三因子构成须交代）"])
         if "进度" not in report and "█" not in report:
-            return False   # 进度条对比缺
+            return GateResult(passed=False, reasons=[
+                "SGR 进度条对比缺——报告须有「进度」或 █ 进度条（实际增长 vs 可持续增长的差距可视化）"])
         # 反捏造：报告 SGR 值须 == snapshot（scales=(1.0,) 禁万/亿误配）
         if not _check_value_freshness(report, val, ["SGR", "可持续增长"], scales=(1.0,), tol=0.05):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"报告 SGR 值与 snapshot 不对齐（真值 {val}，tol 5%）——"
+                "照抄 computed_metrics.sgr.value，禁万/亿单位误配"])
     # 不适用 → 报告写「不适用」且禁编值
     if "不适用" in applic:
         if "不适用" not in report:
-            return False
+            return GateResult(passed=False, reasons=[
+                f"snapshot 判定 SGR 不适用（{applic}），报告未写「不适用」——须如实标注"])
         if _sgr_numeric_claim(report):
-            return False
+            return GateResult(passed=False, reasons=[
+                "SGR 不适用却报了数值——禁对不适用标的编 SGR 值"])
     # payout 缺失 assumed → 须 ⚠️/「上限」诚实脚注（防误导）
     if sgr.get("payout_source") == "assumed_no_dividend":
         if "⚠" not in report and "上限" not in report:
-            return False
+            return GateResult(passed=False, reasons=[
+                "payout_source=assumed_no_dividend（派息按零假设）——报告须带 ⚠️ 或「上限」"
+                "诚实脚注（此 SGR 是无分红上限口径）"])
     return True
 
 
@@ -2141,7 +2096,9 @@ def check_g52(report: str, data: dict) -> bool:
     sec = _m3_section(report)
     if not isinstance(atr, dict):
         if sec and re.search(r'ATR\s*(?:=|为|约|：)?\s*[\d.]+\s*元?', sec):
-            return False   # 反捏造：无数据却报 ATR 值
+            return GateResult(passed=False, reasons=[
+                "s4_technical.data.atr 信封缺失，m3 却报了 ATR 值（无中生有）——"
+                "无 atr 数据时禁编 ATR 数值"])
         return True
     atr14 = atr.get("atr14")
     if atr14 is None:
@@ -2149,10 +2106,15 @@ def check_g52(report: str, data: dict) -> bool:
     if s4.get("status") == "ok" and sec:
         # 反捏造：报告 ATR 值须 == snapshot atr14
         if not _check_value_freshness(sec, atr14, ["ATR", "真实波幅", "波幅"], scales=(1.0,), tol=0.05):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"报告 ATR 值与 snapshot 不对齐（真值 atr14={atr14}，tol 5%）——"
+                "照抄 s4_technical.data.atr.atr14，注意单位是元"])
         # read：止损参考价/破位段
         if not any(k in sec for k in ("止损", "破位", "支撑")):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"m3 缺止损/破位段——有 ATR 数据（atr14={atr14}，"
+                f"止损参考 stop_ref_price={atr.get('stop_ref_price')}）"
+                "须 surface 止损参考价/破位阈值（止损/破位/支撑 至少一词）"])
     return True
 
 
@@ -2167,7 +2129,27 @@ def check_g53(report: str, data: dict) -> bool:
         return True
     to = _snapshot_get(data, "s4_technical.data.turnover")
     sec = _m3_section(report)
-    if not isinstance(to, dict) or not sec:
+    if not sec:
+        return True
+    # 量价同维反捏造（B-pilot 2026-08-17）：报告"放量/缩量"须有 volume_price 支撑，零支撑=捏造。
+    # 双口径如实转写放行（如"盘中放量/日终缩量"——两词各寻各的支撑）；volume_price 缺失 → skip（三态）。
+    vp = _snapshot_get(data, "s4_technical.data.volume_price")
+    if isinstance(vp, dict):
+        if "放量" in sec:
+            _vr = vp.get("volume_ratio_rt")
+            _vm = vp.get("volume_vs_ma20")
+            if not (vp.get("volume_state") == "放量"
+                    or (isinstance(_vr, (int, float)) and _vr > 1)
+                    or (isinstance(_vm, (int, float)) and _vm > 1)):
+                return False   # "放量"零支撑（量价维捏造）
+        if "缩量" in sec:
+            _vm = vp.get("volume_vs_ma20")
+            if not (vp.get("volume_state") == "缩量"
+                    or (isinstance(_vm, (int, float)) and _vm < 1)
+                    or "缩量" in str(vp.get("consistency") or "")
+                    or "缩量" in str(vp.get("divergence") or "")):
+                return False   # "缩量"零支撑（量价维捏造）
+    if not isinstance(to, dict):
         return True
     pct = to.get("pct_250")
     if pct is None:
@@ -2176,10 +2158,11 @@ def check_g53(report: str, data: dict) -> bool:
     mm = re.search(r'(?:第?\s*)(\d{1,3})\s*(?:分位|百分位)', sec)
     if mm and abs(int(mm.group(1)) - pct) > 5:
         return False   # 分位数捏造
-    # 自身分位法 enforcement：结论词须与分位一致（防绝对值误判）
-    if re.search(r'(高换手|换手偏高|成交活跃|放量)', sec) and pct < 70:
+    # 自身分位法 enforcement：结论词须与分位一致（防绝对值误判）。
+    # 量价维词(放量/缩量)已移出本维执法——归上方 volume_price 同维反捏造（维度错配修复）。
+    if re.search(r'(高换手|换手偏高|成交活跃)', sec) and pct < 70:
         return False
-    if re.search(r'(低换手|换手偏低|缩量|成交清淡)', sec) and pct > 30:
+    if re.search(r'(低换手|换手偏低|成交清淡)', sec) and pct > 30:
         return False
     # 提了换手须有档位表述（不能只给绝对值不判断）
     if "换手" in sec and not re.search(r'分位|偏高|偏低|正常|活跃|清淡', sec):
@@ -2204,16 +2187,22 @@ def check_g54(report: str, data: dict) -> bool:
     present = [k for k in ("adx_state", "bias_state", "obv_trend") if state.get(k) is not None]
     for k in present:
         if not isinstance(state.get(k), str):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"signals.state.{k} 非 None 但也不是字符串（{type(state.get(k)).__name__}）——"
+                "引擎数据形态异常，检查 runner _compute_indicator_trends"])
     # 反捏造：ADX 数值须 == snapshot technical.dmi.ADX
     dmi = _snapshot_get(data, "s4_technical.data.technical.dmi") or {}
     adx = dmi.get("ADX")
     if adx is not None and "adx_state" in present:
         if not _check_value_freshness(sec, adx, ["ADX"], scales=(1.0,), tol=0.05):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"报告 ADX 值与 snapshot 不对齐（真值 {adx}，tol 5%）——"
+                f"照抄 s4_technical.data.technical.dmi.ADX（adx_state={state.get('adx_state')}）"])
     # read：环境判定段（震荡/趋势/环境）
     if present and not re.search(r'(震荡|趋势|环境)', sec):
-        return False
+        return GateResult(passed=False, reasons=[
+            "m3 缺技术环境判定段——有 signals.state 三键"
+            f"（adx_state={state.get('adx_state')}）须给出环境结论（震荡/趋势 一词）"])
     return True
 
 
@@ -2234,19 +2223,29 @@ def check_g55(report: str, data: dict) -> bool:
             (r'MACD|KDJ|均线|TD|RSI', "趋势")]
     hit = sum(1 for pat, _ in dims if re.search(pat, sec))
     if hit < 4:
-        return False
+        miss = "、".join(name for pat, name in dims if not re.search(pat, sec))
+        return GateResult(passed=False, reasons=[
+            f"m3 六维读数仅覆盖 {hit}/5（缺 {miss}）——须至少覆盖 4 维"
+            "（环境/量能/位置/筹码/趋势 各维读数词）"])
     if not re.search(r'(诊断|共振|分歧|阶段)', sec):
-        return False   # 缺综合诊断段
+        return GateResult(passed=False, reasons=[
+            "m3 缺综合一致性诊断段——须含诊断词（诊断/共振/分歧/阶段），"
+            "把六维读数收敛成一个结构性结论（禁打分）"])
     # ④ 边界禁区：仓位/盈亏比/重仓/买卖建议/打分（m3 只读数诊断，决策→m6）
     if re.search(r'(仓位|盈亏比|重仓|建议买入|建议卖出)', sec):
-        return False
+        return GateResult(passed=False, reasons=[
+            "m3 越界：出现 仓位%/盈亏比/重仓/买卖建议——m3 只读数诊断，"
+            "决策类表述归 m6/m7，删除或移段"])
     if re.search(r'得分|评分|综合\s*\d+\s*分', sec):
-        return False
+        return GateResult(passed=False, reasons=[
+            "m3 越界：出现 得分/评分/综合N分——技术面禁量化打分（用诊断词收敛）"])
     # ②③ VWAP 反捏造（s2_quote_kline.data.realtime_quote.vwap 零成本消费）
     vwap = _snapshot_get(data, "s2_quote_kline.data.realtime_quote.vwap")
     if vwap is not None and "VWAP" in sec:
         if not _check_value_freshness(sec, vwap, ["VWAP"], scales=(1.0,), tol=0.01):
-            return False
+            return GateResult(passed=False, reasons=[
+                f"报告 VWAP 值与 snapshot 不对齐（真值 {vwap}，tol 1%）——"
+                "照抄 s2_quote_kline.data.realtime_quote.vwap"])
     return True
 
 
@@ -2274,32 +2273,42 @@ def check_g56(report: str, data: dict) -> bool:
         stem = next((k for k in _TYPE_KW if k in str(primary)), None)
         syns = _TYPE_KW.get(stem, (str(primary),))
         if not any(s in sec for s in syns):
-            return False   # 类型词缺失（可能捏造了别的类型）
+            return GateResult(passed=False, reasons=[
+                f"m1 类型词缺失：classification.primary_type={primary}，"
+                f"标的概况段须含该类型词（{ '/'.join(syns) }）——禁换用别的类型"])
         # dominant_business 占比数值对齐（report"占主营Y%" == snapshot）
         dom = cls.get("dominant_business") or {}
         ratio = dom.get("revenue_ratio")
         if ratio is not None and any(k in sec for k in ("占主营", "主营")):
             if not _check_value_freshness(sec, ratio, ["占主营", "主营"], scales=(1.0, 0.01), tol=0.05):
-                return False   # 占比数捏造
+                return GateResult(passed=False, reasons=[
+                    f"m1 占主营比例与 snapshot 不对齐（真值 revenue_ratio={ratio}，tol 5%）——"
+                    "照抄 classification.dominant_business.revenue_ratio"])
 
     # ③ golden 结构：五块标志词（任一同义即可）
     _MUST = [("类型", "估值框架"), ("主营", "业务", "产品"), ("历史", "上市", "阶段"),
              ("当前", "阶段定位", "所处"), ("同行", "差异化", "vs", "对比")]
-    for grp in _MUST:
+    _MUST_NAMES = ["类型/估值框架", "主营/业务", "历史阶段", "当前阶段定位", "同行差异化"]
+    for grp, name in zip(_MUST, _MUST_NAMES):
         if not any(k in sec for k in grp):
-            return False   # 五块不全
+            return GateResult(passed=False, reasons=[
+                f"m1 五块缺「{name}」——定性叙事须含：类型/身份主营/历史阶段/当前阶段定位/同行差异化"])
 
     # ④ 边界禁区（收敛核心）：禁新接线标记 + ST5/ST6 量化独立段
     if "🆕" in sec:
-        return False
+        return GateResult(passed=False, reasons=[
+            "m1 残留 🆕 新接线标记——收敛后 m1 禁标注新功能，删除该标记"])
     if re.search(r'(减持|增持|回购)\s*(?:计划|悬顶|在途).{0,20}[\d.]+\s*[%亿]', sec):
-        return False   # ST5/ST6 量化越界（→m9 §9.2）
+        return GateResult(passed=False, reasons=[
+            "m1 越界：减持/增持/回购的 %/金额/窗口量化——ST5 归 m9 §9.2，m1 只定性一句话"])
     if re.search(r'(verdict|买卖阵营|买卖力量).{0,15}[\d.]+\s*亿', sec):
-        return False   # ST6 verdict 量化越界
+        return GateResult(passed=False, reasons=[
+            "m1 越界：买卖力量 verdict 带亿级量化——ST6 归 m7 §7.5.2，m1 不重渲染"])
     # 资金/筹码方向须指向 home（≤1 句，不可独立成段重渲染）
     if any(k in sec for k in ("资金", "筹码", "回购", "减持", "增持")) and \
             not re.search(r'(详见|见)\s*m[79]', sec, re.IGNORECASE):
-        return False   # 资金筹码未指向 m9/m7 = 越界重渲染
+        return GateResult(passed=False, reasons=[
+            "m1 资金/筹码表述未指向 home——须 ≤1 句并带「详见 m9/m7」指路（禁独立成段重渲染）"])
     return True
 
 
@@ -2351,11 +2360,16 @@ def check_g58(report: str, data: dict) -> bool:
         if blk.get("applicable") and blk.get("pct_5y") is not None:
             if not _check_value_freshness(sec, blk.get("pct_5y"), ["分位", "百分位"],
                                           scales=(0.01,), tol=0.15):
-                return False   # applicable 但 m5 未 surface 分位（漏报 / 数值不对齐 / 章节缺失）
+                return GateResult(passed=False, reasons=[
+                    f"m5 未 surface {key} 估值分位（applicable，真值 pct_5y={blk.get('pct_5y')}）——"
+                    "估值分析段须写「NN% 分位」且值对齐 snapshot（分位值×0.01 口径，tol 15%），"
+                    "或行带 [src:] 锚"])
     # ② 反编造：无分位数据（vp 整体空）却写具体分位百分比 → 编造
     if not vp:
         if "分位" in sec and re.search(r'[\d.]+\s*%', sec):
-            return False
+            return GateResult(passed=False, reasons=[
+                "valuation_percentile 数据缺失，m5 却写了具体「NN% 分位」（无中生有）——"
+                "无分位数据禁编分位数"])
     return True
 
 
@@ -2371,8 +2385,13 @@ def check_g59(report: str, data: dict) -> bool:
     rest = report[m.end():]
     nxt = re.search(r'^#{1,4}\s', rest, re.MULTILINE)
     sec = rest[:(nxt.start() if nxt else len(rest))]
-    return any(k in sec for k in ("偏贵", "偏贱", "高估", "低估", "估值合理",
-                                   "估值适中", "估值偏低", "估值偏高"))
+    if not any(k in sec for k in ("偏贵", "偏贱", "高估", "低估", "估值合理",
+                                  "估值适中", "估值偏低", "估值偏高")):
+        # B2 原生 reasons：§5.3 估值结论缺判定词（纯 presence，但给作者可执行指引）
+        return GateResult(passed=False, reasons=[
+            "§5.3 估值结论缺判定词——须含 偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高 之一，"
+            "给读者明确贵贱判定"])
+    return True
 
 
 def check_g60(report: str, data: dict) -> bool:
@@ -2490,11 +2509,160 @@ def check_g61(report: str, data: dict) -> bool:
     return True
 
 
+# ============================================================
+# B5 盲区新门（G62-64，全 SOFT weight1：漏报可忍误报不可忍，公理①门禁分级）
+# 立项依据 = 2026-08-16 真实产出 review 的 C 类 LLM 手写层实错：
+# tally 不闭合 / fib 666→662 转录错 / 主力误标大单
+# ============================================================
+
+# 方向词规范化（看多≡偏多、看空≡偏空）
+_DIR_NORM = {"偏多": "多", "看多": "多", "偏空": "空", "看空": "空", "中性": "中性"}
+
+
+def _tally_table_counts(report: str) -> dict:
+    """数全报告 markdown 表格第 2 列为裸方向词的行（**已剥**），返回 {多/中性/空: 计数}。
+
+    只数裸单元格（cell.strip('* ') 精确等于方向词）——「**偏空（强趋势）**」这类带括号
+    修饰的技术表不数（非 tally 表，防误伤）。"""
+    counts = {"多": 0, "中性": 0, "空": 0}
+    for ln in report.splitlines():
+        s = ln.strip()
+        if not (s.startswith("|") and s.endswith("|")):
+            continue
+        cells = [c.strip().strip("*").strip() for c in s.strip("|").split("|")]
+        if len(cells) >= 2 and cells[1] in _DIR_NORM:
+            counts[_DIR_NORM[cells[1]]] += 1
+    return counts
+
+
+def check_g62(report: str, data: dict) -> bool:
+    """G62: m6 tally 跨章一致（§6 证据表方向计数 == 正文自称数）。SOFT(weight1)。
+
+    真实败因（2026-08-16 review）：正文自称「7 偏多 / 5 中性 / 1 偏空」，证据表实际
+    5/6/4——自称数与表格不符 = 结论失真。执法：数全报告表格第 2 列裸方向词行，
+    与正文「N 偏多 / N 中性 / N 偏空」自称模式逐项比对，任一不符 → FAIL。
+    三态：无自称模式或无 tally 表行 → PASS（no-op，不强制写自称句）。
+    """
+    m = re.search(r'(\d+)\s*(?:个)?\s*[偏看]多\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*中性'
+                  r'\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*[偏看]空', report)
+    if not m:
+        return True
+    claimed = {"多": int(m.group(1)), "中性": int(m.group(2)), "空": int(m.group(3))}
+    actual = _tally_table_counts(report)
+    if not any(actual.values()):
+        return True  # 有自称但无 tally 表（可能是纯叙事 tally）→ no-op
+    diffs = [f"{k}: 自称{claimed[k]} vs 表格{actual[k]}" for k in ("多", "中性", "空")
+             if claimed[k] != actual[k]]
+    if diffs:
+        return GateResult(passed=False, reasons=[
+            "m6 tally 跨章不一致——正文自称方向计数与证据表实数不符（" + "；".join(diffs) +
+            "）。自称句须照表格重数（或表格补齐后同步自称）"])
+    return True
+
+
+def _extract_price_candidates(text: str) -> list:
+    """提取疑似价位数字：剥 % 值与已知 fib 比率/百分数值、年份、<3 的小数（比率）。"""
+    t = re.sub(r'\d+(?:\.\d+)?\s*%', '', text)          # 百分数先剥
+    out = []
+    for tok in re.findall(r'\d+(?:,\d{3})*(?:\.\d+)?', t):
+        n = float(tok.replace(",", ""))
+        if n < 3 or 1990 <= n <= 2099:                    # 比率(<3)与年份跳过
+            continue
+        if n in (23.6, 38.2, 50.0, 61.8, 78.6):           # fib 百分数裸写跳过
+            continue
+        out.append(n)
+    return out
+
+
+def check_g63(report: str, data: dict) -> bool:
+    """G63: m3 技术位数值对拍（报告 fib/S&R/成本位数值 == snapshot ±0.5%）。SOFT(weight1)。
+
+    真实败因：fib 高点 666.0 被转录成 662（G40 族只查渲染不查数值）。执法（值锚定延伸，
+    复用数值反捏造多精度范式）：真值集 = fibonacci.levels+swing高低点 / support_resistance.
+    layers[].price / chip.chipAvgCost；m3 段技术位语境数字距最近真值 ∈(0.5%, 5%] =
+    转录错 FAIL，≤0.5% 对齐 PASS，>5% 非该值转写跳过。三态：无 m3 段/真值集空 → PASS。
+    """
+    s4d = _snapshot_get(data, "s4_technical.data") or {}
+    if not isinstance(s4d, dict):
+        return True
+    truths = []
+    fib = s4d.get("fibonacci")
+    if isinstance(fib, dict):
+        truths += [v for v in (fib.get("levels") or {}).values() if isinstance(v, (int, float))]
+        truths += [v for k, v in fib.items() if k in ("swing_high", "swing_low")
+                   and isinstance(v, (int, float))]
+    sr = s4d.get("support_resistance")
+    if isinstance(sr, dict):
+        truths += [ly.get("price") for ly in (sr.get("layers") or [])
+                   if isinstance(ly, dict) and isinstance(ly.get("price"), (int, float))]
+    chip = s4d.get("chip")
+    if isinstance(chip, dict) and isinstance(chip.get("chipAvgCost"), (int, float)):
+        truths.append(chip["chipAvgCost"])
+    truths = [t for t in truths if t]
+    if not truths:
+        return True
+    sec = _m3_section(report)
+    if not sec:
+        return True
+    for ln in sec.splitlines():
+        if not re.search(r'(斐波|fib|Fib|回撤|支撑|压力|成本|套牢|获利盘)', ln):
+            continue
+        for n in _extract_price_candidates(ln):
+            rel = min(abs(n - t) / abs(t) for t in truths)
+            if 0.005 < rel <= 0.05:
+                near = min(truths, key=lambda t: abs(n - t))
+                return GateResult(passed=False, reasons=[
+                    f"m3 技术位转录错：『{ln.strip()[:50]}』中 {n} ≈但≠ 真值 {near}"
+                    "（偏差>0.5%）——照抄 snapshot levels（fibonacci/support_resistance/chipAvgCost），"
+                    "禁手抄改动（666→662 类）"])
+    return True
+
+
+def check_g64(report: str, data: dict) -> bool:
+    """G64: 资金流术语口径（「大单」禁错标主力/全单口径数值）。SOFT(weight1)。
+
+    真实败因：报告把 trend_5/10/20d（主力口径）与 net_flow（全单净额）标成「大单」。
+    执法：含「大单」且不含「主力」的行，其数值若命中 trend_*/net_flow 真值（万/亿双刻度）
+    而不命中 items[] 大单行自身 in/out/net → 口径错标 FAIL。三态：无 fund_flow/无「大单」
+    提及/数值两不命中 → PASS。"""
+    ff = _snapshot_get(data, "s3_fund_flow.data.fund_flow")
+    if not isinstance(ff, dict):
+        return True
+    main_caliber = {ff.get(k) for k in ("trend_5d", "trend_10d", "trend_20d", "net_flow")}
+    main_caliber = {v for v in main_caliber if isinstance(v, (int, float)) and v}
+    if not main_caliber:
+        return True
+    big_row_ok = set()
+    for it in (ff.get("items") or []):
+        if isinstance(it, dict) and it.get("name") == "大单":
+            for v in (it.get("in"), it.get("out"),
+                      (it.get("in") or 0) - (it.get("out") or 0)):
+                if isinstance(v, (int, float)):
+                    big_row_ok.add(abs(v))
+    def _hit(n, vals):
+        # 绝对值双刻度匹配（万/亿；报告「净流出 N」写正数+流出词，负号不在数字里）
+        return any(abs(abs(n) - abs(v)) <= 0.01 * abs(v) or
+                   abs(abs(n) - abs(v) / 1e4) <= 0.01 * (abs(v) / 1e4) for v in vals if v)
+    for ln in report.splitlines():
+        if "大单" not in ln or "主力" in ln:
+            continue
+        nums = [float(x.replace(",", "")) for x in
+                re.findall(r'\d+(?:,\d{3})*(?:\.\d+)?', re.sub(r'\d+(?:\.\d+)?\s*%', '', ln))]
+        nums = [n for n in nums if n >= 0.001]
+        for n in nums:
+            if _hit(n, main_caliber) and not _hit(n, big_row_ok):
+                return GateResult(passed=False, reasons=[
+                    f"资金流口径错标：『{ln.strip()[:50]}』中 {n} 是主力/全单口径真值"
+                    "（trend_5/10/20d 或 net_flow），不是大单口径——大单行真值见 items[] 大单 "
+                    "in/out；主力趋势数值须标「主力」"])
+    return True
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
-    "G9": check_g9, "G10": check_g10, "G11": check_g11, "G12": check_g12,
+    "G9": check_g9, "G11": check_g11, "G12": check_g12,
     "G13": check_g13, "G14": check_g14, "G15": check_g15, "G16": check_g16,
-    "G17": check_g17, "G18": check_g18, "G19": check_g19, "G20": check_g20,
+    "G17": check_g17, "G19": check_g19, "G20": check_g20,
     "G21": check_g21, "G22": check_g22, "G23": check_g23,
     "G25": check_g25, "G26": check_g26, "G27": check_g27, "G28": check_g28,
     "G29": check_g29, "G30": check_g30, "G31": check_g31,
@@ -2503,11 +2671,10 @@ GATE_CHECKERS = {
     "G37": check_g37, "G38": check_g38, "G39": check_g39,
     "G40": check_g40, "G41": check_g41,
     "G42": check_g42, "G43": check_g43, "G44": check_g44,
-    "G45": check_g45, "G46": check_g46,
+    "G45": check_g45,
     "G47": check_g47,
     "G48": check_g48,
     "G49": check_g49,
-    "G50": check_g50,
     "G51": check_g51,
     "G52": check_g52,
     "G53": check_g53,
@@ -2518,8 +2685,276 @@ GATE_CHECKERS = {
     "G58": check_g58,
     "G59": check_g59,
     "G60": check_g60,
-    "G61": check_g61,
+    "G61": check_g61, "G62": check_g62, "G63": check_g63, "G64": check_g64,
 }
+
+# ============================================================
+# GATE_REGISTRY — 元数据单一真相源（B1 2026-08-17，plan ticklish-soaring-beacon 层1）
+#
+# 一行一门，三消费方同源：
+#   - preflight 写作要求（verify_gates --preflight 读 requires/weight，写作前告知 LLM）
+#   - verify 执法（checker 具名函数照旧；bool 门 FAIL 无原生 reasons 时上浮 fail_hint 薄壳兜底）
+#   - 词表审计（data_dim 锚定 snapshot 维度，跨维词表错配即 bug——G53 教训）
+# checker 具名函数保留不动（恒等断言 GATE_CHECKERS["G37"] is check_g37 等外部契约锁定）。
+# ============================================================
+
+GATE_REGISTRY = {
+    "G1":  {"checker": check_g1, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical",
+            "requires": "§3 须消费 s4_technical 量价字段（换手率/涨跌幅/成交额），引 [src: s4_technical]",
+            "fail_hint": "§3 补量价字段消费 + [src: s4_technical] 溯源（四段闭环：拉取/存放/读取/消费）"},
+    "G6":  {"checker": check_g6, "weight": 2, "owner": ["m2"],
+            "data_dim": "s1_financial.data.income_statement",
+            "requires": "§2 季报连续展示 ≥6 个连续季度",
+            "fail_hint": "季报期数 <6 或未逐期展示；检查 s1_financial 三表期数"},
+    "G7":  {"checker": check_g7, "weight": 2, "owner": ["m2"],
+            "data_dim": "s1_financial.data.income_statement",
+            "requires": "净利润/扣非净利润/差额% 三列同表展示",
+            "fail_hint": "扣非对比缺列——补「净利润|扣非|差额%」三列"},
+    "G8":  {"checker": check_g8, "weight": 2, "owner": ["m2"],
+            "data_dim": "s1_financial.data.cash_flow",
+            "requires": "CFO/CFI/CFF 三件套 + FCF + FCF/净利润比",
+            "fail_hint": "现金流三件套不齐——补 CFO/CFI/CFF/FCF/FCF净利润比"},
+    "G9":  {"checker": check_g9, "weight": 2, "owner": ["m2"],
+            "data_dim": "s1_financial.data.income_statement",
+            "requires": "ΔNetProfit 四项分解闭合（营收/毛利率/费用/其他）",
+            "fail_hint": "利润归因不闭合——四项分解之和须≈ΔNetProfit"},
+    "G11": {"checker": check_g11, "weight": 1, "owner": ["m0"],
+            "data_dim": "meta",
+            "requires": "报告开头声明数据截止时间；表格仅在来源不同时标注日期",
+            "fail_hint": "开头补「数据截止 YYYY-MM-DD」声明"},
+    "G12": {"checker": check_g12, "weight": 2, "owner": ["m8"],
+            "data_dim": "meta",
+            "requires": "≥3 条具体局限性披露",
+            "fail_hint": "局限性不足 3 条或过于泛化"},
+    "G13": {"checker": check_g13, "weight": 2, "owner": ["m6"],
+            "data_dim": "meta",
+            "requires": "用户提供持仓时操作建议须考虑持仓语境",
+            "fail_hint": "操作建议与持仓语境脱节"},
+    "G14": {"checker": check_g14, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical.data.td",
+            "requires": "TD 序列由 s4.td 驱动并逐根展示",
+            "fail_hint": "TD setup 未逐根展示或非 s4.td 数据驱动"},
+    "G15": {"checker": check_g15, "weight": 3, "owner": ["m5"],
+            "data_dim": "s11_peer",
+            "requires": "同业对比核心 6 计数≥2 家齐全 + [src: s11_peer]；金融股豁免毛利率/必 PB；missing 反编造",
+            "fail_hint": "同业表核心字段缺或无 [src: s11_peer]；无 peer 数据时须写「无同业数据」禁编造"},
+    "G16": {"checker": check_g16, "weight": 2, "owner": ["m2"],
+            "data_dim": "s12_orders",
+            "requires": "合同负债核对（报告值 vs snapshot 偏差≤15%）",
+            "fail_hint": "合同负债数值与 snapshot 冲突（>15%）或缺核对关键词"},
+    "G17": {"checker": check_g17, "weight": 3, "owner": ["m7"],
+            "data_dim": "computed_metrics.tariff_vulnerability",
+            "requires": "tariff fatal∪partial 时 m7 须有地缘/关税风险行 + 估值折让区间",
+            "fail_hint": "关税/地缘风险行或估值折让区间缺失（tariff 有敞口时）"},
+    "G19": {"checker": check_g19, "weight": 3, "owner": ["m10"],
+            "data_dim": "consensus_forecast",
+            "requires": "营收预测给区间或明确标注「无法量化」",
+            "fail_hint": "营收预测缺区间且未标无法量化"},
+    "G20": {"checker": check_g20, "weight": 2, "owner": ["m10"],
+            "data_dim": "meta",
+            "requires": "Layer0 口径 == Layer8 输出口径",
+            "fail_hint": "估值口径前后不一致（Layer0 vs Layer8）"},
+    "G21": {"checker": check_g21, "weight": 3, "owner": ["m11"],
+            "data_dim": "meta",
+            "requires": "所有 [src: 路径] 须命中 snapshot 真实路径；None 值占位不写 [src:]",
+            "fail_hint": "[src:] 路径在 snapshot 中不存在——核对快照路径后改写或删标"},
+    "G22": {"checker": check_g22, "weight": 3, "owner": ["m2"],
+            "data_dim": "segment_composition",
+            "requires": "segment_composition 已披露维须有 [src: segment_composition] + 分业务表",
+            "fail_hint": "分业务表缺 [src:] 或维度缺失"},
+    "G23": {"checker": check_g23, "weight": 3, "owner": ["m2"],
+            "data_dim": "s1_financial",
+            "requires": "D3-D6 覆盖率 + segment 维度",
+            "fail_hint": "年报数据完整性缺口（D3-D6）"},
+    "G25": {"checker": check_g25, "weight": 2, "owner": ["m4"],
+            "data_dim": "s5_events.data.news",
+            "requires": "新闻分析流程完整（有新闻/无新闻均如实）",
+            "fail_hint": "新闻分析流程块缺失"},
+    "G26": {"checker": check_g26, "weight": 2, "owner": ["m4"],
+            "data_dim": "s3_fund_flow",
+            "requires": "四档资金分布（超大/大/中/小单）数据可用且报告已消费",
+            "fail_hint": "资金流四档分布未消费或编造"},
+    "G27": {"checker": check_g27, "weight": 1, "owner": ["m2"],
+            "data_dim": "s1_financial.data.financial_indicators",
+            "requires": "financial_indicators 最新期有 ROE；income 最新期有预计算同比键；报告数值与之一致",
+            "fail_hint": "财务指标/同比与 snapshot 不一致或缺失"},
+    "G28": {"checker": check_g28, "weight": 1, "owner": ["m2"],
+            "data_dim": "s1_financial.data.dupont",
+            "requires": "杜邦三因子展示且闭合（ROE=净利率×周转×权益乘数，残差<0.25pp）；金融股豁免",
+            "fail_hint": "杜邦三因子不闭合或非 snapshot 驱动"},
+    "G29": {"checker": check_g29, "weight": 2, "owner": ["m2"],
+            "data_dim": "computed_metrics.asset_safety",
+            "requires": "asset_safety 可用时须消费；缺失不许编造",
+            "fail_hint": "资产安全（防雷）块缺失或编造"},
+    "G30": {"checker": check_g30, "weight": 4, "owner": ["m6"],
+            "data_dim": "capstone",
+            "requires": "证据全景全维 + 反方诚实 + 概率闭合（≥3 情景和=100%）+ 情景-动作一致 + 致命事件 surface",
+            "fail_hint": "综合研判结构缺陷（概率/反方/情景-动作/fatal_events 任一不闭合）"},
+    "G31": {"checker": check_g31, "weight": 1, "owner": ["m5"],
+            "data_dim": "valuation_snapshot.data.quote",
+            "requires": "peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计有数据",
+            "fail_hint": "估值基础数据覆盖率不足"},
+    "G32": {"checker": check_g32, "weight": 1, "owner": ["m9"],
+            "data_dim": "lhb.data.processed",
+            "requires": "lhb processed status=ok 时须消费席位信号；never_listed 真空豁免",
+            "fail_hint": "龙虎榜信号 status 异常（failed）或漏消费"},
+    "G33": {"checker": check_g33, "weight": 1, "owner": ["m9"],
+            "data_dim": "northbound.data.processed",
+            "requires": "northbound processed status=ok 时须消费；no_northbound_data 真空豁免",
+            "fail_hint": "北向信号 status 异常（failed）或漏消费"},
+    "G34": {"checker": check_g34, "weight": 1, "owner": ["m2"],
+            "data_dim": "_quality_markers.segment_product",
+            "requires": "segment_product 有效态（ok/真空）时披露分产品构成",
+            "fail_hint": "分产品维 fetch_failed/degraded"},
+    "G35": {"checker": check_g35, "weight": 1, "owner": ["m2"],
+            "data_dim": "_quality_markers.segment_industry",
+            "requires": "segment_industry 有效态时披露分行业构成",
+            "fail_hint": "分行业维 fetch_failed/degraded"},
+    "G36": {"checker": check_g36, "weight": 1, "owner": ["m2"],
+            "data_dim": "_quality_markers.segment_geo",
+            "requires": "segment_geo 有效态时披露分地区构成（海外敞口）",
+            "fail_hint": "分地区维 fetch_failed/degraded"},
+    "G37": {"checker": check_g37, "weight": 1, "owner": ["m0"],
+            "data_dim": "s6_macro",
+            "requires": "PMI/PPI/M2 presence≥2/3；引用值须为最新期",
+            "fail_hint": "宏观指标缺失或引用 stale 值"},
+    "G38": {"checker": check_g38, "weight": 1, "owner": ["m5"],
+            "data_dim": "valuation_snapshot.data.quote.dividend_history",
+            "requires": "有分红历史须引最新值；不分红真空豁免",
+            "fail_hint": "股息率/分红引旧值或编造"},
+    "G39": {"checker": check_g39, "weight": 1, "owner": ["m0"],
+            "data_dim": "classification",
+            "requires": "类型词/估值框架/宏观引用与 classification 单源一致",
+            "fail_hint": "分类与 snapshot.classification 不一致"},
+    "G40": {"checker": check_g40, "weight": 1, "owner": ["m3", "m6", "m7"],
+            "data_dim": "s4_technical.data.signals",
+            "requires": "signals ok→含 state 结论词；fibonacci→渲染；support_resistance→止损禁 xx元 空位；degraded→禁编 DIF",
+            "fail_hint": "技术信号信封漏消费或编造数值"},
+    "G41": {"checker": check_g41, "weight": 1, "owner": ["m6", "m7", "m3"],
+            "data_dim": "s4_technical.data.chip",
+            "requires": "chipAvgCost 非空→含成本位词（均成本/成本位/套牢/筹码/获利盘）；cost_pressure→surface 套牢",
+            "fail_hint": "筹码成本位漏写或无 chip 编造成本"},
+    "G42": {"checker": check_g42, "weight": 1, "owner": ["m4", "m7"],
+            "data_dim": "s_margin",
+            "requires": "s_margin ok→含融资余额/两融词",
+            "fail_hint": "两融杠杆情绪漏写或编造亿数"},
+    "G43": {"checker": check_g43, "weight": 1, "owner": ["m4"],
+            "data_dim": "s5_events.data.disclosure",
+            "requires": "disclosure ok→含披露/财报词",
+            "fail_hint": "披露日历漏写或编造日期"},
+    "G44": {"checker": check_g44, "weight": 1, "owner": ["m9", "m7"],
+            "data_dim": "s_esg",
+            "requires": "s_esg ok→含 ESG/评级词（不含裸「治理」）",
+            "fail_hint": "ESG 评级漏写或编造"},
+    "G45": {"checker": check_g45, "weight": 1, "owner": ["m5"],
+            "data_dim": "valuation_snapshot.data.targetPrice",
+            "requires": "目标价数字须 [src:] 溯源或不确定性标注；websearch 与 API-grade 口径禁混用无 src",
+            "fail_hint": "目标价无溯源或口径混用（websearch vs API）"},
+    "G47": {"checker": check_g47, "weight": 1, "owner": ["m9", "m7"],
+            "data_dim": "s8_a_share.processed.shareholder_dynamics",
+            "requires": "shareholder_dynamics 有方向→surface 内部人/董监高/前十大/增持/减持/净买/净卖/港资/言行合一",
+            "fail_hint": "股东行为综合研判漏 surface 或编造"},
+    "G48": {"checker": check_g48, "weight": 1, "owner": ["m9", "m7", "m1"],
+            "data_dim": "s8_a_share.processed.programs",
+            "requires": "programs 有 planned/ongoing→surface 待执行/进行中/拟减持/拟增持/窗口/计划",
+            "fail_hint": "增减持计划漏 surface 或编造"},
+    "G49": {"checker": check_g49, "weight": 1, "owner": ["m9", "m7", "m6", "m1"],
+            "data_dim": "s8_a_share.processed.buy_sell_pressure",
+            "requires": "buy_sell_pressure verdict 有向→surface 买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓",
+            "fail_hint": "买卖力量 verdict 漏 surface 或编造"},
+    "G51": {"checker": check_g51, "weight": 2, "owner": ["m2"],
+            "data_dim": "computed_metrics.sgr",
+            "requires": "sgr ok+适用→消费+三件套(ROE/派息率/留存率)+进度条+数值对齐；不适用→写明禁编值",
+            "fail_hint": "SGR 块缺失/数值不对齐/不适用却编值"},
+    "G52": {"checker": check_g52, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical.data.atr",
+            "requires": "atr ok→消费+止损/破位段+数值对齐；缺→禁编 ATR 值",
+            "fail_hint": "ATR 波动/破位块缺失或数值不对齐"},
+    "G53": {"checker": check_g53, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical.data.turnover",
+            "requires": "换手率须带自身250天分位；高换手↔pct≥70/低换手↔pct≤30；放量/缩量须有 volume_price 支撑",
+            "fail_hint": "换手分位缺失/捏造/与结论词矛盾；放量缩量零支撑（量价维捏造）"},
+    "G54": {"checker": check_g54, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical.data.signals.state",
+            # preview_dims：preflight 额外渲染的执法真值叶（data_dim 归词表审计，ADX 执法值在 dmi）
+            "preview_dims": ["s4_technical.data.technical.dmi"],
+            "requires": "ADX/BIAS/OBV 三键渐进消费；ADX 值==snapshot；须有环境判定段（震荡/趋势/环境）",
+            "fail_hint": "技术环境段缺失或 ADX 数值不对齐"},
+    "G55": {"checker": check_g55, "weight": 2, "owner": ["m3"],
+            "data_dim": "s4_technical",
+            # preview_dims：VWAP 执法真值在 s2（跨 scene 消费），preflight 一并渲染
+            "preview_dims": ["s2_quote_kline.data.realtime_quote.vwap"],
+            "requires": "六维读数≥4维（环境/量能/位置/筹码/趋势）+综合诊断段（诊断/共振/分歧/阶段）；禁仓位%/盈亏比/打分；VWAP==snapshot",
+            "fail_hint": "六维读数覆盖<4 或缺诊断段或越界（仓位/打分）或 VWAP 不对齐"},
+    "G56": {"checker": check_g56, "weight": 2, "owner": ["m1"],
+            "data_dim": "classification",
+            "requires": "五块结构（类型/主营/历史/当前定位/同行差异）+类型词/占主营Y%==snapshot；资金筹码≤1句指向 m9/m7",
+            "fail_hint": "m1 五块缺失/类型词不符/占比不对齐/ST5-ST6 量化越界"},
+    "G57": {"checker": check_g57, "weight": 1, "owner": ["m4"],
+            "data_dim": "consensus_forecast.data.growth_tier",
+            "requires": "growth_tier=high/moderate→surface 对应成长词；None 豁免且禁编造成长强度",
+            "fail_hint": "成长强度与 growth_tier 不一致或无数据编造"},
+    "G58": {"checker": check_g58, "weight": 1, "owner": ["m5"],
+            "data_dim": "valuation_snapshot.data.valuation_percentile",
+            "requires": "pe_ttm/pb/ev_ebitda applicable=true→surface 分位（pct×0.01 对齐或 src）",
+            "fail_hint": "估值分位漏写/数值不对齐/无数据却写分位%"},
+    "G59": {"checker": check_g59, "weight": 1, "owner": ["m5"],
+            "data_dim": "meta",
+            "requires": "§5.3 必含估值结论判定词（偏贵/偏贱/高估/低估/估值合理等）",
+            "fail_hint": "§5.3 缺估值 verdict 判定词"},
+    "G60": {"checker": check_g60, "weight": 1, "owner": ["m6"],
+            "data_dim": "capstone",
+            "requires": "⑪护城河/⑫治理战略/⑬前瞻催化 各≥1 [src:] 锚点或标「无源」；研发强度X%≈snapshot",
+            "fail_hint": "定性三行裸奔或研发强度不对齐"},
+    "G61": {"checker": check_g61, "weight": 1, "owner": ["m4"],
+            "data_dim": "s_stock_evaluation",
+            "requires": "千股千评 conclusions 每个维度 surface 对应词 + [src:] 锚；failed→FAIL 禁编造",
+            "fail_hint": "千股千评结论漏 surface/缺 src 锚/failed 却编造"},
+    "G62": {"checker": check_g62, "weight": 1, "owner": ["m6"],
+            "data_dim": "capstone",
+            "requires": "写「N偏多/N中性/N偏空」自称句前先数证据表第2列方向词；两处须逐项相等",
+            "fail_hint": "tally 自称数与证据表实数不符"},
+    "G63": {"checker": check_g63, "weight": 1, "owner": ["m3"],
+            "data_dim": "s4_technical.data.fibonacci",
+            "requires": "fib/支撑/压力/成本位数值照抄 snapshot levels（±0.5%），禁手抄改动",
+            "fail_hint": "技术位数值转录错（近但不等于真值）"},
+    "G64": {"checker": check_g64, "weight": 1, "owner": ["m3", "m9"],
+            "data_dim": "s3_fund_flow.data.fund_flow",
+            "requires": "「大单」行数值只准用 items[] 大单行 in/out；主力趋势(trend_5/10/20d)/全单净额(net_flow)须标「主力/净额」",
+            "fail_hint": "主力/全单口径数值错标成「大单」"},
+}
+
+# GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）
+GATE_WEIGHTS = {g: row["weight"] for g, row in GATE_REGISTRY.items()}
+
+# —— 退役门留档（B3 2026-08-17，56→52）——
+# 防编号误复用：复活任一门须先补「successor 已失效」证明再从本表移出。
+# 四门退役时均为恒 PASS 占位（checker 已删，git 历史可考），执法力由 successor 实际承接、零损失。
+RETIRED_GATES = {
+    "G10": {"retired": "2026-08-17", "successor": "G30#1",
+            "reason": "事件扫描完成占位。事件完整性 surface 已由 G30#1 timeline.fatal_events 执法；"
+                      "内容质量密度属报告作者责任（同 G1/G8/G9 文本段）"},
+    "G18": {"retired": "2026-08-17", "successor": "G15",
+            "reason": "竞品对标并入 G15：原「≥3 家可比公司」机械计数不可靠，"
+                      "G15 核心 6 计数 + src 溯源分支已覆盖"},
+    "G46": {"retired": "2026-08-17", "successor": "G30#1",
+            "reason": "公告登记表 machine_field 消费并入大事提醒时间线："
+                      "机器字段由 m4 时间线 LEVEL1_CONTENT surface，致命事件由 G30#1 fatal_events 执法"},
+    "G50": {"retired": "2026-08-17", "successor": "G16/G29",
+            "reason": "公告 severity 三档一致性随事件层重建退役：时间线改用官方 EVENT_TYPE_CODE 分类，"
+                      "无三档 severity 可校验；数字/编造由 G16/G29 兜底"},
+}
+
+# —— 一致性断言（import 时自检；治计数/清单漂移，B1）——
+assert set(GATE_REGISTRY) == set(ALL_GATES) == set(GATE_CHECKERS), \
+    "GATE_REGISTRY/ALL_GATES/GATE_CHECKERS 三方漂移（新增/退役 gate 须三处同步或改注册表）"
+assert set(GATE_DESCS) == set(ALL_GATES), "GATE_DESCS 与 ALL_GATES 漂移"
+assert set(GATE_WEIGHTS) == set(ALL_GATES), "GATE_WEIGHTS 与 ALL_GATES 漂移"
+assert not (set(RETIRED_GATES) & set(ALL_GATES)), "退役门与活跃集重叠（复活须先改 RETIRED_GATES）"
+for _g, _row in GATE_REGISTRY.items():
+    assert GATE_CHECKERS[_g] is _row["checker"], f"{_g}: registry.checker != GATE_CHECKERS[{_g}]"
+    assert isinstance(_row["weight"], int) and _row["weight"] >= 1, f"{_g}: weight 非法"
 
 
 def get_profile(profile_name: str) -> dict:
