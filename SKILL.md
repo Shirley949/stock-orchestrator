@@ -203,6 +203,12 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
    ```
 5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report.verified.json`
    —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
+6. **发布到外部文档（腾讯文档等）前，先剥离 src 标记**（gate 执法用的溯源标记，读者不需要）：
+   ```bash
+   python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/strip_src_for_publish.py \
+     /tmp/analysis_report.md /tmp/analysis_report_publish.md
+   # → 写入腾讯文档用 publish 副本；原报告 md 永不剥离（verify_gates 扫的就是它）
+   ```
 
 ### Gate Profile 对应关系
 | 模式 | Profile | 失败阈值 |

@@ -62,6 +62,8 @@ echo "[① 契约层] test_m5_gates.py（m5 G58分位必写/G59结论verdict/G45
 python3 "$HERE/test_m5_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_m6_gates.py（m6 G60 定性三行结构化锚点+反捏造 三态+限证据全景子节防误伤）"
 python3 "$HERE/test_m6_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_src_hidden_style.py（src 写法契约：gate 对注释包裹等价+G62 tally 禁区+strip_for_publish 发布剥离）"
+python3 "$HERE/test_src_hidden_style.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组保真+KEEP 截断+by_code 投影闭合+三态 离线纯函数）"
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
