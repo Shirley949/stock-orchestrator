@@ -635,9 +635,10 @@ class DataSnapshot:
         return mapping.get(scene, [scene])
 
     def get_summary(self) -> dict:
-        """返回缓存摘要（哪些成功、哪些失败）"""
+        """返回缓存摘要（哪些成功、哪些失败）。cached = 缓存命中（非失败，单独计数）"""
         ok_count = sum(1 for e in self._fetch_log if e.get("status") == "ok")
-        fail_count = sum(1 for e in self._fetch_log if e.get("status") not in ("ok",))
+        cached_count = sum(1 for e in self._fetch_log if e.get("status") in ("cached", "cached_recovered"))
+        fail_count = sum(1 for e in self._fetch_log if e.get("status") not in ("ok", "cached", "cached_recovered"))
         # source 分布（akshare/curl/westock；旧记录无 source 字段归 akshare）
         source_counts = {}
         for e in self._fetch_log:
@@ -648,6 +649,7 @@ class DataSnapshot:
             "date": self._today,
             "total_fetches": len(self._fetch_log),
             "ok": ok_count,
+            "cached": cached_count,
             "failed": fail_count,
             "sources": source_counts,
             "cached_entries": len(self._mem_cache),

@@ -1862,10 +1862,20 @@ def check_g44(report: str, data: dict) -> bool:
     es = _snapshot_get(data, "s_esg") or {}
     es_data = es.get("data", {}) if isinstance(es, dict) else {}
     status = es_data.get("status") if isinstance(es_data, dict) else None
-    has_value = (es_data.get("latest_period") or {}).get("value") is not None if isinstance(es_data, dict) else False
+    _esg_val = (es_data.get("latest_period") or {}).get("value") if isinstance(es_data, dict) else None
+    # value="—"（占位符，源无数据）不算有效值——实败因：中证"暂无数据"的 value="—" 被当有效触发检查。
+    # 但信封漏填（中证占位行抢先成为 latest_period，items[] 里另一源有真评级）≠ 真无数据：
+    # 真值兜底 items[]——任一 item rating 有效即视为有值（单读 latest_period = 检查力回退）
+    _VALID = ("—", "-", "", "无", "暂无数据", None)
+    _items = es_data.get("items") if isinstance(es_data, dict) else None
+    has_value = (_esg_val not in _VALID) or any(
+        isinstance(it, dict) and it.get("rating") not in _VALID
+        for it in (_items or []))
 
     if status == "ok" and has_value:
-        if not re.search(r"(ESG|中证|聚源|可持续发展|AAA|AA|BBB|BB|CCC|CC)", report):
+        # 评级词加词边界（\b 不适中文+字母混排，用 (?<![A-Z]) / (?![A-Z]) 防子串误命中：
+        # 实败因「特斯拉/ABB/西门子」的 BB 子串虚假满足 ESG 消费检查）
+        if not re.search(r"(ESG|中证|聚源|可持续发展|(?<![A-Z])AAA(?![A-Z])|(?<![A-Z])AA(?![A-Z])|(?<![A-Z])BBB(?![A-Z])|(?<![A-Z])BB(?![A-Z])|(?<![A-Z])CCC(?![A-Z])|(?<![A-Z])CC(?![A-Z]))", report):
             return False
     # 反编造：非 ok 却写具体「ESG 评级为 X」
     if status != "ok" and re.search(r"ESG\s*评级\s*(?:为|约|是|[：:])\s*[A-F]", report):
@@ -2596,6 +2606,15 @@ def check_g63(report: str, data: dict) -> bool:
     chip = s4d.get("chip")
     if isinstance(chip, dict) and isinstance(chip.get("chipAvgCost"), (int, float)):
         truths.append(chip["chipAvgCost"])
+    # ATR 派生价也是 snapshot 真值（G52 消费的 stop_ref_price/break_threshold）：
+    # 实败因——报告照抄 ATR 止损价（如 41.18）落在两个 fib 位之间（距最近真值 3-5%），
+    # 被 G63 误判「转录错」。加入对拍集后：照抄 ATR 止损 = 精确命中，不再误报
+    atr = s4d.get("atr")
+    if isinstance(atr, dict):
+        for k in ("stop_ref_price", "break_threshold"):
+            v = atr.get(k)
+            if isinstance(v, (int, float)) and v:
+                truths.append(v)
     truths = [t for t in truths if t]
     if not truths:
         return True
