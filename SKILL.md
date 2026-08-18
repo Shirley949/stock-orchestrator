@@ -196,6 +196,15 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
      --profile full      # 或 quick
    # → 产出 /tmp/analysis_report.verified.json（含 verdict / self_score / failed_gates）
    ```
+3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档）：
+   ```
+   ~/analysis_report/analysis_report-<模型>-<股票名>-<代码>/   ← 每股一目录（用股票名+代码区分）
+       ├── analysis_report-<模型>-<股票名>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
+       ├── analysis_report-<模型>-<股票名>-<代码>.md.verified.json   ← sidecar
+       └── analysis_report-<模型>-<股票名>-<代码>_publish.md   ← 发布副本（已剥 src）
+   ```
+   示例：`~/analysis_report/analysis_report-glm5.1-源杰科技-688498/analysis_report-glm5.1-源杰科技-688498.md`
+   > `<模型>` = 当前会话模型简称（如 glm5.1）；同股重分析（模型/日期不同）各自成目录，不覆盖。
 3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
 4. 在报告 m11 区放指针行（**禁止手填分数**）：
    ```

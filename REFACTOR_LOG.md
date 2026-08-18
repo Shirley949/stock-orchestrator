@@ -1,3 +1,11 @@
+## 2026-08-18 报告归档固定目录 + 命名规范
+
+- **SKILL.md Phase 4 第 3 步（新增）**：Gate 全过后三件套归档到 `~/analysis_report/analysis_report-<模型>-<股票名>-<代码>/`（原始 md 明文 [src:] / sidecar / _publish 剥离副本）。用户指令：目录固定 `/home/ubuntu/analysis_report/`，用股票名+代码区分，例 `analysis_report-glm5.1-源杰科技-688498`。同股重分析各自成目录不覆盖。
+- 首次归档完成：源杰科技三件套（sidecar PASS / self_score 100）。
+
+验证：归档目录 ls 三件套齐全；sidecar JSON 可解析。
+
+
 ## 2026-08-18 发布层剥离器 strip_src_for_publish + src 写法契约 fixture
 
 - **背景**：用户视认证实腾讯文档 smartcanvas 前台**原样显示** `<!-- [src:...] -->` 注释文本（散文+表格皆可见）——推翻此前「前台不渲染」判断（存储转义 ≠ 前台隐藏），隐藏式写法否决。gate 侧本免疫（21 匹配点静态审计 + A/B 全量对拍 55 gate byte-equal），阅读体验诉求改由**发布层剥离**满足。
