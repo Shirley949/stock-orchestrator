@@ -58,9 +58,19 @@ def _make_frozen(iso: str):
 
 
 def _patch_project_datetime(frozen_cls, frozen_date_cls):
-    """patch 已加载本项目模块中的 datetime/date 名（先 import runner 触发懒加载）。"""
+    """patch 已加载本项目模块中的 datetime/date 名（先 import runner 触发懒加载）。
+
+    同时 patch datetime 模块本身的 datetime/date 类：函数内局部 `from datetime import
+    datetime`（如 runner._build_timeline）从 sys.modules['datetime'] 取属性，仅 patch
+    项目模块名覆盖不到——曾致 300394 的 2026-08-19 事件随真实日历翻转 future↔historical
+    （回放时钟泄漏=定时炸弹，golden 生成后次日起必炸，2026-08-20 修）。
+    """
+    import datetime as _dtmod
     import runner  # noqa: F401
-    patches = []
+    patches = [
+        mock.patch.object(_dtmod, "datetime", frozen_cls),
+        mock.patch.object(_dtmod, "date", frozen_date_cls),
+    ]
     for mod in list(sys.modules.values()):
         f = getattr(mod, "__file__", None)
         if not f or not any(str(f).startswith(r) for r in _REPO_ROOTS):
