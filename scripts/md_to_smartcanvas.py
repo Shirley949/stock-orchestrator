@@ -43,6 +43,24 @@ PARA_HL_MAX_LEN = 120
 RED_LINE_KEYS = ("止损", "破位", "致命", "fatal")
 
 
+# SGR 条形图字符语义（m2 §2.13 两行模板）：█=实际增长段 ░=未透支余量段 ▓=透支段。
+# 源报告保持纯文本（单色也语义分明）；颜色增强只在本发布层做。
+BAR_GAP_RUN = re.compile(r"░{2,}")   # 余量段 → 灰
+BAR_OVER_RUN = re.compile(r"▓{2,}")  # 透支段 → 红
+
+
+def colorize_bars(text: str) -> str:
+    """表格行内的 ░/▓ 条段着色（Mark 在 TableCell 内实测可用，同 fix_bold）。"""
+    out = []
+    for line in text.split("\n"):
+        if line.lstrip().startswith("|"):
+            line = BAR_GAP_RUN.sub(r'<Mark color="grey">\g<0></Mark>', line)
+            line = BAR_OVER_RUN.sub(
+                r'<Mark bold color="red">\g<0></Mark>', line)
+        out.append(line)
+    return "\n".join(out)
+
+
 def fix_bold(text: str) -> str:
     """**X** → <Mark bold>X</Mark>（组件路径，免疫全角标点侧翼失效）。
 
@@ -74,8 +92,10 @@ def wrap_callout(lines: list[str], icon: str, block: str, border: str) -> list[s
 def transform(src: str, title: str, icon: str) -> str:
     lines = src.split("\n")
 
-    # 1) 全量 **X** → <Mark bold>X</Mark>（在结构处理前做，后续匹配用 Mark 形态）
+    # 1) 全量 **X** → <Mark bold>X</Mark>（在结构处理前做，后续匹配用 Mark 形态）；
+    #    表格行内条形段着色（░→灰 / ▓→红）
     lines = fix_bold("\n".join(lines)).split("\n")
+    lines = colorize_bars("\n".join(lines)).split("\n")
 
     out = []
     i = 0
