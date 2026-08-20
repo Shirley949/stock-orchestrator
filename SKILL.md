@@ -249,6 +249,19 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.cash_flow.d
 | A | profile_full | 3 |
 | B | profile_quick | 2 |
 
+### Phase 6：Token 审计归档（报告完成后一条命令，LLM 零成本记录）
+
+报告归档后跑一次事后审计（从会话 JSONL 提取 per-request 真实 usage + 内容块 context 压力归因，**分析过程零负担、勿在写作中自记 token**）：
+
+```bash
+python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/token_audit.py \
+  --latest --stock <code>
+# → ~/analysis_report/token_audits/<code>-<日期>.md
+# 含：Phase×类别矩阵 / 模块明细 / 新管线检查项(JIT/m11延迟/视图直读/无手写提取/模块占比) / Top-15 贵内容块
+```
+
+复盘看 5 项检查全 ✅ 与否即可；❌ 会给出具体量化（如「手写提取 N 处 / stdout X chars / 压力 Y%」）。
+
 ---
 
 ## Phase 5：调用契约（详见 `references/exec-protocol.md`）
