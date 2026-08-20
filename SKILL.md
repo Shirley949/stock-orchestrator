@@ -174,12 +174,36 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
 
 ---
 
-## Phase 3：报告生成（仅按模式加载需要的模块）
+## Phase 3：报告生成（JIT 模块加载 + 视图直读）
 
-| 模式 | 加载模块文件 |
-|------|------------|
-| **A** | m12 / m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m10 / m11 |
-| **B** | m3 / m6 / m11 |
+### ⚠️ 模块 JIT 加载（2026-08-20 起，替代「Phase 3 开始全量 Read」）
+
+**写某模块的章节前才 Read 该模块文件**，不提前批量加载。按报告章节顺序（m12→m0→m1→m2→m25→m3→m4→m5→m6→m7→m8→m10）逐个即时加载——后段模块推迟 100+ 轮暴露，省 token 零信息损失（各 m* 内嵌硬约束提示已覆盖写作期避错）。
+
+| 模式 | 报告涉及模块（按此顺序 JIT） | 延迟加载 |
+|------|------------------------------|---------|
+| **A** | m12 / m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m10 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
+| **B** | m3 / m6 | 同上 m11 |
+
+### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
+
+写报告需要 K线/三表/新闻/事件/股东数据时，**用 CLI 直出已裁剪视图**，不要手写 Python 提取脚本、不要整段 Read snapshot JSON：
+
+```bash
+SV=~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py
+python3 $SV /tmp/runner_snapshot_<code>.json kline       # K线：recent30 desc + 52周/YTD/量能 stats
+python3 $SV /tmp/runner_snapshot_<code>.json cash_flow   # 现金流 12 期（FCF/CFO净利比已算好）
+python3 $SV /tmp/runner_snapshot_<code>.json income      # 利润表 12 期（毛利率/同比已算好）
+python3 $SV /tmp/runner_snapshot_<code>.json mainfina    # 主要指标 8 期（单季同比/ROIC/偿债）
+python3 $SV /tmp/runner_snapshot_<code>.json news        # 新闻 high+medium 标题级
+python3 $SV /tmp/runner_snapshot_<code>.json events      # 大事提醒投影
+python3 $SV /tmp/runner_snapshot_<code>.json holder      # 股东户数信号期
+python3 $SV /tmp/runner_snapshot_<code>.json --list      # 可用视图清单
+# 视图缺数据时兜底（任意 raw 路径直读）：
+python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.cash_flow.data.0
+```
+
+**为什么（token 审计实证）**：视图已在 runner 落盘时完成裁剪/反转（desc 最新在前）/换算（%·亿元），kline 视图 4.8K vs raw 146K（-96.7%）；旧路径 LLM 手写提取脚本 stdout 浪费 ~20% token。数值已对拍验证与 raw 分毫不差（12 股普适）。**视图没有的字段才用 `--raw`，禁止绕过 CLI 直接 json.load 写提取脚本。**
 
 ---
 

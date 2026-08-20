@@ -59,11 +59,22 @@ SCENES = {
              "note": "东财 MAINFINADATA 指标 165 字段（wide 族，rows[0]=最新期 desc）；ZCFZL/LD/SD 偿债能力 + ROEJQ/ROIC + 同比/DJD 单季；G27③/m2§2.3"},
             {"path": "data.rd_expense",         "confidence": CONFIRMED,
              "note": "东财 RDEXP 研发全子字段（序列族取最新年报期 12-31）；RESEARCH_EXPENSE/_CAPITALIZATION/_RATIO/_NUM/_NUM_RATIO；m2§2.3.1/§2.11"},
+            {"path": "data.cash_flow.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20）：12 期 desc ×{CFO,CFI,CFF,capex,net_profit,cash_end,dep,amort,wc_*}"
+                     "+现算{FCF,CFO_NP_ratio_pct,FCF_NP_ratio_pct}；源分派映射（THS 中文/EM 英文/Sina 变体）"},
+            {"path": "data.income_statement.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影：12 期 desc ×{revenue,np_parent,np_deducted,三费,rd_exp}"
+                     "+现算{毛利率,净利率,三项 yoy(同期 i+4)}"},
+            {"path": "data.mainfinadata.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影：最新 8 期 ×{DJD_TOI_YOY,DJD_DPNP_YOY,ROIC,ROEJQ,ZCFZL,LD,SD,XSMLL,XSJLL}"},
         ],
         "consumers": {
             "data.income_statement":     ["m2", "m25:67", "G6", "G9", "G27", "computed_metrics"],
             "data.balance_sheet":        ["m2", "m25:12", "G16", "computed_metrics"],
             "data.cash_flow":            ["m2", "G8"],
+            "data.cash_flow.report_view": ["m2"],
+            "data.income_statement.report_view": ["m2"],
+            "data.mainfinadata.report_view": ["m2"],
             "data.financial_abstract":   ["m2", "G7"],
             "data.financial_indicators": ["m2", "G27"],
             "data.segment_composition":  ["m2:§2.2", "m25:13", "m6:Layer1", "m7:7.1", "m0", "m1", "m5:§5.2"],   # 三维 canonical v2.0（product/industry/geo + dimension_status）；m0 分类/m1 叙事/m5 同业本公司行/m6 主营构成行/m7 地缘/关税+集中度/m2 分业务表
@@ -107,6 +118,9 @@ SCENES = {
             {"path": "data.daily_kline.latest_period", "confidence": CONFIRMED,
              "note": "最新 bar 信封（series-family，value=close 标量；plan L2）。"
                      "G30#1 经 _G30_VALUE_FIELDS 读 close 做数值新鲜度（现价 stale 兜底）"},
+            {"path": "data.daily_kline.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20，report_views.py）：recent30 行 desc（chg%/亿元/换算%已算，"
+                     "outstanding_share 保留）+ stats250d（52周/YTD 高低、涨幅、量能）。写作读视图，raw 仅供 s4 计算与 gate"},
             {"path": "data.realtime_quote", "confidence": CONFIRMED},
             {"path": "data.realtime_quote.turnover",       "confidence": CONFIRMED},  # 换手率%（=turnover_pct 归一，腾讯 d[38]，与 daily.turnover×100 统一口径）
             {"path": "data.realtime_quote.turnover_pct",   "confidence": CONFIRMED},  # 换手率% 归一字段（四态 ok 态填；兼容名 turnover）
@@ -118,6 +132,7 @@ SCENES = {
         "consumers": {
             "data.daily_kline":   ["m3-technical", "computed_metrics", "R6_holder_distribution", "G14", "_EXPECTED_SCENES"],
             "data.daily_kline.latest_period": ["G30"],   # #1 数值新鲜度（close stale 兜底）
+            "data.daily_kline.report_view": ["m3", "m12"],   # 视图直出（近20日叙事+区间统计）
             "data.realtime_quote": ["m3-technical", "computed_metrics"],
             # 换手率归一% 扩展到 7 模块 + G1（量价四镜头消费链；原仅 m3 → 603663 漏消费根因）
             "data.realtime_quote.turnover":      ["m3-technical", "m4-sentiment", "m5-valuation", "m6-decision", "m7-risk", "m9-governance", "m25-orders", "G1"],
@@ -346,6 +361,11 @@ SCENES = {
             # ★断链#3：中文键名依赖 news_analyzer 输出
             {"path": "data.news.data_full[].新闻内容", "confidence": ASSUMED,
              "note": "中文键名依赖 news_analyzer 输出；m4:166 引用，G21 [src:] 路径验证依赖此键"},
+            {"path": "data.news.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20）：high+medium 标题级[{日期,来源,标题,分类}]+counts；"
+                     "skipped 自同日起只存计数（skipped_count），行对象去 _python_extracted/_need_full_content/_priority"},
+            {"path": "data.risk_signals.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影：remind 4 字段投影[{date,code,type,content}]（权威交接仍是 processed.timeline）"},
             {"path": "data.risk_signals", "confidence": CONFIRMED},
             # ★断链#4：细粒度子键，runner 不强制 schema
             {"path": "data.risk_signals.unlock.has_forward_pressure", "confidence": UNVERIFIED,
@@ -410,6 +430,8 @@ SCENES = {
         ],
         "consumers": {
             "data.news":                                  ["m4", "G25", "_EXPECTED_SCENES", "m25:14"],
+            "data.news.report_view":                      ["m4"],
+            "data.risk_signals.report_view":              ["m4", "m1"],
             "data.news.data_full[].新闻内容":             ["m4:166"],
             "data.risk_signals":                          ["m1", "m4", "m5", "m6", "m7", "m9"],
             "data.risk_signals.unlock.has_forward_pressure": ["m7:19"],
@@ -472,9 +494,12 @@ SCENES = {
             {"path": "data.shareholder_count.latest_period", "confidence": CONFIRMED,
              "note": "户数最新期信封（series-family，value=holder_count+change_pct 透传；plan L2）。"
                      "G30#1 经 _G30_VALUE_FIELDS 读 value 做数值新鲜度校验（★ 户数 stale-value bug 兜底）"},
+            {"path": "data.shareholder_count.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20）：processed.periods 最近 8 期 desc + summary/signals（raw 240 行不动）"},
         ],
         "consumers": {
             "data.shareholder_count.processed": ["m25:15", "m4:55", "m6:43", "_EXPECTED_SCENES"],
+            "data.shareholder_count.report_view": ["m4:55", "m6:43"],
             "data.shareholder_count.latest_period": ["G30"],   # #1 数值新鲜度（_g30_value_freshness_findings）
         },
         "priority": P1,
