@@ -96,6 +96,51 @@ GATE_DESCS = {
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
+# ============================================================
+# GATE_HINTS — FAIL 自解释修法速查（verify_gates FAIL 时注入 action_required）
+#
+# 内容 = 各 check_g* docstring 提炼（败因→修法），不新造语义；来源与执法代码同文件同修。
+# 未列出的 gate：先看下方 reason（多数 gate 自带具体败因行），再读 stock-analysis-quality
+# references/modules/m11-gates.md 对应节（20K 全量判读约束）；仍不足才看单 gate 的
+# check 函数源码段（勿全文 Read 本文件，178K）。
+# ============================================================
+GATE_HINTS = {
+    "G1": "技术面四段：tq=ok 时 m3 必须消费换手/量比/成交额任一词（量价漏消费=最常见 FAIL）；"
+          "failed→禁编造技术结论。修法：m3 补量价段并带 [src: snapshot.s4_technical]。",
+    "G16": "合同负债核对：报告「合同负债」行数值若与 snapshot 偏离>50% 且无 [src:] → FAIL。"
+           "修法：数值照抄 snapshot（亿元两位小数）+ 行带 [src:]，或写明核对结论；"
+           "⚠️ 行内勿混入其他科目数值（行级数值冲突扫描会双命中）。",
+    "G30": "capstone 六硬检查。高频败因：①情景表条件列写 N%（禁——条件必须可判定）"
+           "②矩阵行列结构缺 ③主情景结论与矩阵矛盾 ④该观望却写可买。"
+           "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）。",
+    "G45": "目标价裸数字无 [src:] → FAIL。修法：目标价行带 [src:]（机构目标价）或加不确定性标注"
+           "（区间/粗略/仅供参考/待核实）；支撑/压力位不触发本 gate。",
+    "G47": "shareholder_dynamics 有材料级方向（净减持/净增持/分歧/具名 top10 变动）时，"
+           "m7/m9.2 必须 surface 对应词（内部人/前十大/增持/减持/港资等）；反编造：无数据禁写具名增减持。",
+    "G48": "processed.programs 有 status∈{planned,ongoing}（待执行/进行中增减持计划）时，"
+           "报告必须出现待执行/拟减持/窗口期等词；无活跃计划时写「已完成/无计划」是有效结论（豁免），"
+           "禁编造「待执行 X%」。",
+    "G51": "SGR 三件套（值+适用性+进度条）须与 computed_metrics.sgr 数值对齐（value 存百分数）；"
+           "applicability=不适用 → 写「不适用」禁编值；payout_source=assumed_no_dividend → 须 ⚠️上限脚注。",
+    "G53": "换手率用自身分位判高低（pct_250≥70=高 / ≤30=低），禁用绝对阈值跨股误判；"
+           "报告分位数须 == snapshot pct_250（tol 5 分位）。高频误伤：否定语境/阈值词——"
+           "写「非高位」也会命中「高位」，注意措辞与切片归属。",
+    "G55": "m3 golden=六维读数（环境/量能/位置/筹码/趋势至少 4 维）+ 一致性诊断段（非打分）。"
+           "边界禁区：仓位%/盈亏比/重仓/打分句 → m6/m7（m3 出现即 FAIL）；VWAP 值照抄 snapshot。",
+    "G58": "valuation_percentile 每项 applicable=true 时 m5 必须 surface 分位（带 [src:] 或对齐值）；"
+           "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。",
+    "G59": "m5 §5.3 估值结论必须含判定词（偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高）。"
+           "高频误伤：判定词落在 §5.3 之外的段（切片边界）——判定词必须写在 5.3 节内。",
+    "G61": "千股千评每个 ok 结论维度报告须 surface 对应词 + [src: snapshot.s_stock_evaluation] 锚；"
+           "failed 禁编结论；missing（金融股/次新）豁免。高频误伤：报告用了结论词但无 src 锚。",
+    "G62": "正文自称「N 偏多 / N 中性 / N 偏空」时，必须与全报告表格第 2 列方向词实数一致。"
+           "修法：自称句照表格重数（所有表第 2 列都数，不止 §6 证据表）。",
+    "G63": "m3 技术位数字必须 == snapshot 真值（fibonacci.levels / S&R layers[].price / "
+           "chipAvgCost / ATR stop_ref_price，±0.5%）。高频败因：手抄改数（666→662）；"
+           "高频误伤：非技术位数字落进技术位语境行——日期/比率/RS60 这类数字勿写在"
+           "含「支撑/压力/回撤/成本」的行内（拆行隔离），VWAP 勿标成本位。",
+}
+
 # GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）

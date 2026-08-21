@@ -67,6 +67,9 @@ SCENES = {
                      "+现算{毛利率,净利率,三项 yoy(同期 i+4)}"},
             {"path": "data.mainfinadata.report_view", "confidence": CONFIRMED,
              "note": "报告视角投影：最新 8 期 ×{DJD_TOI_YOY,DJD_DPNP_YOY,ROIC,ROEJQ,ZCFZL,LD,SD,XSMLL,XSJLL}"},
+            {"path": "data.balance_sheet.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：最新 4 期 ×~32 关键科目矩阵（亿元，含合同负债/有息负债族/商誉；"
+                     "双键兜底 data→data_full；G16 执法读 raw，本视图供 m2 资产结构叙事）"},
         ],
         "consumers": {
             "data.income_statement":     ["m2", "m25:67", "G6", "G9", "G27", "computed_metrics"],
@@ -75,6 +78,7 @@ SCENES = {
             "data.cash_flow.report_view": ["m2"],
             "data.income_statement.report_view": ["m2"],
             "data.mainfinadata.report_view": ["m2"],
+            "data.balance_sheet.report_view": ["m2"],
             "data.financial_abstract":   ["m2", "G7"],
             "data.financial_indicators": ["m2", "G27"],
             "data.segment_composition":  ["m2:§2.2", "m25:13", "m6:Layer1", "m7:7.1", "m0", "m1", "m5:§5.2"],   # 三维 canonical v2.0（product/industry/geo + dimension_status）；m0 分类/m1 叙事/m5 同业本公司行/m6 主营构成行/m7 地缘/关税+集中度/m2 分业务表
@@ -261,6 +265,8 @@ SCENES = {
                      "金融股跳过（EBITDA 不适用）；best-effort 失败→键缺；m5 §5.x/m6 Layer1 企业价值锚消费"},
             {"path": "data.valuation_percentile.ev_ebitda", "confidence": CONFIRMED,
              "note": "lixinger ≤10y 序列本地算 box（同 pe_ttm 结构 + 适用性/history_sufficient）；EV-EBITDA≤0 不适用→键缺"},
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：quote 11 字段 + valuation_percentile{pe_ttm,pb,ev_ebitda} + analystRating + targetPrice + ev_metrics"},
         ],
         "consumers": {
             "data.quote.price":          ["computed_metrics"],
@@ -273,6 +279,7 @@ SCENES = {
             "data.quote.totalMarketCap": ["m5", "computed_metrics"],
             "data.quote.dividend_history":["m5"],               # 原始方案（主）
             "data.quote.dividend_ratio": ["m5:17"],             # 派生股息率（辅）
+            "data.report_view": ["m5"],                          # 估值锚+分位+评级/目标价 投影
             "data.quote.dividend_year":  ["m5"],
             "data.quote.dividend_latest_period": ["G38"],   # 分红有效性（每股股利数值新鲜度，scales 1.0/0.1）
             "data.quote.changeRatio":    ["m5", "m6"],
@@ -326,8 +333,11 @@ SCENES = {
              "note": "dict[year→{eps,net_profit 亿,net_profit_count,revenue 亿,revenue_count,roe}]；EPS 口径常低于 westock=机构分歧信号；加法式不动 annual"},
             {"path": "data.em_annual_latest_period", "confidence": CONFIRMED,
              "note": "东财最近预测年信封（make_latest_envelope period_type=year）；T3 推算锚 eps 候选1 入口"},
+             {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：annual/em_annual + series{eps,revenue,netProfit,ebit} + last_actual + target_price + company_guidance{status,latest_period}"},
         ],
         "consumers": {
+            "data.report_view": ["m4", "m5", "m10"],   # 一致预期投影（m10 §10A 年度预测表读最近预测年）
             "data.eps":       ["m10:10A.3", "m6:81", "m5:35", "computed_metrics:eps_fy_consensus"],
             "data.revenue":   ["m10:10A.3"],
             "data.netProfit": ["m10:10A.3"],
@@ -366,6 +376,9 @@ SCENES = {
                      "skipped 自同日起只存计数（skipped_count），行对象去 _python_extracted/_need_full_content/_priority"},
             {"path": "data.risk_signals.report_view", "confidence": CONFIRMED,
              "note": "报告视角投影：remind 4 字段投影[{date,code,type,content}]（权威交接仍是 processed.timeline）"},
+            {"path": "data.risk_signals.processed.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：timeline 五桶投影（risk/catalyst/future/historical/fatal_events，"
+                     "historical content 截 40 chars）+ by_code 计数 + buy_sell_pressure/shareholder_dynamics {verdict,summary} + programs"},
             {"path": "data.risk_signals", "confidence": CONFIRMED},
             # ★断链#4：细粒度子键，runner 不强制 schema
             {"path": "data.risk_signals.unlock.has_forward_pressure", "confidence": UNVERIFIED,
@@ -436,6 +449,7 @@ SCENES = {
             "data.risk_signals":                          ["m1", "m4", "m5", "m6", "m7", "m9"],
             "data.risk_signals.unlock.has_forward_pressure": ["m7:19"],
             "data.risk_signals.processed":                ["m6", "G30"],
+            "data.risk_signals.processed.report_view":    ["m1", "m4", "m6"],  # timeline 五桶+买卖压力+股东动态 投影（叙事直读）
             "data.risk_signals.processed.timeline":       ["m1", "m4", "m6", "m7", "m9", "capstone_panorama", "G30"],  # 大事提醒时间线：m1拐点锚/m4渲染/m6悲观top/m7风险行/m9 §9.2/capstone fatal+signals/G30#1 fatal surface
             "data.risk_signals.executive_trade":          ["m4", "m9", "capstone_panorama"],   # ST3 内部人执行层（既有 raw 补登 consumer）
             "data.risk_signals.shareholder":              ["m4", "m9", "capstone_panorama"],   # ST3 前十大执行层（今日 orphan 补登）
@@ -571,8 +585,11 @@ SCENES = {
             # items[].metrics(核心6)/target_rank 等全部子字段（_path_matches 前缀匹配）。
             # 核心 6（gate 强制）vs 富字段（不计 gate）的区分见 schema.md 散文 + 下方 note。
             {"path": "data", "confidence": CONFIRMED},
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：items[]{code,name,metrics,dims,scale} + target_metrics + target_rank + industry_median + market_performance"},
         ],
         "consumers": {
+            "data.report_view":      ["m5", "m1"],
             "data.status":           ["G15"],                  # 三态(ok/degraded/missing)判定
             "data.target_metrics":  ["m5", "G15"],             # m5 同业对比(§5.2) + G15 核心6计数
             "data.items[].metrics": ["m5", "G15", "m6"],       # m6 capstone 引用 peer 指标
@@ -696,8 +713,11 @@ SCENES = {
             {"path": "data.D4_top10_holders", "confidence": CONFIRMED},   # 东财 EH_HOLDERS 前十大（off-PDF）
             {"path": "data.D7_custsupp",      "confidence": CONFIRMED},   # 东财 CUSTSUPP 前五客户/供应商（最新年报期，off-PDF）
             {"path": "data.D8_staff",         "confidence": CONFIRMED},   # 东财 STAFF 员工构成（最新年报期，off-PDF）
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：D3 6字段 + D4{name,shares,ratio,state,rank} + D7 top3 客户/供应商 + D8{total_num,avg_salary}"},
         ],
         "consumers": {
+            "data.report_view":      ["m9", "m2", "m1"],
             "data.D3_dividend":      ["m9"],
             "data.D4_top10_holders": ["m9"],
             "data.D7_custsupp":      ["m9"],   # §9.4 客户/供应商集中度
@@ -842,8 +862,11 @@ SCENES = {
             {"path": "data.volume_price",       "confidence": CONFIRMED, "note": "加工前置：双口径量价（realtime vr + daily v/ma20）+ 背离 + turnover MA"},
             {"path": "data.chip_behavior",      "confidence": CONFIRMED, "note": "加工前置：跨场景筹码判定（派发/吸筹/洗盘/中性）"},
             {"path": "data.signals",            "confidence": CONFIRMED, "note": "technical_signals：westock technical_series 历史序列→结构化 events(金叉/死叉/缺口/触轨)+state(macd/kdj/rsi/ma/boll态)+latest_period，三态 ok/degraded/never_traded"},
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "报告视角投影（2026-08-20 终局版）：signals_state + td/weekly_td summary + technical{close,ma,macd,kdj,rsi,boll,dmi} + 支撑压力层 + fib + chip4 + turnover/volume_price/relative_strength/atr 全量"},
         ],
         "consumers": {
+            "data.report_view":        ["m3-technical", "m6-decision"],
             "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
             "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验）
             "data.td":                 ["m3-technical", "m6-decision", "G1", "G14"],  # m3 §3.1 TD、G14 数据驱动 setup≥9
