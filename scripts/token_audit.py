@@ -21,9 +21,14 @@
 新管线检查项（自动判定，基线=瑞丰 300243 旧路径审计 2026-08-20）：
   1. 模块 JIT：m*.md Read 轮次跨度（全量加载=集中 1-3 轮；JIT=跨度大且穿插写作）
   2. m11 延迟：m11-gates.md Read 应在首次 verify_gates 之后（或不出现）
-  3. 视图直读：snapshot_view.py 调用计数；禁手写提取（json.load+runner_snapshot 且
-     非 verify/token_audit 自身）
-  4. 模块文件加权占比 vs 基线 32.3%
+  3. 视图直读：snapshot_view.py 调用计数（含 any 两级探查；any 命中扁平小节=合规）
+  4. 无视图内手写：手写提取（tool_use 去重）按命令内路径字面量 vs VIEW_MOUNT_PREFIXES
+     机械分层——前缀互通=视图内❌违规，视图外=info（建议改 any）；含 .jsonl /
+     token_audit / verify_gates 的命令不计（日志挖掘与自审计排除）
+  5. gate 源码零读入：Read gate_definitions.py（178K）→ ❌（FAIL 修法看 verify hint）
+  6. 视图覆盖率：CLI result chars /（CLI result + 手写 result）chars > 80%（v2 result-only）
+  7. 模块文件加权占比 vs 基线 32.3%
+  8. 无快照写回：以写模式 open 的文件参数命中快照路径（runner.py 除外）→ ❌
 """
 import argparse
 import glob
@@ -38,14 +43,57 @@ from datetime import datetime
 
 MODULE_RE = re.compile(r"modules/(m\d[\w-]*)\.md")
 
-VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder"]
+VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder",
+              "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual"]
 # 视图 → 消费模块（报告归因用；events 双消费取 m4）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
-                  "news": "m4", "events": "m4", "holder": "m4"}
+                  "news": "m4", "events": "m4", "holder": "m4",
+                  "balance": "m2", "timeline": "m4", "technical": "m3",
+                  "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9"}
+
+# 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
+VIEW_MOUNT_PREFIXES = [
+    "s2_quote_kline.data.daily_kline", "s1_financial.data.cash_flow",
+    "s1_financial.data.income_statement", "s1_financial.data.mainfinadata",
+    "s1_financial.data.balance_sheet", "s5_events.data.news",
+    "s5_events.data.risk_signals", "s8_a_share.data.shareholder_count",
+    "s4_technical.data", "valuation_snapshot.data", "consensus_forecast.data",
+    "s11_peer.data", "s36_annual_analysis.data",
+]
+# 扁平小节（≤4K，any --depth 2 一条命令即全量；V9 尺寸采样结论，视图化收益<维护成本）
+FLAT_SECTIONS = ["segment_composition", "financial_indicators", "rd_expense",
+                 "dupont", "financial_abstract", "computed_metrics", "classification"]
 
 WEBSEARCH_PAT = re.compile(r"feedcoopapi|mcp\.exa\.ai|api\.tavily|firecrawl|websearch|WebSearch", re.I)
 HANDWRITE_PAT = re.compile(r"json\.load|json\.loads", re.I)
 SNAPSHOT_FILE_PAT = re.compile(r"runner_snapshot|/tmp/snapshot")
+WRITEBACK_PAT = re.compile(r"""open\(\s*['"]([^'"]+)['"]\s*,\s*['"][wa]['"]""")
+
+# 手写提取路径解析：链式 ['a']['b'] 与 .get('a' 两类字面量（转义引号归一）
+_PATH_CHAIN_RE = re.compile(r"(\[\s*['\"]([\w.\-]+)['\"]\s*\])+")
+_PATH_GET_RE = re.compile(r"\.get\(\s*['\"]([\w.\-]+)['\"]")
+
+
+def _extract_paths(cmd):
+    s = cmd.replace('\\"', '"').replace("\\'", "'")
+    paths = set()
+    for m in _PATH_CHAIN_RE.finditer(s):
+        paths.add(".".join(re.findall(r"['\"]([\w.\-]+)['\"]", m.group(0))))
+    paths.update(_PATH_GET_RE.findall(s))
+    return paths
+
+
+def _tier_in_view(cmd):
+    """手写命令访问路径 vs 视图挂载前缀的机械分层：前缀互通（含相等）= 视图内。
+
+    禁用尾分量匹配：data 是 4 个挂载点的尾分量，尾匹配会把 s35/computed_metrics
+    等 .data 访问误判视图内（688048 重放实测 4 处假阳性）。解析不出保守归视图外。
+    """
+    for p in _extract_paths(cmd):
+        for mnt in VIEW_MOUNT_PREFIXES:
+            if mnt == p or mnt.startswith(p + ".") or p.startswith(mnt + "."):
+                return True
+    return False
 
 
 def classify_block(kind, detail):
@@ -64,16 +112,22 @@ def classify_block(kind, detail):
         if m:
             mid = re.match(r"m\d+", m.group(1)).group()
             return f"模块文件{mid}", mid
+        if "gate_definitions" in fp:
+            return "gate源码读入", None
         if "SKILL" in fp or "/references/" in fp or "skills/" in fp:
             return "Skill加载", None
         return "Read其它", None
     if "snapshot_view.py" in c:
+        if HANDWRITE_PAT.search(c) and SNAPSHOT_FILE_PAT.search(c):
+            return "复合命令(view+提取)", None   # snapshot_view 为主 + 附带 json.load → 复合，不计手写
+        if re.search(r"\bany\b", c):
+            return "视图:any", None
         for v in VIEW_NAMES:
             if re.search(rf"\b{v}\b", c):
                 return f"视图:{v}", VIEW_TO_MODULE[v]
         return "视图:list/raw", None
     if HANDWRITE_PAT.search(c) and SNAPSHOT_FILE_PAT.search(c):
-        return "手写提取stdout", None
+        return "手写提取", None   # 处数/分层/覆盖率以 handwrite_hits 单一计数源为准（v2）
     if "runner.py" in c:
         return "runner拉取", None
     if "verify_gates" in c or "update_checklist" in c:
@@ -170,7 +224,8 @@ def main():
 
     # ---- 第二遍：内容块归因（user 消息里的 tool_result + assistant 自产） ----
     # cost = chars × 存活轮数(T - i)；归一化后即「context 压力占比」
-    blocks = []  # [{turn, phase, cat, module, chars, desc}]
+    blocks = []  # [{turn, phase, cat, module, chars, desc, kind(call/result)}]
+    result_chars_by_id = {}   # tool_use_id -> result chars（handwrite_hits 记录用）
     turn_no = -1
     for l in lines:
         if l.get("type") == "assistant":
@@ -190,7 +245,8 @@ def main():
                 fp = str(inp.get("file_path", "")) if isinstance(inp, dict) else ""
                 desc = (c[:70] or fp[-70:]).replace("\n", " ")
                 blocks.append(dict(turn=turn_no, phase=ph, cat=cat, module=mod,
-                                   chars=len(desc) + 20, desc=f"调用:{name} {desc}"))
+                                   chars=len(desc) + 20, desc=f"调用:{name} {desc}",
+                                   kind="call"))
         elif l.get("type") == "user":
             msg = l.get("message", {})
             content = msg.get("content")
@@ -208,6 +264,7 @@ def main():
                 if isinstance(txt, list):
                     txt = " ".join(x.get("text", "") for x in txt if isinstance(x, dict))
                 chars = len(str(txt or ""))
+                result_chars_by_id[b.get("tool_use_id")] = chars
                 cat, mod = classify_block("tool_result", src)
                 n, i2 = src
                 c = str(i2.get("command", "")) if isinstance(i2, dict) else ""
@@ -215,7 +272,7 @@ def main():
                 desc = (c[:60] or fp[-60:]).replace("\n", " ")
                 tno = max(turn_no, 0)
                 blocks.append(dict(turn=tno, phase=phase_of(tno), cat=cat, module=mod,
-                                   chars=chars, desc=f"{n}: {desc}"))
+                                   chars=chars, desc=f"{n}: {desc}", kind="result"))
 
     for b in blocks:
         b["cost"] = b["chars"] * max(T - b["turn"], 1)
@@ -235,10 +292,12 @@ def main():
         by_cat[b["cat"]][b["phase"]] += b["cost"]
 
     module_reads = defaultdict(list)   # mXX -> [turn]
-    snapshot_calls, handwrite_hits = [], []
+    snapshot_calls, handwrite_hits, writeback_hits, gate_src_reads, any_calls = [], [], [], [], []
+    hw_turn = -1
     for l in lines:
         if l.get("type") != "assistant":
             continue
+        hw_turn += 1
         for b in l.get("message", {}).get("content", []):
             if not (isinstance(b, dict) and b.get("type") == "tool_use"):
                 continue
@@ -247,9 +306,24 @@ def main():
             fp = str(inp.get("file_path", "")) if isinstance(inp, dict) else ""
             if "snapshot_view.py" in c:
                 snapshot_calls.append(c)
+                if re.search(r"\bany\b", c):
+                    any_calls.append(c)
+            if "gate_definitions" in fp and n == "Read":
+                gate_src_reads.append(fp)
+            # 写回检测：以写模式 open 的文件参数本身命中快照路径（目标同一，
+            # 防「读快照+写报告 md」跨文件假阳——688048 轮212-246 曾 7 处误报）；
+            # 合法生产者 runner.py 除外；Path.write_text(json.dumps) 形态为已知限制
+            if "runner.py" not in c and any(
+                    SNAPSHOT_FILE_PAT.search(fn) for fn in WRITEBACK_PAT.findall(c)):
+                writeback_hits.append(c[:90].replace("\n", " "))
+            # 手写提取：tool_use 去重单一计数源（处数/分层/覆盖率全由此出）；
+            # .jsonl = 日志挖掘（snapshot 恒 .json），token_audit/verify_gates = 自审计
             if HANDWRITE_PAT.search(c) and SNAPSHOT_FILE_PAT.search(c) \
+                    and "snapshot_view.py" not in c and ".jsonl" not in c \
                     and "verify_gates" not in c and "token_audit" not in c:
-                handwrite_hits.append(c[:90].replace("\n", " "))
+                handwrite_hits.append({
+                    "turn": hw_turn, "chars": result_chars_by_id.get(b.get("id"), 0),
+                    "in_view": _tier_in_view(c), "cmd": c[:90].replace("\n", " ")})
 
     # 模块 Read 轮次（精确）
     module_reads = defaultdict(list)
@@ -273,19 +347,44 @@ def main():
     mod_file_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("模块文件"))
     mod_file_pct = 100 * mod_file_cost / total_cost
     view_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("视图:"))
-    view_chars = sum(b["chars"] for b in blocks if b["cat"].startswith("视图:"))
-    hw_cost = sum(b["cost"] for b in blocks if b["cat"] == "手写提取stdout")
-    hw_chars = sum(b["chars"] for b in blocks if b["cat"] == "手写提取stdout")
+    # v2：覆盖率口径 result-only（剔 tool_use stub 幽灵 chars），两侧同口径
+    view_chars = sum(b["chars"] for b in blocks
+                     if b["cat"].startswith("视图:") and b.get("kind") == "result")
+    hw_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("手写提取"))
+    hw_chars = sum(h["chars"] for h in handwrite_hits)
+    hw_in_view = [h for h in handwrite_hits if h["in_view"]]
+    hw_out_view = [h for h in handwrite_hits if not h["in_view"]]
+    # 视图覆盖率 = CLI result chars /（CLI result + 手写 result）chars
+    cli_chars = view_chars
+    view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
+    any_flat_hits = sum(1 for c in any_calls if any(s in c for s in FLAT_SECTIONS))
     BASE_MOD_PCT = 32.3   # 瑞丰 300243 旧路径基线（2026-08-20 审计）
 
     # ---- 输出 ----
     stock = args.stock or "?"
-    out_path = args.out or os.path.expanduser(
-        f"~/analysis_report/token_audits/{stock}-{datetime.now():%Y%m%d-%H%M}.md")
+    # 默认落对应股票分析目录（analysis_report-*-{code}/）；无匹配目录再退 token_audits/
+    if args.out:
+        out_path = args.out
+    else:
+        base = os.path.expanduser("~/analysis_report")
+        stock_dir = None
+        if os.path.isdir(base):
+            for d in sorted(os.listdir(base)):
+                if d.startswith("analysis_report-") and d.endswith(f"-{stock}"):
+                    stock_dir = os.path.join(base, d)
+                    break
+        if stock_dir:
+            out_path = os.path.join(
+                stock_dir, f"token_audit-{stock}-{datetime.now():%Y%m%d-%H%M}.md")
+        else:
+            out_path = os.path.join(
+                base, "token_audits", f"{stock}-{datetime.now():%Y%m%d-%H%M}.md")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     L = []
     L.append(f"# Token 审计 — {stock}（{datetime.now():%Y-%m-%d %H:%M}）")
+    L.append(f"- 语义口径：**semantics v2**（deduped · result-only · path-tiered）"
+             "——与 08-20 瑞丰基线及更早 ad-hoc 审计不可比")
     L.append(f"\n- 会话：`{os.path.basename(path)}`（{T} 轮 API 调用，{len(blocks)} 内容块）")
     L.append(f"- 真实口径（per-request usage 累计）："
              f"input **{tot_in:,}**（cache_read {tot_cache:,} / cache_write {tot_cc:,}）"
@@ -312,11 +411,16 @@ def main():
     for m in sorted(module_reads):
         L.append(f"| {m} | {len(module_reads[m])} | {module_reads[m][0]} | — |")
     L.append(f"\n- 模块 Read 轮次跨度：**{jit_span} 轮**（JIT 生效=跨度大且穿插写作；旧全量加载=集中 1-3 轮）")
-    L.append(f"- snapshot_view 调用 **{len(snapshot_calls)} 次**，结果合计 {view_chars:,} chars")
-    if handwrite_hits:
-        L.append(f"- ⚠️ 疑似手写提取 {len(handwrite_hits)} 处：")
-        for h in handwrite_hits[:5]:
-            L.append(f"  - `{h}`")
+    L.append(f"- snapshot_view 调用 **{len(snapshot_calls)} 次**（含 any {len(any_calls)} 次，"
+             f"其中扁平小节命中 {any_flat_hits} 次），结果合计 {view_chars:,} chars")
+    if hw_in_view:
+        L.append(f"- ⚠️ 手写提取（视图内·违规）{len(hw_in_view)} 处：")
+        for h in hw_in_view[:5]:
+            L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
+    if hw_out_view:
+        L.append(f"- ℹ️ 手写提取（视图外·建议 any）{len(hw_out_view)} 处：")
+        for h in hw_out_view[:5]:
+            L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
 
     L.append("\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）\n")
     checks = [
@@ -325,10 +429,19 @@ def main():
          "未提前读" if not m11_turns else f"首读轮 {m11_turns[0]} vs verify 轮 {vg_turn}"),
         ("视图直读", len(snapshot_calls) >= 3,
          f"{len(snapshot_calls)} 次调用 / {view_chars:,} chars（旧 kline 单项 146K）"),
-        ("无手写提取", not handwrite_hits,
-         f"{len(handwrite_hits)} 处 / stdout {hw_chars:,} chars（加权压力 "
-         f"{100*hw_cost/total_cost:.1f}%）——视图覆盖字段禁 json.load 直读" if handwrite_hits
-         else f"0 处（stdout 节省基线 ~20%）"),
+        ("无视图内手写提取", not hw_in_view,
+         f"视图内 {len(hw_in_view)} 处（挂载点覆盖字段禁 json.load 直读）；"
+         f"视图外 {len(hw_out_view)} 处（info，建议改 any）"
+         if (hw_in_view or hw_out_view) else "0 处（stdout 节省基线 ~20%）"),
+        ("无快照写回", not writeback_hits,
+         f"{len(writeback_hits)} 处 json.dump/open(w/a) 写快照（runner.py 除外）"
+         if writeback_hits else "0 处（快照只读）"),
+        ("gate 源码零读入", not gate_src_reads,
+         f"{len(gate_src_reads)} 次 Read gate_definitions（178K）——FAIL 修法看 verify 输出 "
+         f"💡 hint，不足再读 m11-gates.md" if gate_src_reads else "0 次"),
+        ("视图覆盖率>80%", view_cov_pct > 80,
+         f"CLI 直读 {cli_chars:,} / (CLI+手写) {cli_chars + hw_chars:,} chars = "
+         f"{view_cov_pct:.0f}%（any 命中扁平小节计合规）"),
         ("模块文件占比较基线下降", mod_file_pct < BASE_MOD_PCT,
          f"当前 {mod_file_pct:.1f}% vs 基线 {BASE_MOD_PCT}%（健康线 20%）"),
     ]
@@ -348,6 +461,9 @@ def main():
     print(f"   轮次={T} | input={tot_in:,}(+cache {tot_cache:,}/{tot_cc:,}) "
           f"output={tot_out:,} | 检查项: "
           + " ".join(f"{'✅' if ok else '❌'}{n}" for n, ok, _ in checks))
+    print(f"   [v2] 手写提取 {len(handwrite_hits)} 处（视图内 {len(hw_in_view)} / "
+          f"视图外 {len(hw_out_view)}）| 写回 {len(writeback_hits)} | "
+          f"覆盖率 {view_cov_pct:.1f}%（CLI {cli_chars:,} / 手写 {hw_chars:,} result chars）")
 
 
 if __name__ == "__main__":

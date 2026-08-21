@@ -37,6 +37,8 @@ CHECKID_TO_SNAPSHOT_PATH = {
     "c_d3_growth": "s36_annual_analysis.data",
     "c_d4_dividend": "s36_annual_analysis.data",
     "c_d5_governance": "s36_annual_analysis.data",
+    # 叶子路径（.completed int）——dict 级会因 s10_checklist 无 status 键恒 FAIL
+    "c50": "s10_checklist.completed",
 }
 
 

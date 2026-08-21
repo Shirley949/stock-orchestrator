@@ -83,6 +83,21 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
         print(f"   缺失: {missing}", file=sys.stderr)
         # 不阻塞，但发出警告
 
+    # 执行后验证三项（routing SKILL 手查①② + _warnings 的脚本化，全打 stderr 惯例）
+    # ① 财务摘要完整性（读三表双键兜底硬规则）
+    inc = snapshot.get("s1_financial", {}).get("data", {}).get("income_statement", {})
+    rows = inc.get("data") or inc.get("data_full") or []
+    print(f"   财务摘要: income {len(rows)} 期" + (" ⚠️ <8期" if len(rows) < 8 else ""),
+          file=sys.stderr)
+    # ② 主营构成三态（dimension_status 自解释：真空/降级/ok 语义同黄金范式）
+    seg = snapshot.get("s1_financial", {}).get("data", {}).get("segment_composition", {})
+    ds = seg.get("dimension_status") or {}
+    print(f"   主营构成: {seg.get('status', '—')} 维度={list(ds.keys()) or '—'}",
+          file=sys.stderr)
+    # ③ 拉取警告（前 5 条，手验的另一半）
+    for w in snapshot.get("_warnings", [])[:5]:
+        print(f"   ⚠️ {w[:110]}", file=sys.stderr)
+
     print(f"✅ 数据预检通过 ({completed}/{total} 项完成)", file=sys.stderr)
     return True
 

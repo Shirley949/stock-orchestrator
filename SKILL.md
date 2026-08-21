@@ -145,24 +145,18 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
 
 **验证：** 5 股票实测，`> file` 重定向输出 460K-621K chars 完整 JSON；`| head -2000` 仅捕获 67K chars 并触发 BrokenPipeError。
 
-### 模式 A 调用顺序（带并行标注）
+### 模式 A 调用顺序
 
+runner 一条命令全量并发（scene 编排 = `fetch_for_mode` 阶段A `_TASKS` + 阶段B 串行 s4 技术；
+年报维度 s36 全 off-PDF：东财 datacenter + westock 分红，cninfo PDF 管道已退役）。
+
+**拉完后第一步（强制 stop-gate）**：
+
+```bash
+python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/precheck.py /tmp/runner_snapshot_<code>.json
 ```
-串行：s1-financial（财报必须先拿到）
-    ↓
-强制：s1 内部已自动执行以下步骤（runner 已实现）：
-  ├─ 步骤3: fetch_cninfo_reports() → cninfo 年报/季报 PDF 下载+解析
-  ├─ 步骤3.5: fetch_research_reports() → 东财机构研报 PDF 下载+解析
-  └─ 步骤3.6: fetch_annual_report_analysis() → 年报维度数据提取（D3 分红 / D4 股东 / D7 客户供应商 / D8 员工）
-    ↓
-并行 4 路 explore subagent：
-  ├─ Agent 1: s2 行情 + s3 资金流
-  ├─ Agent 2: s5 事件扫描（东财大事提醒→processed.timeline）
-  ├─ Agent 3: s7/s8 周期/A 股专属（按分类）
-  └─ Agent 4: s9 新闻 + s11 可比公司
-    ↓
-串行：s12 订单（依赖 s1 的合同负债）
-```
+
+exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warnings / 财务摘要期数 / 主营构成三态 / 收单 N/12），**禁手写 json.load 验收**。
 
 ### 模式 B 调用顺序
 
@@ -187,7 +181,7 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
 
 ### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
 
-写报告需要 K线/三表/新闻/事件/股东数据时，**用 CLI 直出已裁剪视图**，不要手写 Python 提取脚本、不要整段 Read snapshot JSON：
+写报告需要**任何** snapshot 数据（K线/三表/新闻/事件/股东/估值/资金/ESG/治理/研报…）时，**用 CLI 直出已裁剪视图**，不要手写 Python 提取脚本、不要整段 Read snapshot JSON：
 
 ```bash
 SV=~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py
@@ -195,15 +189,33 @@ python3 $SV /tmp/runner_snapshot_<code>.json kline       # K线：recent30 desc 
 python3 $SV /tmp/runner_snapshot_<code>.json cash_flow   # 现金流 12 期（FCF/CFO净利比已算好）
 python3 $SV /tmp/runner_snapshot_<code>.json income      # 利润表 12 期（毛利率/同比已算好）
 python3 $SV /tmp/runner_snapshot_<code>.json mainfina    # 主要指标 8 期（单季同比/ROIC/偿债）
+python3 $SV /tmp/runner_snapshot_<code>.json balance     # 资产负债表：最新4期×~32关键科目（含合同负债，G16 面）
+python3 $SV /tmp/runner_snapshot_<code>.json timeline    # 事件五桶 risk/catalyst/future/fatal + 买卖压力/股东动态 verdict
+python3 $SV /tmp/runner_snapshot_<code>.json technical   # 技术面：信号态+TD+fib/S&R/筹码+ATR（G63 真值面）
+python3 $SV /tmp/runner_snapshot_<code>.json valuation   # 估值：quote+分位(pe/pb/ev_ebitda)+评级/目标价+EV
+python3 $SV /tmp/runner_snapshot_<code>.json consensus   # 一致预期：westock+东财双年度表+时序+实际值
+python3 $SV /tmp/runner_snapshot_<code>.json peer        # 同业：核心6指标表+rank+行业中位+相对大盘
+python3 $SV /tmp/runner_snapshot_<code>.json annual      # 年报维度：D3分红/D4前十大/D7客户供应商/D8员工
 python3 $SV /tmp/runner_snapshot_<code>.json news        # 新闻 high+medium 标题级
 python3 $SV /tmp/runner_snapshot_<code>.json events      # 大事提醒投影
 python3 $SV /tmp/runner_snapshot_<code>.json holder      # 股东户数信号期
-python3 $SV /tmp/runner_snapshot_<code>.json --list      # 可用视图清单
-# 视图缺数据时兜底（任意 raw 路径直读）：
-python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.cash_flow.data.0
+python3 $SV /tmp/runner_snapshot_<code>.json --list      # 14 视图状态 + 顶层 scene 键（= any 的目标空间）
+# any 探查（视图外数据的第一入口）：
+python3 $SV /tmp/runner_snapshot_<code>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）
+python3 $SV /tmp/runner_snapshot_<code>.json any s35_research_reports.data --depth 1                 # ② 逐层下钻（猜深路径必报「路径不存在」，必须逐层）
+python3 $SV /tmp/runner_snapshot_<code>.json any s1_financial.data.segment_composition --depth 2     # ③ 扁平小节 depth 2（主营构成/指标/computed_metrics 同款）
+python3 $SV /tmp/runner_snapshot_<code>.json annual --raw s36_annual_analysis.data.D4_top10_holders.0  # ④ 单行全文深读（独立 `--raw <path>` 亦可）
 ```
 
-**为什么（token 审计实证）**：视图已在 runner 落盘时完成裁剪/反转（desc 最新在前）/换算（%·亿元），kline 视图 4.8K vs raw 146K（-96.7%）；旧路径 LLM 手写提取脚本 stdout 浪费 ~20% token。数值已对拍验证与 raw 分毫不差（12 股普适）。**视图没有的字段才用 `--raw`，禁止绕过 CLI 直接 json.load 写提取脚本。**
+**取数硬规则（五条）**：
+
+1. 14 视图优先——覆盖面见上表，先查再探查。
+2. 视图没有的，**第一步必是 `any <scene> --depth 1`**（--list 的 scenes 行即目标空间），再逐层下钻或 `.N` 取单条——**禁猜深路径、禁 json.load 探查结构**。
+3. **长列表纪律**：父层只看 `list x N` 计数（计数即答案，N=0 是真空结论）；要单条用 `.N` 下钻（`remind_records.0 --depth 1` = 920c；直接展开 95 条 = 77K token 炸弹——引擎 cap 只保底 10 条，cap 是底线不是配额）。
+4. 关键词定位：any/视图拿行索引 → `--raw` 单行深读；grep 只取计数不取全文。
+5. 跨 scene 计算先查 `computed_metrics`（fetch 期已算好）；确无才允许一次性 `python3 -c` 只打 ≤40 行摘要、**每会话 ≤2 次**（唯一豁免——写明比省略诚实）。
+
+**为什么（token 审计实证）**：视图已在 runner 落盘时完成裁剪/反转（desc 最新在前）/换算（%·亿元），kline 视图 4.8K vs raw 146K（-96.7%）。688048 会话审计：手写 json.load 35 处 / 32,278 chars result / CLI 覆盖率仅 57%，其中 29 处 any 实测可达且 **any 输出全部 ≤ 手写**（top10 1,887 vs 3,790c、backtest 327 vs 2,380c）——手写不是省 token 的理性选择，是缺规范的训练默认。数值已对拍验证与 raw 分毫不差（41 股普适）。**视图没有的字段才用 `any`/`--raw`，禁止绕过 CLI 直接 json.load 写提取脚本。**
 
 ---
 
@@ -230,12 +242,18 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.cash_flow.d
    示例：`~/analysis_report/analysis_report-glm5.1-源杰科技-688498/analysis_report-glm5.1-源杰科技-688498.md`
    > `<模型>` = 当前会话模型简称（如 glm5.1）；同股重分析（模型/日期不同）各自成目录，不覆盖。
 3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
-4. 在报告 m11 区放指针行（**禁止手填分数**）：
+   **FAIL 修法直接看 verify 输出**：action_required 自带 `💡 Gxx 修法` hint（GATE_HINTS，高频 gate
+   败因+修法速查）。hint 不足再 Read `stock-analysis-quality/references/modules/m11-gates.md` 对应节；
+   **禁止 Read `gate_definitions.py`**（178K 源码，历史上单次全读 ≈ 全部模块文件之和）。
+4. 在报告 m11 区放指针行（**禁止手填分数**）：verify 全过时 stdout 末尾直接打印可复制的 📌 指针行——
+   从 verify 输出原样复制（勿为格式提前读 m11-gates.md），**粘贴后重跑一次 verify 刷新 sidecar**（mtime 新鲜度）：
    ```
    [verified: self_score=<sidecar中的值> profile=full | see analysis_report.verified.json]
    ```
 5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report.verified.json`
    —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
+   c50 同款在场证明：`update_checklist.py --check c50 --file <清单> --evidence-from /tmp/runner_snapshot_<code>.json`
+   （映射叶子 `s10_checklist.completed`，snapshot 在场即过——凭空打勾会 exit 1）。
 6. **发布到外部文档（腾讯文档等）前，先剥离 src 标记**（gate 执法用的溯源标记，读者不需要）：
    ```bash
    python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/strip_src_for_publish.py \

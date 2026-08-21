@@ -1,3 +1,19 @@
+## 2026-08-22 token 审计 v2 + 取数行为修复批（plan fuzzy-swinging-marble T2/T3/T4）
+
+触发：688048 会话 token 审计——手写 `json.load(snapshot)` 35 处（v2 口径 33 / 31,804c）vs CLI 覆盖率 57%（目标 ≤5 / >80%）。全量归因：T2 行为缺口 29 处（79% chars，any 实测全部可达且**输出 ≤ 手写**：top10 1,887 vs 3,790c——手写非省 token 理性选择，是缺规范的训练默认）/ T3 流程缺口 1 处（precheck.py 孤儿，SKILL 零引用）/ T4 度量四重假信号（双计 70=35×2、排除不对称、自匹配两路径、分层内联表与死常量漂移）。
+
+- **`token_audit.py` v2（D1-D5）**：单一计数源 handwrite_hits（tool_use-only 天然去重，扩成 turn/chars/in_view/全命令记录）；覆盖率 result-only（`kind=="result"` 块）；分层=命令提取路径 vs 复活常量 `VIEW_MOUNT_PREFIXES` 全链前缀匹配（**禁尾分量**——`data` 是 4 挂载点尾分量，尾匹配 4 处假阳）；排除 `.jsonl` 自匹配（轮364/367 恰中、33 处零误伤）；写回=写模式 open 的**文件参数本身**命中快照路径（D4，防跨文件假阳——旧 3 条件 AND 把「读快照+写报告md」误判 7 处）；头部 `semantics: v2` 版本戳。
+- **`test_token_audit.py`（D6）**：合成 9 命令微型会话 → 断言处数/视图内外/写回/覆盖率全语义（含跨文件假阳反例）。表计是验收线的尺，尺的语义此后由回归脚本判定，**永久消除 LLM 手跑模拟重验**（用户成本原则：算 token 的成本必须低、脚本顺手完成、绝不 LLM 手算）。
+- **`snapshot_view.py`**：F1 独立 `--raw <path>` 修复（原 SKILL:201 教的全文兜底形式是静默 no-op——main() 只在命名视图分支处理 --raw）；B2 `--list` 增 scenes 行（顶层 scene 键=any 目标空间，可发现性断裂修复）；B2b any list 展开上限 10 条+`…(+N more; 用 .N 单条下钻)`（实测 remind_records 直接展开 95 条=77,349c token 炸弹→8,815c，引擎 cap 是底线，散文纪律仍须遵守）。
+- **`verify_gates.py`**：verdict==PASS 且非 quiet 时 stdout 末尾打印可复制 📌 指针行（`args.profile` 非 `profile_name`，与 check_pointer 双匹配）——消除「为格式提前读 m11-gates.md」预读；已实跑对拍 check_pointer PASS。
+- **`precheck.py` +15 行**：执行后验证脚本化（income 期数双键兜底/主营构成三态/`_warnings` 前5条，全 stderr）——T3「Skill 要求验收却没给工具」的工具层。
+- **`update_checklist.py`**：`c50 → s10_checklist.completed` **叶子**映射（dict 级会因无 status 键恒 FAIL——两极验证：叶子 True/假键 False/dict 级 False）；在场证明语义（同 c13/c14），不造 completed==12 阈值（零覆盖股合法 <12，==12 误伤真空股）。
+- **SKILL.md 散文批**：① 数据读取节 any 示例 3→4 条（顶层 scene 第一步/逐层下钻/扁平 depth2/单行 --raw，四命令全实跑验证）+ **取数硬规则五条**（视图优先/any 第一步禁猜深路径禁 json.load 探查/长列表 `.N` 纪律/关键词定位/computed_metrics 先查+`python3 -c` ≤40行·每会话≤2次唯一豁免）+ 688048 实证与经济性对拍入「为什么」；② Phase 2 runner 后第一步 precheck **stop-gate**（exit 1 停机——复活死掉的 gate，本会话实测零人跑过它）；③ Phase 4 指针行从 verify 输出复制+粘贴后重跑刷新 sidecar（mtime 新鲜度）+ c50 `--evidence-from` 示例（仿 c70 先例）。
+- **routing SKILL.md**：执行后验证三项改写——①②已内置 precheck（跑它，禁手写 json.load 验收）、③[src:] 属写作期。
+- **run_regression.sh** +2 行：test_report_views_kline / test_token_audit（脚本显式列举非 glob，不加则防线永不跑）。
+
+验证：全量回归 exit 0（含 D6/A1T 新行、parity 三票 byte-parity 完好）；DoD 冻结语料重放 33/23/10/写回0/59.2% 逐一命中；precheck/verify 指针行/c50 CLI 端到端实跑绿。明确不做：禁 json.load 钩子拦截、禁查询 DSL、不新增 named 视图（六候选 any 输出合格，扩视图违 FLAT_SECTIONS 哲学；复评触发器=下个干净会话覆盖率仍<80% 且残余由 fund_flow/lhb/s35 主导）、D7 SessionEnd hook 默认不加（待用户点头）。
+
 ## 2026-08-18 报告归档固定目录 + 命名规范
 
 - **SKILL.md Phase 4 第 3 步（新增）**：Gate 全过后三件套归档到 `~/analysis_report/analysis_report-<模型>-<股票名>-<代码>/`（原始 md 明文 [src:] / sidecar / _publish 剥离副本）。用户指令：目录固定 `/home/ubuntu/analysis_report/`，用股票名+代码区分，例 `analysis_report-glm5.1-源杰科技-688498`。同股重分析各自成目录不覆盖。
@@ -81,3 +97,11 @@
 - **5 项新管线检查项固化进脚本**：模块 JIT（Read 轮次跨度）/ m11 延迟 / 视图直读计数 / 无手写提取（json.load+snapshot 正则，stdout chars+加权压力量化）/ 模块文件占比 vs 基线 32.3%（瑞丰 300243 旧路径）。
 - **首测 002859 半程**：JIT ✅（跨度 87 轮）/ m11 ✅ / 视图 ✅（5 次 22.8K chars）/ 模块占比 ✅（27.3%<32.3%）；❌ 手写提取 36 处 / stdout 48.7K chars / 压力 13.1%——审计抓到真执行偏差（视图覆盖字段仍被 json.load 直读），旧 ~20% 浪费主要残留在手。
 - **SKILL.md 新增 Phase 6**：报告归档后 `token_audit.py --latest --stock <code>` 一条命令，产出 `~/analysis_report/token_audits/<code>-<日期>.md`。
+
+## 2026-08-20 gate FAIL 自解释 + any 两级探查 + token_audit v2（plan buzzing-wandering-lemur）
+
+- **`lib/gate_definitions.py` +GATE_HINTS 字典**（14 高频 gate：G1/G16/G30/G45/G47/G48/G51/G53/G55/G58/G59/G61/G62/G63）：各 check_g* docstring 提炼（败因+修法+误伤防），不新造语义；`verify_gates._build_action_required` FAIL 时注入 `💡 Gxx 修法`。动因：002859 审计抓到 gate_definitions 全文 178K 被读入一次（G63 FAIL 排障）≈ 全部模块文件之和。冒烟：G63 反例 FAIL→hint→照抄真值→PASS 闭环。
+- **`SKILL.md` Phase 4 规范**：FAIL 修法看 verify hint → 不足读 m11-gates.md（20.3K）→ **禁 Read gate_definitions.py**；Phase 3 命令清单扩 14 视图 + any 扁平小节示例；Phase 2 模式A 调用顺序图精简（原图含已退役 cninfo PDF 步骤与过时 4-subagent 编排，实测 runner fetch_for_mode 单命令全量并发）。
+- **`snapshot_view.py` +7 printer + any 两级探查**：`any <scene或路径> [--depth N]` 键树渲染（默认1，扁平小节建议2）；视图未挂载时报错自带 any 兜底路径。
+- **`token_audit.py` v2**：手写分级（路径∈14 视图挂载点=❌违规 / 视图外=info 建议 any）；复合命令（snapshot_view+json.load 并存）归「复合」不再误计手写；新检查项 gate 源码零读入（Read gate_definitions→❌）+ 视图覆盖率>80%；审计回放 002859 原会话验证分类变准（视图内 48/视图外 18/gate 读 1——历史事实，分类变准≠消失）。
+- **回归**：run_regression.sh exit 0（契约层 13+7+16 tests + parity 3票 + 运行时层 55门×3票 漏报=0）。

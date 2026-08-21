@@ -40,6 +40,8 @@ echo "[① 契约层] test_dongcai_client.py（东财 client 三态+缓存命中
 python3 "$ROUTING/test_dongcai_client.py" 2>&1 | tail -3
 echo "[① 契约层] test_sina_client.py（S8 sina_client：行情 GBK 快照解析+杜邦 SSR HTML 切期/闭合校验 冻结响应 golden）"
 python3 "$ROUTING/test_sina_client.py" 2>&1 | tail -1
+echo "[① 契约层] test_report_views_kline.py（kline 视图内存态类型回归+except 加法式保 raw）"
+python3 "$ROUTING/test_report_views_kline.py" 2>&1 | tail -3
 echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"
 python3 "$ROUTING/test_lixinger_client.py" 2>&1 | tail -1
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
@@ -54,6 +56,8 @@ echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 p
 python3 "$HERE/test_freshness_gate.py" 2>&1 | tail -3
 echo "[① 契约层] test_checklist_consistency.py（checklist 分母一致：generate N == c-tag 数；100% 可达；mapping c_map_N 可打勾）"
 python3 "$HERE/test_checklist_consistency.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_token_audit.py（表计 v2 语义自检：去重/result-only/挂载前缀分层/写回目标同一/排除正交）"
+python3 "$HERE/test_token_audit.py" 2>&1 | tail -3
 echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-run FAIL+fallback emit 四态+capstone 富字段+m6/m1 锚点）"
 python3 "$HERE/test_peer_pipeline.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_g48_shareholder_programs.py（G48 待执行-FIRST 增减持计划 SOFT gate 三态+反编造）"

@@ -34,7 +34,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from gate_definitions import (
-    ALL_GATES, GATE_CHECKERS, GATE_DESCS, GATE_WEIGHTS, GATE_REGISTRY,
+    ALL_GATES, GATE_CHECKERS, GATE_DESCS, GATE_HINTS, GATE_WEIGHTS, GATE_REGISTRY,
     PROFILES, compute_score, get_profile, compute_self_score
 )
 
@@ -61,10 +61,12 @@ def load_data_snapshot(data_path: str) -> dict:
 
 
 def _build_action_required(failed_gates: list, details: list) -> list:
-    """构建 action_required：失败 gate 的 desc + 具体原因（gate 返 dict 时上浮 reasons）。
+    """构建 action_required：失败 gate 的 desc + 具体原因（gate 返 dict 时上浮 reasons）+ GATE_HINTS 修法。
 
     有 reasons 的 gate（如 G30 返 {passed,failed,reasons}）逐条展开，让作者看到具体 FAIL 项
     （如「G30: ... → #1 数值新鲜度 FAIL — 股东户数 stale」），而非泛化 desc。
+    GATE_HINTS（gate_definitions.py）注入高频 gate 的修法速查——FAIL 即自解释，
+    免 Read 178K 源码排障；hint 不足再读 m11-gates.md 对应节。
     """
     detail_by_gate = {d["gate"]: d for d in details}
     lines = []
@@ -76,6 +78,9 @@ def _build_action_required(failed_gates: list, details: list) -> list:
                 lines.append(f"{base} → {r}")
         else:
             lines.append(base)
+        hint = GATE_HINTS.get(g)
+        if hint:
+            lines.append(f"  💡 {g} 修法: {hint}")
     return lines
 
 
@@ -462,6 +467,13 @@ def main():
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         if not args.quiet:
             print(f"\n📝 sidecar 已写入: {sidecar_path}")
+            # E：指针行直接可复制——消除「为格式提前读 m11-gates.md」的预读，
+            # 用 args.profile（="full"）非 profile_name，与 SKILL 模板及 check_pointer 双匹配
+            if result["verdict"] == "PASS":
+                ss = result.get("self_score", {})
+                print(f"📌 指针行（复制进 m11 区，粘贴后重跑 verify 刷新 sidecar）："
+                      f"[verified: self_score={ss.get('score')} profile={args.profile} "
+                      f"| see {sidecar_path.name}]")
 
     # 退出码
     if result["verdict"] == "FAIL":
