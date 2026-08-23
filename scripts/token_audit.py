@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """token_audit.py — 股票分析会话 token 事后审计（零 LLM 成本，复盘时一条命令）。
 
-用法：
-  python3 token_audit.py <session.jsonl> [--stock 002859] [-o out.md]
-  python3 token_audit.py --latest                 # 审计最新会话
-  python3 token_audit.py --latest --stock 002859  # 最新会话 + 标注股票
+用法（显式传路径优先——--latest 按 mtime 挑选，可能选中活跃会话自身或错目标）：
+  python3 token_audit.py <session.jsonl> [--stock 002859] [-o out.md]   # ✅ 推荐
+  python3 token_audit.py --latest --stock 002859                        # ⚠️ mtime 挑选，慎用
 
 设计（2026-08-20）：记录的活交给引擎——分析会话零改动零负担，本脚本从 Claude Code
 会话 JSONL 提取 per-request 真实 usage（input/cache_read/output）+ 内容块静态加权
@@ -162,6 +161,7 @@ def main():
     args = ap.parse_args()
 
     path = args.session
+    used_latest = args.latest or not path
     if args.latest or not path:
         cands = sorted(glob.glob(os.path.expanduser(
             "~/.claude/projects/*/*.jsonl")), key=os.path.getmtime)
@@ -178,6 +178,32 @@ def main():
                     lines.append(json.loads(l))
                 except json.JSONDecodeError:
                     pass
+
+    # A1：会话内容自提股票码（扫前 5 条用户文本消息——首条常为 caveat/命令包装，单读首条必漏）
+    detected_code = ""
+    seen_user = 0
+    for l in lines:
+        if l.get("type") != "user" or seen_user >= 5:
+            if l.get("type") == "user":
+                break
+            continue
+        content = (l.get("message") or {}).get("content")
+        if isinstance(content, str):
+            texts = [content]
+        elif isinstance(content, list):
+            texts = [x.get("text", "") for x in content
+                     if isinstance(x, dict) and x.get("type") == "text"]
+        else:
+            texts = []
+        txt = " ".join(t for t in texts if t)
+        if not txt.strip():
+            continue
+        seen_user += 1
+        m = re.search(r"(?<!\d)\d{6}(?!\d)", txt)
+        if m:
+            detected_code = m.group(0)
+            break
+    code_mismatch = bool(args.stock and detected_code and args.stock != detected_code)
 
     # ---- 第一遍：建轮次序列（assistant 消息 = 一轮 API 调用），记录工具调用参数 ----
     turns = []          # [{usage, tool_uses:[(id,name,input)], text_chars, thinking_chars}]
@@ -226,6 +252,7 @@ def main():
     # cost = chars × 存活轮数(T - i)；归一化后即「context 压力占比」
     blocks = []  # [{turn, phase, cat, module, chars, desc, kind(call/result)}]
     result_chars_by_id = {}   # tool_use_id -> result chars（handwrite_hits 记录用）
+    vg_result_texts = []      # verify_gates.py 执行的 result（按时间序，末条=终态）
     turn_no = -1
     for l in lines:
         if l.get("type") == "assistant":
@@ -269,6 +296,8 @@ def main():
                 n, i2 = src
                 c = str(i2.get("command", "")) if isinstance(i2, dict) else ""
                 fp = str(i2.get("file_path", "")) if isinstance(i2, dict) else ""
+                if "verify_gates" in c and "python" in c:
+                    vg_result_texts.append(str(txt or ""))
                 desc = (c[:60] or fp[-60:]).replace("\n", " ")
                 tno = max(turn_no, 0)
                 blocks.append(dict(turn=tno, phase=phase_of(tno), cat=cat, module=mod,
@@ -293,6 +322,8 @@ def main():
 
     module_reads = defaultdict(list)   # mXX -> [turn]
     snapshot_calls, handwrite_hits, writeback_hits, gate_src_reads, any_calls = [], [], [], [], []
+    field_calls, field_chars = 0, 0                    # A5：--field 外科投影分布
+    gate_src_bash_n, gate_src_bash_chars = 0, 0        # A2：gate 源码 Bash 侧访问（透明度）
     hw_turn = -1
     for l in lines:
         if l.get("type") != "assistant":
@@ -308,6 +339,15 @@ def main():
                 snapshot_calls.append(c)
                 if re.search(r"\bany\b", c):
                     any_calls.append(c)
+                if "--field" in c:
+                    field_calls += 1
+                    field_chars += result_chars_by_id.get(b.get("id"), 0)
+            # A2：sed/grep/cat/awk 撞 gate_definitions = 源码访问（verify_gates.py 执行不计；
+            # 与手写并集的命令只计手写不重复计）
+            if re.search(r"\b(sed|grep|cat|awk)\b", c) and "gate_definitions" in c \
+                    and not (HANDWRITE_PAT.search(c) and SNAPSHOT_FILE_PAT.search(c)):
+                gate_src_bash_n += 1
+                gate_src_bash_chars += result_chars_by_id.get(b.get("id"), 0)
             if "gate_definitions" in fp and n == "Read":
                 gate_src_reads.append(fp)
             # 写回检测：以写模式 open 的文件参数本身命中快照路径（目标同一，
@@ -323,7 +363,8 @@ def main():
                     and "verify_gates" not in c and "token_audit" not in c:
                 handwrite_hits.append({
                     "turn": hw_turn, "chars": result_chars_by_id.get(b.get("id"), 0),
-                    "in_view": _tier_in_view(c), "cmd": c[:90].replace("\n", " ")})
+                    "in_view": _tier_in_view(c), "surgical": "# rule5-surgical" in c,
+                    "cmd": c[:90].replace("\n", " ")})
 
     # 模块 Read 轮次（精确）
     module_reads = defaultdict(list)
@@ -351,17 +392,47 @@ def main():
     view_chars = sum(b["chars"] for b in blocks
                      if b["cat"].startswith("视图:") and b.get("kind") == "result")
     hw_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("手写提取"))
-    hw_chars = sum(h["chars"] for h in handwrite_hits)
-    hw_in_view = [h for h in handwrite_hits if h["in_view"]]
-    hw_out_view = [h for h in handwrite_hits if not h["in_view"]]
+    # A3：外科豁免单列（# rule5-surgical 声明处不计违规，quota ≤2 超额打 ⚠️）
+    hw_exempt = [h for h in handwrite_hits if h.get("surgical")]
+    hw_violations = [h for h in handwrite_hits if not h.get("surgical")]
+    hw_chars = sum(h["chars"] for h in hw_violations)
+    hw_in_view = [h for h in hw_violations if h["in_view"]]
+    hw_out_view = [h for h in hw_violations if not h["in_view"]]
     # 视图覆盖率 = CLI result chars /（CLI result + 手写 result）chars
     cli_chars = view_chars
     view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
     any_flat_hits = sum(1 for c in any_calls if any(s in c for s in FLAT_SECTIONS))
     BASE_MOD_PCT = 32.3   # 瑞丰 300243 旧路径基线（2026-08-20 审计）
 
+    # ---- A4：总账行 + 环比历史（TOKEN_AUDIT_NO_HISTORY=1 时回归测试防污染） ----
+    total_pull = cli_chars + hw_chars
+    gate_fails = -1
+    if vg_result_texts:
+        m = re.search(r"失败: (\d+)", vg_result_texts[-1])
+        if m:
+            gate_fails = int(m.group(1))
+    p4_start = phase_start.get("P4gate")
+    p4_dump_chars = sum(h["chars"] for h in handwrite_hits
+                        if p4_start is not None and h["turn"] >= p4_start)
+    stock = args.stock or detected_code or "?"
+    hist_path = os.path.expanduser("~/.cache/token_audit_history.jsonl")
+    hist_entry = dict(date=datetime.now().strftime("%Y-%m-%d %H:%M"), stock=stock,
+                      cli=cli_chars, handwrite=hw_chars, total=total_pull,
+                      coverage=round(view_cov_pct, 1), gate_fails=gate_fails,
+                      p4_dump_chars=p4_dump_chars, session=os.path.basename(path))
+    recent = []
+    try:
+        with open(hist_path, encoding="utf-8") as fh:
+            recent = [json.loads(x) for x in fh if x.strip()][-3:]
+    except (OSError, json.JSONDecodeError):
+        recent = []
+    if os.environ.get("TOKEN_AUDIT_NO_HISTORY") != "1":
+        os.makedirs(os.path.dirname(hist_path), exist_ok=True)
+        with open(hist_path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(hist_entry, ensure_ascii=False) + "\n")
+
     # ---- 输出 ----
-    stock = args.stock or "?"
+    # stock 已在 A4 段取 args.stock or detected_code or "?"
     # 默认落对应股票分析目录（analysis_report-*-{code}/）；无匹配目录再退 token_audits/
     if args.out:
         out_path = args.out
@@ -386,11 +457,27 @@ def main():
     L.append(f"- 语义口径：**semantics v2**（deduped · result-only · path-tiered）"
              "——与 08-20 瑞丰基线及更早 ad-hoc 审计不可比")
     L.append(f"\n- 会话：`{os.path.basename(path)}`（{T} 轮 API 调用，{len(blocks)} 内容块）")
+    L.append(f"- 被分析文件：`{path}`")
+    if used_latest:
+        L.append("- ⚠️ 本次经 `--latest` mtime 挑选会话——可能选中活跃会话自身或错目标，"
+                 "建议显式传路径")
+    if code_mismatch:
+        L.append(f"- ⚠️ 内容自提股票码 **{detected_code}** ≠ --stock {args.stock}"
+                 "——疑似错目标审计（张冠李戴）")
+    elif detected_code:
+        L.append(f"- 内容自提股票码：{detected_code}"
+                 + ("（与 --stock 一致 ✓）" if args.stock else "（--stock 未传，自动采用）"))
     L.append(f"- 真实口径（per-request usage 累计）："
              f"input **{tot_in:,}**（cache_read {tot_cache:,} / cache_write {tot_cc:,}）"
              f"+ output **{tot_out:,}**")
     L.append(f"- 归因口径：Σ chars×存活轮数 = {total_cost/1e6:.1f}M char·turn"
              f"（定位浪费用，非计费单位）")
+    L.append(f"- **总取数 = CLI {cli_chars:,} + 手写 {hw_chars:,} = {total_pull:,} chars**"
+             f"（覆盖率 {view_cov_pct:.1f}%｜末次 gate FAIL {gate_fails if gate_fails >= 0 else '—'}"
+             f"｜P4 dump {p4_dump_chars:,}c｜外科豁免 {len(hw_exempt)} 处）")
+    if recent:
+        L.append("- 环比（最近 3 次）：" + "；".join(
+            f"{r.get('date','?')} {r.get('stock','?')}: {r.get('total',0):,}c" for r in recent))
 
     L.append("\n## ① Phase × 类别矩阵（归因占比 %）\n")
     cats = sorted(by_cat, key=lambda c: -sum(by_cat[c].values()))
@@ -413,13 +500,20 @@ def main():
     L.append(f"\n- 模块 Read 轮次跨度：**{jit_span} 轮**（JIT 生效=跨度大且穿插写作；旧全量加载=集中 1-3 轮）")
     L.append(f"- snapshot_view 调用 **{len(snapshot_calls)} 次**（含 any {len(any_calls)} 次，"
              f"其中扁平小节命中 {any_flat_hits} 次），结果合计 {view_chars:,} chars")
+    L.append(f"- --field 外科投影调用 **{field_calls} 次 / {field_chars:,} chars**"
+             "（分布行——防散便宜调用刷覆盖率：3c/调使刷分子成本趋零，须与手写残余同读）")
     if hw_in_view:
         L.append(f"- ⚠️ 手写提取（视图内·违规）{len(hw_in_view)} 处：")
-        for h in hw_in_view[:5]:
+        for h in hw_in_view:
             L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
     if hw_out_view:
-        L.append(f"- ℹ️ 手写提取（视图外·建议 any）{len(hw_out_view)} 处：")
-        for h in hw_out_view[:5]:
+        L.append(f"- ℹ️ 手写提取（视图外·建议 any/--field）{len(hw_out_view)} 处：")
+        for h in hw_out_view:
+            L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
+    if hw_exempt:
+        over = " ⚠️ 超额（quota ≤2）" if len(hw_exempt) > 2 else ""
+        L.append(f"- 🔬 外科豁免（# rule5-surgical 声明，quota ≤2）{len(hw_exempt)} 处{over}：")
+        for h in hw_exempt:
             L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
 
     L.append("\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）\n")
@@ -447,6 +541,9 @@ def main():
     ]
     for name, ok, detail in checks:
         L.append(f"- {'✅' if ok else '❌'} **{name}**：{detail}")
+    L.append(f"- ℹ️ gate 源码 Bash 侧访问（sed/grep/cat/awk 撞 gate_definitions，sanctioned "
+             f"fallback 透明度）：**{gate_src_bash_n} 次 / {gate_src_bash_chars:,}c**"
+             f"（vs Read 全文 178K）")
 
     L.append("\n## ④ Top-15 最贵内容块（context 压力）\n")
     L.append("| 轮 | Phase | 类别 | chars | 压力% | 内容 |")
@@ -458,12 +555,23 @@ def main():
     with open(out_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L) + "\n")
     print(f"✅ 审计已写入 {out_path}")
+    print(f"   被分析文件: {path}")
+    if used_latest:
+        print("   ⚠️ --latest mtime 挑选——可能选中活跃会话自身或错目标，建议显式传路径")
+    if code_mismatch:
+        print(f"   ⚠️ 内容自提股票码 {detected_code} ≠ --stock {args.stock}——疑似错目标审计")
     print(f"   轮次={T} | input={tot_in:,}(+cache {tot_cache:,}/{tot_cc:,}) "
           f"output={tot_out:,} | 检查项: "
           + " ".join(f"{'✅' if ok else '❌'}{n}" for n, ok, _ in checks))
     print(f"   [v2] 手写提取 {len(handwrite_hits)} 处（视图内 {len(hw_in_view)} / "
           f"视图外 {len(hw_out_view)}）| 写回 {len(writeback_hits)} | "
           f"覆盖率 {view_cov_pct:.1f}%（CLI {cli_chars:,} / 手写 {hw_chars:,} result chars）")
+    print(f"   [v3] 外科豁免 {len(hw_exempt)} 处（quota ≤2）"
+          + ("⚠️ 超额 " if len(hw_exempt) > 2 else "")
+          + f"| gate源码Bash侧 {gate_src_bash_n} 次/{gate_src_bash_chars:,}c | "
+          f"--field {field_calls} 次/{field_chars:,}c")
+    print(f"   总取数 {total_pull:,} = CLI {cli_chars:,} + 手写 {hw_chars:,}"
+          f"｜gate FAIL {gate_fails if gate_fails >= 0 else '—'}｜P4 dump {p4_dump_chars:,}c")
 
 
 if __name__ == "__main__":
