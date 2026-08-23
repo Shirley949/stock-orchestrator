@@ -19,12 +19,15 @@
   python snapshot_view.py <snap.json> --list       # 列出可用视图与状态
   python snapshot_view.py <snap.json> any <scene或路径> [--depth 2]  # 任意节键树探查（扁平小节首选）
   python snapshot_view.py <snap.json> --raw a.b.c  # 兜底：任意 raw 路径直读（视图缺数据时）
+  python snapshot_view.py <snap.json> --raw a.b.c --field 合同负债  # 外科投影：单字段直出（行表→全期单列）
 
 设计（2026-08-20）：视图由 runner 落盘时挂载（report_views.attach_report_views），
 本 CLI 只做「格式化直出」——LLM 一条命令拿到已裁剪/已反转/已换算的紧凑表格，
 禁止再手写提取脚本。输出对齐文本表（人读友好 + token 紧凑）。
 """
 import argparse
+import contextlib
+import io
 import json
 import sys
 
@@ -78,29 +81,35 @@ def _print_kline(v):
         print(line)
 
 
-def _print_period_table(v, cols, n=12):
+def _print_period_table(v, cols, n=12, raw_path=None):
     print(f"## {v.get('view')} status={v.get('status')} periods={v.get('periods')} "
           f"missing_fields={v.get('missing_fields') or '无'}")
-    data = (v.get("data") or [])[:n]
+    data_all = v.get("data") or []
+    data = data_all[:n]
     for line in _table(cols, [[_fmt(r.get(c)) for c in cols] for r in data]):
         print(line)
+    if raw_path and len(data_all) > n:
+        print(f"⚠️ 仅前{n}期（共{len(data_all)}期）；单字段全期 → --raw {raw_path} --field <字段名>")
 
 
 def _print_cash(v):
     _print_period_table(v, ["报告日", "CFO", "CFI", "CFF", "capex", "FCF",
                             "net_profit", "CFO_NP_ratio_pct", "FCF_NP_ratio_pct", "cash_end",
-                            "dep", "amort", "wc_recv", "wc_inv", "wc_pay"])
+                            "dep", "amort", "wc_recv", "wc_inv", "wc_pay"],
+                       raw_path="s1_financial.data.cash_flow")
 
 
 def _print_income(v):
     _print_period_table(v, ["报告日", "revenue", "revenue_yoy_pct", "np_parent", "np_parent_yoy_pct",
                             "np_deducted", "np_deducted_yoy_pct", "gross_margin_pct",
-                            "net_margin_pct", "three_exp", "rd_exp"])
+                            "net_margin_pct", "three_exp", "rd_exp"],
+                       raw_path="s1_financial.data.income_statement")
 
 
 def _print_mainfina(v):
     _print_period_table(v, ["REPORT_DATE", "DJD_TOI_YOY", "DJD_DPNP_YOY", "ROIC", "ROEJQ",
-                            "ZCFZL", "LD", "SD", "XSMLL", "XSJLL"], n=8)
+                            "ZCFZL", "LD", "SD", "XSMLL", "XSJLL"], n=8,
+                       raw_path="s1_financial.data.mainfinadata")
 
 
 def _print_news(v):
@@ -129,7 +138,7 @@ def _print_holder(v):
 # 7 新视图 printer（2026-08-20 终局版）
 # ---------------------------------------------------------------------------
 
-def _print_balance(v):
+def _print_balance(v, snap=None):
     print(f"## {v.get('view')} status={v.get('status')} dates={v.get('dates')} unit={v.get('unit')}")
     if v.get("missing_fields"):
         print(f"  missing_fields={v['missing_fields']}")
@@ -138,6 +147,17 @@ def _print_balance(v):
     for line in _table(["科目"] + [str(d) for d in dates],
                        [[k] + [_fmt(x) for x in m.get(k, [])] for k in m]):
         print(line)
+    # footer：routing 执法要求合同负债 8 季度趋势，视图仅挂 4 期 → 从 raw 补前 8 期（万元）
+    if snap is not None:
+        sec = _walk(snap, "s1_financial.data.balance_sheet") or {}
+        rows = sec.get("data") or sec.get("data_full") or []
+        hl = [(r.get("报告日"), r.get("合同负债")) for r in rows[:8] if isinstance(r, dict)]
+        if any(x is not None for _, x in hl):
+            print("合同负债 8期(万): " + " ".join(
+                f"{str(d or '—')[2:]}:{_fmt(x / 1e4) if x is not None else '—'}" for d, x in hl))
+        if len(rows) > len(dates):
+            print(f"⚠️ 仅前{len(dates)}期（共{len(rows)}期）；单字段全期 → "
+                  f"--raw s1_financial.data.balance_sheet --field 合同负债")
 
 
 def _print_timeline(v):
@@ -159,6 +179,7 @@ def _print_timeline(v):
     if bc:
         print("\n[by_code 计数] " + " ".join(f"{c}×{n}" for c, n in
               sorted(bc.items(), key=lambda x: -x[1])))
+    print("子层指针: programs 等子层未展开 → --raw s5_events.data.risk_signals.processed --field programs")
 
 
 def _print_technical(v):
@@ -375,6 +396,70 @@ def _walk(obj, path):
     return cur
 
 
+# --field 外科投影（行表日期键探测 + 非标量渲染硬帽，与 --raw json.dumps[:4000] 同款）
+FIELD_DATE_KEYS = ("报告日", "日期", "date", "notice_date", "REPORT_DATE", "trade_date", "day")
+FIELD_CAP = 4000
+
+
+def _print_field(snap, raw_path, field):
+    """--raw <路径> --field <字段>：单字段直出（白名单单 flag，永不接受表达式）。
+    行表（section.data/data_full 双键兜底）→ 全期单列「日期: 值」；dict → 单值；
+    非标量过 _any_render(depth=1, 10条帽) 再套 FIELD_CAP 硬截断（remind_records x97
+    裸 dump 70K/仅10条帽 7.4K，双帽后 ≤~4.1K）；字段缺失显式报错+前10可用字段；
+    空列表「0 行（真空）」三态；含点字段拒绝指路 .N。"""
+    if "." in field:
+        print(f"❌ --field 不支持嵌套/.N（含点即拒绝）；单条下钻 → --raw {raw_path}.{field} 或 any",
+              file=sys.stderr)
+        sys.exit(1)
+    node = _walk(snap, raw_path)
+    if node is None:
+        print(f"❌ 路径不存在: {raw_path}", file=sys.stderr)
+        sys.exit(1)
+
+    def _emit(body):
+        print(f"--raw {raw_path} --field {field}:")
+        print(body)
+
+    if isinstance(node, dict) and ("data" in node or "data_full" in node):
+        rows = node.get("data") or node.get("data_full")
+        if not isinstance(rows, list):
+            rows = []
+        if not rows:
+            _emit("0 行（真空：data/data_full 为空）")
+            return
+        if isinstance(rows[0], dict):
+            if field not in rows[0]:
+                print(f"❌ 字段「{field}」不存在。可用字段（前10）: {list(rows[0].keys())[:10]}",
+                      file=sys.stderr)
+                sys.exit(1)
+            _emit("\n".join(
+                f"{_fmt(r.get(next((k for k in FIELD_DATE_KEYS if k in r), None)))}: {_fmt(r.get(field))}"
+                for r in rows))
+            return
+    if isinstance(node, dict):
+        if field not in node:
+            print(f"❌ 字段「{field}」不存在。可用字段（前10）: {list(node.keys())[:10]}",
+                  file=sys.stderr)
+            sys.exit(1)
+        val = node[field]
+    else:
+        print(f"❌ 节点非 dict（{type(node).__name__}），--field 需 dict/行表", file=sys.stderr)
+        sys.exit(1)
+    if isinstance(val, list) and not val:
+        _emit("0 行（真空）")
+        return
+    if isinstance(val, (list, dict)):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _any_render(val, 1)
+        out = buf.getvalue().rstrip("\n")
+        if len(out) > FIELD_CAP:
+            out = out[:FIELD_CAP] + f"\n… 截断；单条 → --raw {raw_path}.{field}.N"
+        _emit(out)
+        return
+    _emit(_fmt(val) if isinstance(val, float) else str(val))
+
+
 def main():
     ap = argparse.ArgumentParser(description="snapshot 报告视图直出")
     ap.add_argument("snapshot", help="snapshot JSON 路径")
@@ -383,12 +468,16 @@ def main():
     ap.add_argument("--depth", type=int, default=1, help="any 模式展开深度（默认 1，扁平小节建议 2）")
     ap.add_argument("--list", action="store_true", help="列出可用视图与状态")
     ap.add_argument("--raw", metavar="PATH", help="兜底：任意 raw 路径直读（如 s1_financial.data.cash_flow.data.0）")
+    ap.add_argument("--field", metavar="FIELD", help="外科投影：--raw 路径下单字段直出（行表→全期单列；非标量 capped ≤4000c）")
     args = ap.parse_args()
 
     snap = json.load(open(args.snapshot))
 
     # 独立 --raw 形式（不带视图名）：任意 raw 路径直读（SKILL 文档形式，先于 --list 分支）
     if args.raw and not args.view and not args.list:
+        if args.field:
+            _print_field(snap, args.raw, args.field)
+            return
         val = _walk(snap, args.raw)
         print(f"--raw {args.raw} =")
         print(json.dumps(val, ensure_ascii=False, default=str)[:4000])
@@ -423,7 +512,10 @@ def main():
         print(f"❌ 视图未挂载（snapshot 可能是旧版 runner 产出）: {args.view}\n"
               f"   兜底：any {'.'.join(VIEW_PATHS[args.view][:-1])} --depth 2", file=sys.stderr)
         sys.exit(1)
-    PRINTERS[args.view](view)
+    if args.view == "balance":
+        PRINTERS["balance"](view, snap)   # footer 需 raw 8 期合同负债（视图仅 4 期）
+    else:
+        PRINTERS[args.view](view)
 
     if args.raw:
         val = _walk(snap, args.raw)

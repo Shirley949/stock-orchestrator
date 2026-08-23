@@ -58,6 +58,8 @@ echo "[① 契约层] test_checklist_consistency.py（checklist 分母一致：g
 python3 "$HERE/test_checklist_consistency.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_token_audit.py（表计 v2 语义自检：去重/result-only/挂载前缀分层/写回目标同一/排除正交）"
 python3 "$HERE/test_token_audit.py" 2>&1 | tail -3
+echo "[① 契约层] test_snapshot_view_field.py（--field 外科投影六语义+footer/截断指针+炸弹双帽）"
+python3 "$HERE/test_snapshot_view_field.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-run FAIL+fallback emit 四态+capstone 富字段+m6/m1 锚点）"
 python3 "$HERE/test_peer_pipeline.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_g48_shareholder_programs.py（G48 待执行-FIRST 增减持计划 SOFT gate 三态+反编造）"
