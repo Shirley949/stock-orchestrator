@@ -112,14 +112,21 @@ GATE_HINTS = {
            "⚠️ 行内勿混入其他科目数值（行级数值冲突扫描会双命中）。",
     "G30": "capstone 六硬检查。高频败因：①情景表条件列写 N%（禁——条件必须可判定）"
            "②矩阵行列结构缺 ③主情景结论与矩阵矛盾 ④该观望却写可买。"
-           "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）。",
+           "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）。"
+           "数据核对：python3 …/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot <S>"
+           "（证据全景一次成形，注意在 lib/ 下）；分类判定单字段充分："
+           "snapshot_view <S> --raw classification --field primary_type。",
     "G45": "目标价裸数字无 [src:] → FAIL。修法：目标价行带 [src:]（机构目标价）或加不确定性标注"
-           "（区间/粗略/仅供参考/待核实）；支撑/压力位不触发本 gate。",
+           "（区间/粗略/仅供参考/待核实）；支撑/压力位不触发本 gate。"
+           "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field targetPrice"
+           "（机构目标价真值，westock 源）。",
     "G47": "shareholder_dynamics 有材料级方向（净减持/净增持/分歧/具名 top10 变动）时，"
            "m7/m9.2 必须 surface 对应词（内部人/前十大/增持/减持/港资等）；反编造：无数据禁写具名增减持。",
     "G48": "processed.programs 有 status∈{planned,ongoing}（待执行/进行中增减持计划）时，"
            "报告必须出现待执行/拟减持/窗口期等词；无活跃计划时写「已完成/无计划」是有效结论（豁免），"
-           "禁编造「待执行 X%」。",
+           "禁编造「待执行 X%」。"
+           "数据核对：snapshot_view <S> --raw s5_events.data.risk_signals.processed --field programs"
+           "（capped 渲染即见 status；「0 行（真空）」= 无活跃计划）。",
     "G51": "SGR 三件套（值+适用性+进度条）须与 computed_metrics.sgr 数值对齐（value 存百分数）；"
            "applicability=不适用 → 写「不适用」禁编值；payout_source=assumed_no_dividend → 须 ⚠️上限脚注。",
     "G53": "换手率用自身分位判高低（pct_250≥70=高 / ≤30=低），禁用绝对阈值跨股误判；"
@@ -127,14 +134,26 @@ GATE_HINTS = {
            "写「非高位」也会命中「高位」，注意措辞与切片归属。",
     "G55": "m3 golden=六维读数（环境/量能/位置/筹码/趋势至少 4 维）+ 一致性诊断段（非打分）。"
            "边界禁区：仓位%/盈亏比/重仓/打分句 → m6/m7（m3 出现即 FAIL）；VWAP 值照抄 snapshot。",
+    "G56": "m1 golden=五块定性叙事（类型/身份主营/历史阶段/当前阶段定位/同行差异化）+ 资金筹码一句话"
+           "指向 home；禁 ST5/ST6 独立段量化（%/金额/窗口/逐笔→m9 §9.2 / m7 §7.5.2）。"
+           "反捏造：类型词 == classification.primary_type；占主营 Y% == dominant_business.revenue_ratio。"
+           "数据核对（五块结构对拍须全结构，勿用 primary_type 单字段）："
+           "snapshot_view <S> any classification --depth 2；SGR --raw computed_metrics --field sgr（capped）。",
     "G58": "valuation_percentile 每项 applicable=true 时 m5 必须 surface 分位（带 [src:] 或对齐值）；"
-           "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。",
+           "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。"
+           "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field valuation_percentile"
+           "（pe_ttm/pb/ev_ebitda 各项 applicable+pct_5y 真值）。",
     "G59": "m5 §5.3 估值结论必须含判定词（偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高）。"
            "高频误伤：判定词落在 §5.3 之外的段（切片边界）——判定词必须写在 5.3 节内。",
     "G61": "千股千评每个 ok 结论维度报告须 surface 对应词 + [src: snapshot.s_stock_evaluation] 锚；"
-           "failed 禁编结论；missing（金融股/次新）豁免。高频误伤：报告用了结论词但无 src 锚。",
+           "failed 禁编结论；missing（金融股/次新）豁免。高频误伤：报告用了结论词但无 src 锚。"
+           "数据核对：snapshot_view <S> any s_stock_evaluation.data.processed --depth 2"
+           "（conclusions 四键+latest_period 全结构，单 --field 不充分）。",
     "G62": "正文自称「N 偏多 / N 中性 / N 偏空」时，必须与全报告表格第 2 列方向词实数一致。"
-           "修法：自称句照表格重数（所有表第 2 列都数，不止 §6 证据表）。",
+           "修法：自称句照表格重数（所有表第 2 列都数，不止 §6 证据表）。"
+           "数据核对：grep -E '^\\|' report.md | awk -F'[|]' "
+           "'$3 ~ /偏多|中性|偏空/ {gsub(/ /,\"\",$3); print $3}' | sort | uniq -c"
+           "（全表第 2 列方向词实数，自称句照此对齐）。",
     "G63": "m3 技术位数字必须 == snapshot 真值（fibonacci.levels / S&R layers[].price / "
            "chipAvgCost / ATR stop_ref_price，±0.5%）。高频败因：手抄改数（666→662）；"
            "高频误伤：非技术位数字落进技术位语境行——日期/比率/RS60 这类数字勿写在"
