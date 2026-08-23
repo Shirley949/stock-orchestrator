@@ -1,3 +1,16 @@
+## 2026-08-23 token 审计 v3 + `--field` 外科投影 + GATE_HINTS 数据行（plan stateful-finding-alpaca Fix A-E）
+
+触发：688195 会话审计 v3 深度归因——手写 18 处（v2 口径 4 视图内 / 14 视图外）+ sed 撞 gate_definitions 16 次 33,610c；P4 gate 修复期 6 处 8,346c（48.3% chars）是最大单一簇。四条裁决（v1→v4 全实证）：①m11 ❌ 系 `--latest` mtime 张冠李戴（688195 实际 ✅）；②「全量转合规」成本 +12.8% 反升——**纪律线与成本线张力是根因**；③6/7 sed 热门 gate 已有 hint 仍 sed（要执法语义非一句话）；④s35/lhb 视图外清零系**数据真空非纪律**（items=0 / never_listed，断空必验裁定，勿再引为修复证据）。
+
+- **`token_audit.py` v3（Fix A）**：A1 被分析文件路径打印 + 扫前 5 条用户文本消息提码错目标 ⚠️（杀 `--latest` 不可检测）；A2 gate 源码 Bash 侧访问透明度行（sed/grep/cat/awk 撞 gate_definitions，与手写并集去重）；A3 手写全列 + `# rule5-surgical` 外科豁免桶（quota≤2 超额 ⚠️）；A4 总账行 `CLI+手写=总取数` + `~/.cache/token_audit_history.jsonl` 环比（gate FAIL/P4 dump 上下文列；`TOKEN_AUDIT_NO_HISTORY` 防污染闸门先读后写）；A5 `--field` 调用分布行（防 coverage 灌水）。test_token_audit 5 测试。
+- **`snapshot_view.py` `--field` 外科投影（Fix C）**：白名单单 flag（非 DSL）`--raw <路径> --field <字段>`——行表→全期单列「日期: 值」（data/data_full 双键兜底=家规）；字段缺失显式报错+前 10 可用字段（杀静默 None 假阳形态）；空列表三态「0 行（真空）」；`.N` 含点拒绝。**H1 双帽**：非标量过 `_any_render(depth=1)` 10 条帽 + 4,000c 硬截断（remind_records x97 裸 dump 70.7K → 双帽 4,120c）。C1 balance footer（8 期合同负债，routing 8 季度执法要求）+ `_print_period_table` data-driven 截断指针；C2 timeline 子层指针。test_snapshot_view_field 11 测试已接线。**实测成本**：合同负债 12 期 304c / targetPrice 143c / primary_type 47c——纪律合规与省 token 从此同向（#04 案例 25.8×→1.2×）。
+- **`gate_definitions.py` GATE_HINTS 扩容（Fix B）**：sed 热门 7 gate（G61/G30/G45/G48/G58/G62 + 新增 G56，14→15 条）各补「数据核对」现成命令，选型**最小充分非最小成本**——单字段即充分用 `--field`（G45 targetPrice/G48 programs/G58 valuation_percentile/G30 primary_type），需结构对拍保持 `any -d2`（G61 conclusions 四键/G56 五块结构对拍，勿用 primary_type 3c 不充分换 gate 重试负优化）；G62 附全表第 2 列方向词 `grep|awk` 计数命令（真实报告实测）。
+- **SKILL.md 取数硬规则（Fix D）**：规则① 视图外字段改**显式阶梯** `视图→any→--field→--raw` + H3 分流（单/双字段→--field；≥3 字段或结构未知→一次 any -d2；3 次 --field 已反超）+ 宽表警示（balance_sheet：any -d2 29.6K > --raw 6.4K > 视图 2.5K > --field 0.28K，宽表取列必 --field）；规则⑤ 扩句（全景/跨 scene 复合提取等 --field 不适用形态，`# rule5-surgical` 声明豁免，应趋零）+ 中段自查锚（json.load 冲动→先 --list 对照，单字段直接 --field）+ gate 修复期同规则（hint 已带命令照抄即合规）；命令块补 ⑤ --field 示例、③ 扁平小节示例补千股千评。
+- **复评触发器新形式（只定形式，数值 n=2 后冻结）**：`覆盖率<80% 或 豁免超额/无声明手写残余按 scene 聚类达次数阈值 → 复评该 scene 引擎侧（footer/--field/视图扩期，按 V9 尺寸优先级）`。旧形式作废原因：字面不触发（fund_flow 1 处 369c/lhb 0/s35 0）+ scene 列表窄于 A2 拒绝集 + P5 数值倒推。**n=2 环比基线**（±20% 方向对照非硬线）：总取数 82,365c / sed 侧 34,087c（A2 落地口径）。n=2 选股：类型相异（次新/亏损股 gate 失败谱高压，真考 Fix B 效力）。
+- **审计纪律（V4）**：收尾审计一律显式传会话路径，**禁 `--latest`**（mtime 会选中活跃会话自身或错目标——A1 ⚠️ 是事后检测不是事前防护）。
+
+验证：T1 冻结语料重放总取数 82,365c 与 v2 完全一致（口径未漂）；T2 错目标 ⚠️ 必出；T3 7 gate hint 关键词+命令实跑全绿；T4 --field 六案例+双帽 4,120c+footer/指针全过；全量回归 exit 0（三票 parity byte-parity 完好）。明确不做：json.load 钩子 / 查询 DSL / 新增 named 视图 / FLAT_SECTIONS 扩容 / runner 预计算投影（消费层严格占优）/ --find 反向索引（重复 any -d1 职能）/ 修 sed 行为（sanctioned，只加透明度）。
+
 ## 2026-08-22 token 审计 v2 + 取数行为修复批（plan fuzzy-swinging-marble T2/T3/T4）
 
 触发：688048 会话 token 审计——手写 `json.load(snapshot)` 35 处（v2 口径 33 / 31,804c）vs CLI 覆盖率 57%（目标 ≤5 / >80%）。全量归因：T2 行为缺口 29 处（79% chars，any 实测全部可达且**输出 ≤ 手写**：top10 1,887 vs 3,790c——手写非省 token 理性选择，是缺规范的训练默认）/ T3 流程缺口 1 处（precheck.py 孤儿，SKILL 零引用）/ T4 度量四重假信号（双计 70=35×2、排除不对称、自匹配两路径、分层内联表与死常量漂移）。
