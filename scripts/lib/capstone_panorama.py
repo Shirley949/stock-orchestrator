@@ -151,6 +151,15 @@ _TIMELINE_CODE_TO_M = {
     "380": "M11", "390": "M11", "370": "M11", # 董事长/总经理/法定代表人变更
 }
 
+
+def _is_phantom_m5(e):
+    """code 230=上市状态变动 涵盖新股上市(benign)与 ST/退市 变动；specific/内容为新股上市的
+    事件不构成 M5 风险信号（次新股 G30#1 假阳性根因，301682 实证）。"""
+    if str(e.get("event_type_code")) != "230":
+        return False
+    return (e.get("specific") == "新股上市"
+            or "新股上市" in str(e.get("level1_content") or ""))
+
 # 信号覆盖维度（G30#1）：S2/S7 筹码码（severity 阈值·股东户数信号族）；M-code 由 timeline 投影（见下）。
 # (processed 路径, 取码子键, {code: (name, precise_kws)}, 收集的 severity 集)
 _SIGNAL_SOURCES = [
@@ -532,6 +541,8 @@ def panorama(data: dict) -> dict:
                 continue
             if code in ("002", "003") and e.get("flavor") != "risk":
                 continue
+            if _is_phantom_m5(e):
+                continue
             _seen_m.add(mcode)
             name, kws = _M_SIGNAL_KW[mcode]
             out["present_signals"].append(
@@ -807,6 +818,8 @@ def _render_material_events(L, v):
                 w in (e.get("level1_content") or "") for w in ("减持", "转让")):
             return
         if code in ("002", "003") and e.get("flavor") != "risk":
+            return
+        if _is_phantom_m5(e):
             return
         mc = _TIMELINE_CODE_TO_M.get(code)
         if mc and mc not in risk_mcodes:

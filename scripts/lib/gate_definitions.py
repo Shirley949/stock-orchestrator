@@ -20,6 +20,7 @@ from latest_extract import days_old  # noqa: E402  G32/G33 freshness 维度（pl
 from capstone_panorama import panorama as _cap_panorama  # noqa: E402
 from capstone_panorama import QUAL_KW as _CAP_QUAL_KW  # noqa: E402
 from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
+from capstone_panorama import _TIMELINE_CODE_TO_M, _is_phantom_m5  # noqa: E402
 
 
 class GateResult(dict):
@@ -112,10 +113,13 @@ GATE_HINTS = {
            "⚠️ 行内勿混入其他科目数值（行级数值冲突扫描会双命中）。",
     "G30": "capstone 六硬检查。高频败因：①情景表条件列写 N%（禁——条件必须可判定）"
            "②矩阵行列结构缺 ③主情景结论与矩阵矛盾 ④该观望却写可买。"
-           "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）。"
+           "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）；"
+           "#1 未 surface 信号看 reasons 携带的底层事件（notice_date+类型+code）直接甄别。"
            "数据核对：python3 …/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot <S>"
            "（证据全景一次成形，注意在 lib/ 下）；分类判定单字段充分："
-           "snapshot_view <S> --raw classification --field primary_type。",
+           "snapshot_view <S> --raw classification --field primary_type；"
+           "事件桶核对：snapshot_view <S> any s5_events.data.risk_signals.processed.report_view --depth 1"
+           "（by_code_count 逐码计数 + fatal_events 桶；勿手写 json.load 过滤 timeline.events）。",
     "G45": "目标价裸数字无 [src:] → FAIL。修法：目标价行带 [src:]（机构目标价）或加不确定性标注"
            "（区间/粗略/仅供参考/待核实）；支撑/压力位不触发本 gate。"
            "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field targetPrice"
@@ -132,6 +136,14 @@ GATE_HINTS = {
     "G53": "换手率用自身分位判高低（pct_250≥70=高 / ≤30=低），禁用绝对阈值跨股误判；"
            "报告分位数须 == snapshot pct_250（tol 5 分位）。高频误伤：否定语境/阈值词——"
            "写「非高位」也会命中「高位」，注意措辞与切片归属。",
+    "G54": "m3 技术环境+正交信号：signals.state 三键（adx_state/bias_state/obv_trend）存在时 "
+           "m3 须有环境判定词（震荡/趋势/环境）；ADX 数值须 == snapshot（tol 5%）。"
+           "高频误伤：ADX 行内混其他数字（拆行隔离或行带 [src:]）；"
+           "⚠️ ADX 真值以 dmi.ADX 为准——adx_state 括号内嵌值是另一路计算（301682 实测 36.59，"
+           "dmi.ADX=29.885/ADXR=35.313 均不等），照抄会撞 5% 容差 FAIL。"
+           "never_traded/无 m3 节豁免。"
+           "数据核对：snapshot_view <S> any s4_technical.data.signals.state --depth 1（三键真值）；"
+           "ADX 真值 --raw s4_technical.data.technical.dmi --field ADX。",
     "G55": "m3 golden=六维读数（环境/量能/位置/筹码/趋势至少 4 维）+ 一致性诊断段（非打分）。"
            "边界禁区：仓位%/盈亏比/重仓/打分句 → m6/m7（m3 出现即 FAIL）；VWAP 值照抄 snapshot。",
     "G56": "m1 golden=五块定性叙事（类型/身份主营/历史阶段/当前阶段定位/同行差异化）+ 资金筹码一句话"
@@ -1370,15 +1382,40 @@ def _g30_signal_coverage_findings(data: dict, cov: str) -> list:
 
     三态：timeline 无风险事件 → present_signals 空 → 豁免（真空票不误伤）；
     有信号但证据全景缺精确词 → FAIL（漏 surface 严重风险）。利好不进
-    present_signals 强制列 → 门禁分级（漏报利好不致命，不 FAIL）。"""
+    present_signals 强制列 → 门禁分级（漏报利好不致命，不 FAIL）。
+    timeline 源未覆盖信号的 finding 附底层最近事件（reason 携带甄别数据，免手挖 timeline）。"""
     pan = _cap_panorama(data)
     findings = []
     for s in (pan.get("present_signals") or []):
-        if not _g30_theme_covered(cov, s.get("kws") or []):
-            findings.append(f"严重信号 {s.get('code')}({s.get('name')}) 未 surface"
-                            f"（证据全景须含 {'/'.join((s.get('kws') or [])[:2])}，技术词不算）")
+        if _g30_theme_covered(cov, s.get("kws") or []):
+            continue
+        ev_txt = _g30_signal_event_evidence(data, s.get("code")) if s.get("source") == "timeline" else ""
+        findings.append(f"严重信号 {s.get('code')}({s.get('name')}) 未 surface"
+                        f"（{ev_txt}证据全景须含 {'/'.join((s.get('kws') or [])[:2])}，技术词不算）")
     findings += _signal_pipeline_consistency_findings(data)
     return findings
+
+
+def _g30_signal_event_evidence(data: dict, mcode) -> str:
+    """timeline 源 M-code 信号的底层最近事件文案（notice_date+event_type+specific+code）。
+    候选 = fatal∪risk∪active 经 _TIMELINE_CODE_TO_M 映射；幻影 M5（230+新股上市）已在
+    capstone_panorama 源头剔除，此处同款过滤保持一致。"""
+    if not mcode:
+        return ""
+    tl = _snapshot_get(data, "s5_events.data.risk_signals.processed.timeline")
+    if not isinstance(tl, dict) or tl.get("status") != "ok":
+        return ""
+    cands = [e for e in list(tl.get("fatal_events") or []) + list(tl.get("risk") or [])
+             + list(tl.get("active") or [])
+             if isinstance(e, dict)
+             and _TIMELINE_CODE_TO_M.get(e.get("event_type_code")) == mcode
+             and not _is_phantom_m5(e)]
+    if not cands:
+        return ""
+    e = max(cands, key=lambda x: str(x.get("notice_date") or ""))
+    spec = e.get("specific") or ""
+    return (f"事件: {e.get('notice_date') or '日期缺失'} {e.get('event_type') or ''}"
+            f"{'·' + spec if spec else ''} [{e.get('event_type_code')}]；")
 
 
 def _signal_pipeline_consistency_findings(data: dict) -> list:

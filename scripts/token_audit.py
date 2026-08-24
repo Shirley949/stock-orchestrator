@@ -364,6 +364,14 @@ def main():
                 handwrite_hits.append({
                     "turn": hw_turn, "chars": result_chars_by_id.get(b.get("id"), 0),
                     "in_view": _tier_in_view(c), "surgical": "# rule5-surgical" in c,
+                    # v3 处数三分桶：gate 调试（读 gate 源码甄别 FAIL）> fetch 补救（重拉/注入运维）
+                    # > extract（真提取，验收线 ≤5 只量此桶）。注入写标记用 re 匹配 json.dump(
+                    # ——禁裸子串 'json.dump'，会误中 json.dumps 打印惯用法
+                    "bucket": ("gate" if "gate_definitions" in c else
+                               "fetch" if ("akshare" in c or "financial-data-routing" in c)
+                               else "extract"),
+                    "inj_write": bool(re.search(r"json\.dump\s*\(", c)
+                                      and SNAPSHOT_FILE_PAT.search(c)),
                     "cmd": c[:90].replace("\n", " ")})
 
     # 模块 Read 轮次（精确）
@@ -398,6 +406,13 @@ def main():
     hw_chars = sum(h["chars"] for h in hw_violations)
     hw_in_view = [h for h in hw_violations if h["in_view"]]
     hw_out_view = [h for h in hw_violations if not h["in_view"]]
+    # v3 处数三分桶（chars 口径不变——hw_chars/覆盖率/总取数仍按非 surgical 全量）
+    hw_extract = [h for h in handwrite_hits if h.get("bucket") == "extract"]
+    hw_gate = [h for h in handwrite_hits if h.get("bucket") == "gate"]
+    hw_fetch = [h for h in handwrite_hits if h.get("bucket") == "fetch"]
+    ext_in_n = sum(1 for h in hw_extract if h["in_view"])
+    ext_out_n = len(hw_extract) - ext_in_n
+    fetch_inj_n = sum(1 for h in hw_fetch if h.get("inj_write"))
     # 视图覆盖率 = CLI result chars /（CLI result + 手写 result）chars
     cli_chars = view_chars
     view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
@@ -419,7 +434,9 @@ def main():
     hist_entry = dict(date=datetime.now().strftime("%Y-%m-%d %H:%M"), stock=stock,
                       cli=cli_chars, handwrite=hw_chars, total=total_pull,
                       coverage=round(view_cov_pct, 1), gate_fails=gate_fails,
-                      p4_dump_chars=p4_dump_chars, session=os.path.basename(path))
+                      p4_dump_chars=p4_dump_chars, session=os.path.basename(path),
+                      hw_extract=len(hw_extract), hw_gate=len(hw_gate),
+                      hw_fetch=len(hw_fetch))
     recent = []
     try:
         with open(hist_path, encoding="utf-8") as fh:
@@ -454,8 +471,8 @@ def main():
 
     L = []
     L.append(f"# Token 审计 — {stock}（{datetime.now():%Y-%m-%d %H:%M}）")
-    L.append(f"- 语义口径：**semantics v2**（deduped · result-only · path-tiered）"
-             "——与 08-20 瑞丰基线及更早 ad-hoc 审计不可比")
+    L.append(f"- 语义口径：**semantics v3**（deduped · result-only · path-tiered · 3-bucket 处数）"
+             "——处数口径与 v2 不可比（gate 调试/fetch 补救另计）；chars 口径可比")
     L.append(f"\n- 会话：`{os.path.basename(path)}`（{T} 轮 API 调用，{len(blocks)} 内容块）")
     L.append(f"- 被分析文件：`{path}`")
     if used_latest:
@@ -515,6 +532,17 @@ def main():
         L.append(f"- 🔬 外科豁免（# rule5-surgical 声明，quota ≤2）{len(hw_exempt)} 处{over}：")
         for h in hw_exempt:
             L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
+    if hw_gate:
+        L.append(f"- 🔧 gate 调试（hint 数据核对优先，读 gate 源码属行为分诊非取数）{len(hw_gate)} 处：")
+        for h in hw_gate:
+            L.append(f"  - 轮{h['turn']} ({h['chars']:,}c) `{h['cmd'][:90]}`")
+    if hw_fetch:
+        inj = f"，其中 ⚠️ 注入写 {fetch_inj_n} 处（json.dump 直写快照，D4 变量间接盲区）" \
+            if fetch_inj_n else ""
+        L.append(f"- 🔄 fetch 补救（API 失败后重拉/注入运维）{len(hw_fetch)} 处{inj}：")
+        for h in hw_fetch:
+            mark = " ⚠️ 注入写" if h.get("inj_write") else ""
+            L.append(f"  - 轮{h['turn']} ({h['chars']:,}c){mark} `{h['cmd'][:90]}`")
 
     L.append("\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）\n")
     checks = [
@@ -524,9 +552,10 @@ def main():
         ("视图直读", len(snapshot_calls) >= 3,
          f"{len(snapshot_calls)} 次调用 / {view_chars:,} chars（旧 kline 单项 146K）"),
         ("无视图内手写提取", not hw_in_view,
-         f"视图内 {len(hw_in_view)} 处（挂载点覆盖字段禁 json.load 直读）；"
-         f"视图外 {len(hw_out_view)} 处（info，建议改 any）"
-         if (hw_in_view or hw_out_view) else "0 处（stdout 节省基线 ~20%）"),
+         f"手写 {len(handwrite_hits)} 处 = 真提取 {len(hw_extract)}"
+         f"（视图内 {ext_in_n} / 视图外 {ext_out_n}）+ gate 调试 {len(hw_gate)} "
+         f"+ fetch 补救 {len(hw_fetch)}；验收线 ≤5 量真提取桶"
+         if handwrite_hits else "0 处（stdout 节省基线 ~20%）"),
         ("无快照写回", not writeback_hits,
          f"{len(writeback_hits)} 处 json.dump/open(w/a) 写快照（runner.py 除外）"
          if writeback_hits else "0 处（快照只读）"),
@@ -563,13 +592,15 @@ def main():
     print(f"   轮次={T} | input={tot_in:,}(+cache {tot_cache:,}/{tot_cc:,}) "
           f"output={tot_out:,} | 检查项: "
           + " ".join(f"{'✅' if ok else '❌'}{n}" for n, ok, _ in checks))
-    print(f"   [v2] 手写提取 {len(handwrite_hits)} 处（视图内 {len(hw_in_view)} / "
-          f"视图外 {len(hw_out_view)}）| 写回 {len(writeback_hits)} | "
+    print(f"   [v2] 手写提取 {len(handwrite_hits)} 处 = 真提取 {len(hw_extract)}"
+          f"（视图内 {ext_in_n} / 视图外 {ext_out_n}）+ gate 调试 {len(hw_gate)} "
+          f"+ fetch 补救 {len(hw_fetch)}（验收线 ≤5 量真提取桶）| 写回 {len(writeback_hits)} | "
           f"覆盖率 {view_cov_pct:.1f}%（CLI {cli_chars:,} / 手写 {hw_chars:,} result chars）")
     print(f"   [v3] 外科豁免 {len(hw_exempt)} 处（quota ≤2）"
           + ("⚠️ 超额 " if len(hw_exempt) > 2 else "")
           + f"| gate源码Bash侧 {gate_src_bash_n} 次/{gate_src_bash_chars:,}c | "
-          f"--field {field_calls} 次/{field_chars:,}c")
+          f"--field {field_calls} 次/{field_chars:,}c"
+          + (f" | fetch 注入写 {fetch_inj_n} 处" if fetch_inj_n else ""))
     print(f"   总取数 {total_pull:,} = CLI {cli_chars:,} + 手写 {hw_chars:,}"
           f"｜gate FAIL {gate_fails if gate_fails >= 0 else '—'}｜P4 dump {p4_dump_chars:,}c")
 

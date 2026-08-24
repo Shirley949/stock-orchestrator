@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""token_audit v2/v3 语义自检 fixture：合成微型会话 → 跑表计 → 断言处数/分层/写回/覆盖率。
+"""token_audit v3 语义自检 fixture：合成微型会话 → 跑表计 → 断言处数/分层/写回/覆盖率。
 
-为什么存在：表计是验收线（纯提取≤5 / 覆盖率>80% / 写回 0 / gate 源码 0）的尺，
+为什么存在：表计是验收线（纯提取≤5 量真提取桶 / 覆盖率>80% / 写回 0 / gate 源码 0）的尺，
 尺的语义（去重 · result-only · 挂载前缀机械分层 · 写回目标同一 · v3 外科豁免/
---field 分布/总账行/Bash 侧透明度/错目标告警）此后任何改动都由本脚本判定，
-不再需要 LLM 手跑模拟重验（2026-08-21 688048 审计重放口径；2026-08-23 v3 扩容）。
+--field 分布/总账行/Bash 侧透明度/错目标告警/处数三分桶 + fetch 注入写标记）此后任何
+改动都由本脚本判定，不再需要 LLM 手跑模拟重验（2026-08-21 688048 审计重放口径；
+2026-08-23 v3 扩容；2026-08-24 3-bucket 处数——chars 口径不变）。
 
 跑：python3 test_token_audit.py（无网络，<2s）
 所有审计子进程统一带 TOKEN_AUDIT_NO_HISTORY=1 + 隔离 HOME（防污染真环比历史）。
@@ -99,13 +100,15 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             stdout, md = r.stdout, open(out, encoding="utf-8").read()
 
-            # v2 摘要行：处数 / 视图内 / 视图外 / 写回 / 覆盖率（result-only）
-            self.assertIn(f"手写提取 {EXPECTED_COUNT} 处（视图内 {EXPECTED_IN} / "
-                          f"视图外 {EXPECTED_OUT}）| 写回 {EXPECTED_WRITEBACK} | "
-                          f"覆盖率 47.6%", stdout)
+            # v2 摘要行：处数分解式（fixture 三处全 extract 桶，gate/fetch=0）/ 写回 / 覆盖率
+            self.assertIn(f"手写提取 {EXPECTED_COUNT} 处 = 真提取 {EXPECTED_COUNT}"
+                          f"（视图内 {EXPECTED_IN} / 视图外 {EXPECTED_OUT}）"
+                          f"+ gate 调试 0 + fetch 补救 0（验收线 ≤5 量真提取桶）"
+                          f"| 写回 {EXPECTED_WRITEBACK} | 覆盖率 47.6%", stdout)
 
             # 版本戳与检查项
-            self.assertIn("semantics v2", md)
+            self.assertIn("semantics v3", md)
+            self.assertIn("3-bucket 处数", md)
             self.assertIn("无快照写回", md)          # 期望行存在（此处 ❌，写回=1）
             self.assertIn("1 处 json.dump/open(w/a) 写快照", md)
             # .jsonl / verify_gates / 复合 不计手写：处数=3 已隐含；再钉 .jsonl 排除词
@@ -188,6 +191,49 @@ class TokenAuditV2Test(unittest.TestCase):
             md3 = open(out3, encoding="utf-8").read()
             self.assertIn("3 处 ⚠️ 超额（quota ≤2）", md3)
             self.assertIn("⚠️ 超额", r3.stdout)
+
+    def test_bucket_split(self):
+        """v3 处数三分桶：gate/fetch/extract 分解 + fetch 注入写标记
+        （json.dumps 打印惯用法不误中；变量间接写 D4 盲区靠 ⚠️ 透明标记，写回计数不动）。"""
+        with tempfile.TemporaryDirectory() as td:
+            fx = os.path.join(td, "fxb.jsonl")
+            calls = [
+                # 真提取（视图外，无桶字面量）
+                ("x1", _hw_cmd("section_x"), 200),
+                # gate 调试：json.load 快照 + gate_definitions 字面量；json.dumps 仅打印
+                # → 计手写、归 gate 桶，注入写标记不得误中（反例）
+                ("g1", 'python3 -c "import json,sys;sys.path.insert(0,\'lib\');'
+                       "from gate_definitions import _g30_signal_coverage_findings as f;"
+                       "d=json.load(open('/tmp/runner_snapshot_688048.json'));"
+                       'print(json.dumps(f(d,\'\')))"', 300),
+                # fetch 补救：akshare 重拉 + load-merge-dump 回写快照（open(p,'w') 变量间接
+                # → D4 写回检测盲区，靠注入写标记透明）
+                ("f1", "python3 -c \"import json,akshare as ak;"
+                       "df=ak.stock_financial_analysis_indicator(symbol='688048');"
+                       "p='/tmp/runner_snapshot_688048.json';d=json.load(open(p));"
+                       "d['financial_indicators']=df.to_dict();json.dump(d,open(p,'w'))\"", 400),
+                ("v1", "python3 snapshot_view.py /tmp/runner_snapshot_688048.json income", 500),
+            ]
+            _build_fixture(fx, calls=calls)
+            out = os.path.join(td, "outb.md")
+            r = _run_audit(fx, out)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            md, stdout = open(out, encoding="utf-8").read(), r.stdout
+
+            # 分解式（stdout [v2] 行）：3 = 1 + 1 + 1
+            self.assertIn("手写提取 3 处 = 真提取 1（视图内 0 / 视图外 1）"
+                          "+ gate 调试 1 + fetch 补救 1", stdout)
+            # ② 新段：🔧 gate 调试 / 🔄 fetch 补救（注入写 1 处）
+            self.assertIn("🔧 gate 调试（hint 数据核对优先，读 gate 源码属行为分诊非取数）1 处", md)
+            self.assertIn("🔄 fetch 补救（API 失败后重拉/注入运维）1 处，"
+                          "其中 ⚠️ 注入写 1 处（json.dump 直写快照，D4 变量间接盲区）", md)
+            self.assertIn("c) ⚠️ 注入写 `python3 -c", md)
+            # json.dumps 反例：gate 命令不亮注入写（fetch 注入写计数仍 1）
+            self.assertIn("| fetch 注入写 1 处", stdout)
+            # D4 盲区透明：open(p,'w') 变量间接 → 写回计数仍 0（标记≠写回命中）
+            self.assertIn("| 写回 0 |", stdout)
+            # chars 口径不变：手写全量（非 surgical）计覆盖率分母 500/(500+900)=35.7%
+            self.assertIn("覆盖率 35.7%", stdout)
 
     def test_a5_field_distribution(self):
         """--field 调用分布行：含 --field 的 snapshot_view 调用计入、普通调用不计。"""
