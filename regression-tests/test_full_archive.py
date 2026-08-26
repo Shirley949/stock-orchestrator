@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """test_full_archive — full/ 合并存档 + detect_prior_data 复用体系回归（模式B v2 §2.5⑤）。
 
-5 断言（离线纯函数，不碰网络；runner._FULL_ARCHIVE_DIR 打向临时沙箱）：
+6 断言（离线纯函数，不碰网络；runner._FULL_ARCHIVE_DIR 打向临时沙箱）：
   1. 存档全量性：_archive_full_snapshot 落盘后顶层场景键 ⊇ snapshot 场景键
-  2. 同日复用：detect_prior_data 只复用 >0 阈值场景（valuation）；阈值0高频场景恒重拉
+  2. 同日复用：低频按各自阈值复用（valuation 7d / s_margin 0=仅同日）；高频5场景恒重拉
+     （2026-08-26 用户指令扩容：时间不敏感数据吃 A 档免限流——s_margin T-1 发布当日不变）
   3. A∪B 合并：同日先 A 后 B 存档，A 场景（s1/s5等）在合并档中存活
   4. cleanup 白名单：clean_dir 只清顶层 *.json，full/ 子目录不受影响（脚本行为快照）
-  5. 90 天旧档识别：days_old 正确 + 高频全刷新 + valuation 视阈值（>7d 时也重拉）
+  5. 90 天旧档识别：days_old 正确 + 高频全刷新 + valuation>7d 重拉；静态 classification 复用
+  6. s1 深度校验两极：A 档三表真数据复用 / B 档 SEGMENTSV 全failed骨架重拉（2026-08-26）
 """
 
 import json
@@ -56,19 +58,22 @@ class TestFullArchive(unittest.TestCase):
                         f"存档缺场景: {snap_keys - set(archived.keys())}")
 
     def test_2_same_day_reuse_only_lowfreq(self):
-        """断言2：同日高频场景恒重拉（阈值0=永不复用），valuation（7d）复用。"""
+        """断言2：同日低频按各自阈值复用（valuation 7d / s_margin 0=仅同日），高频5场景恒重拉。"""
         today = date.today()
         snap_a = {"mode": "A", "timestamp": today.isoformat(),
                   "s2_quote_kline": _scene("s2_quote_kline"),
+                  "s3_fund_flow": _scene("s3_fund_flow"),          # 高频代表：盘中资金流
                   "valuation_snapshot": _scene("valuation_snapshot"),
                   "s_margin": _scene("s_margin")}
         runner._archive_full_snapshot(snap_a, "600000")
         b_snap = {}
         with mock.patch("sys.stderr"):
             diag = runner.detect_prior_data(b_snap, "600000")
-        # 阈值0 的高频场景不复制进 B snapshot（恒重拉）
-        self.assertNotIn("s2_quote_kline", b_snap, "高频场景（K线）同日不得复用")
-        self.assertNotIn("s_margin", b_snap, "高频场景（融资）同日不得复用")
+        # 盘中价在变的高频场景同日也不复用
+        for hf in ("s2_quote_kline", "s3_fund_flow", "market_context", "intraday_60min", "s4_technical"):
+            self.assertNotIn(hf, b_snap, f"高频场景 {hf} 同日不得复用")
+        # s_margin 融资余额 T-1 发布、当日不变 → 同日复用（0 阈值语义）
+        self.assertIn("s_margin", b_snap, "融资余额（T-1 发布，当日不变）同日应复用")
         # valuation 7d 阈值 → 同日复用 + reused_from 标记
         self.assertIn("valuation_snapshot", b_snap, "valuation 7d 阈值内应复用")
         self.assertEqual(b_snap["valuation_snapshot"]["data"]["reused_from"],
@@ -122,8 +127,59 @@ class TestFullArchive(unittest.TestCase):
             diag = runner.detect_prior_data(b_snap, "600003")
         self.assertEqual(diag["days_old"], 90, "90 天旧档 days_old 识别错误")
         self.assertEqual(diag["archive_mode"], "A")
-        # 90 天 > 7 天阈值 → valuation 也重拉；高频全部重拉 → 无任何场景被复制
-        self.assertEqual(b_snap, {}, "90 天旧档不得复制任何场景（classification 由实时分类器提供）")
+        # 90 天 > 7 天阈值 → valuation 重拉；高频全部重拉
+        for k in ("s2_quote_kline", "valuation_snapshot"):
+            self.assertNotIn(k, b_snap, f"90 天旧档 {k} 应重拉")
+        # classification 静态行业归属（3650d 阈值）→ 复用（2026-08-26 用户指令：时间不敏感数据吃 A 档）
+        self.assertIn("classification", b_snap, "静态 classification 跨 90 天应复用")
+        self.assertEqual(b_snap["classification"]["primary_type"], "周期股")
+
+
+    def test_6_s1_deep_substance(self):
+        """断言6（2026-08-26 用户指令）：s1 深度校验两极——
+        A 档三表真数据/主营构成 → 复用；B 档 SEGMENTSV 全failed骨架/failed壳 → 重拉。"""
+        today = date.today()
+
+        def _stmt(status="ok", n=2):
+            return {"status": status, "source": "ths", "data": [{"报告日": "2026-03-31"}] * n}
+
+        # 极A：A 档 s1 三表真数据 + 三维主营构成 → 复用
+        snap_a = {"mode": "A", "timestamp": today.isoformat(),
+                  "s1_financial": {"scene": "s1_financial", "_warnings": [], "data": {
+                      "income_statement": _stmt(), "balance_sheet": _stmt(), "cash_flow": _stmt(),
+                      "segment_composition": {"product": [{"name": "光学", "revenue_ratio": 45}],
+                                              "industry": [], "geo": []}}}}
+        runner._archive_full_snapshot(snap_a, "600006")
+        b_snap = {}
+        with mock.patch("sys.stderr"):
+            diag = runner.detect_prior_data(b_snap, "600006")
+        self.assertIn(next(s for s in diag["reused_scenes"] if s.startswith("s1_financial")),
+                      diag["reused_scenes"], f"A 档 s1 应复用: {diag}")
+        seg = b_snap["s1_financial"]["data"]["segment_composition"]
+        self.assertEqual(seg["product"][0]["name"], "光学")
+        # 极B：B 档 SEGMENTSV 全 failed 骨架（300433 实测形态）→ 重拉，不复制空壳
+        snap_b = {"mode": "B", "timestamp": today.isoformat(),
+                  "s1_financial": {"scene": "s1_financial", "_warnings": [], "data": {
+                      "segment_composition": {
+                          "schema_version": "2.0",
+                          "dimension_status": {d: {"status": "fetch_failed"}
+                                               for d in ("product", "industry", "geo")},
+                          "product": [], "industry": [], "geo": []}}}}
+        runner._archive_full_snapshot(snap_b, "600007")
+        b_snap2 = {}
+        with mock.patch("sys.stderr"):
+            diag2 = runner.detect_prior_data(b_snap2, "600007")
+        self.assertNotIn("s1_financial", b_snap2, "SEGMENTSV 骨架不得复用")
+        self.assertIn("s1_financial(档内无效壳)", diag2["refreshed_scenes"])
+        # 极C：s1 status=failed 整体失败壳 → 重拉
+        snap_c = {"mode": "A", "timestamp": today.isoformat(),
+                  "s1_financial": {"scene": "s1_financial",
+                                   "data": {"status": "failed", "error": "boom"}, "_warnings": []}}
+        runner._archive_full_snapshot(snap_c, "600008")
+        b_snap3 = {}
+        with mock.patch("sys.stderr"):
+            runner.detect_prior_data(b_snap3, "600008")
+        self.assertNotIn("s1_financial", b_snap3, "failed 壳不得复用")
 
 
 if __name__ == "__main__":
