@@ -18,7 +18,10 @@ import re
 
 from latest_extract import days_old  # noqa: E402  G32/G33 freshness 维度（plan Step 5.5）
 from capstone_panorama import panorama as _cap_panorama  # noqa: E402
-from capstone_panorama import QUAL_KW as _CAP_QUAL_KW  # noqa: E402
+from capstone_panorama import QUAL_KW as _CAP_QUAL_KW_A  # noqa: E402
+from capstone_panorama import QUAL_KW_B as _CAP_QUAL_KW_B  # noqa: E402
+# A/B 主题名不重叠 → 合并表；B 快照 qual_required 含 B 主题，单查 A 表会 KeyError（2026-08-26 B v2）
+_CAP_QUAL_KW = {**_CAP_QUAL_KW_A, **_CAP_QUAL_KW_B}
 from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
 from capstone_panorama import _TIMELINE_CODE_TO_M, _is_phantom_m5  # noqa: E402
 
@@ -94,6 +97,12 @@ GATE_DESCS = {
     "G62": "m6 tally 跨章一致（正文「N偏多/N中性/N偏空」自称数 == 证据表第2列裸方向词实数；治自称 7/5/1 实际 5/6/4；无自称/无表 no-op）",
     "G63": "m3 技术位数值对拍（fib/S&R/成本位数值 == snapshot levels ±0.5%；转录错区间 (0.5%,5%]=FAIL；治 666→662；无 m3/无真值豁免）",
     "G64": "资金流术语口径（「大单」行数值禁命中主力 trend_5/10/20d / 全单 net_flow 真值——万/亿双刻度；治主力误标大单；无 fund_flow/无提及豁免）",
+    "G65": "模式B方向预测对拍（direction/confidence/probability ±0.03 + sample_win_rate 同源；insufficient_history/failed 禁出方向；neutral 必现区间）",
+    "G66": "模式B周期状态表（月/周/日/60m ≥3 周期 + resonance_level 原样 + 行级反义对拍）",
+    "G67": "模式B量价分档消费（量比/成交倍数 ±5% 对拍 + amplified/pullback_shrink 键值如实）",
+    "G68": "模式B分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利 f* ±0.01）",
+    "G69": "模式B筹码资金结构 ≥3 维 [src:] 消费（资金流/融资/估值分位/获利盘四维）",
+    "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
@@ -175,7 +184,8 @@ GATE_HINTS = {
 # GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
-ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64"]
+ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
+         "G65", "G66", "G67", "G68", "G69", "G70"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -205,13 +215,23 @@ PROFILES = {
     },
     "profile_quick": {
         "name": "quick",
-        "description": "今天买不买/要不要卖 → 仅技术面+操作+信号",
+        "description": "模式B短期走势预测 → 技术面+操作+信号+G65-G70（B v2）",
         "gates": ["G1", "G30", "G11", "G13"],
-        "auto_pass": ["G6", "G7", "G8", "G9", "G12",
-                      "G14", "G15", "G16", "G17", "G19", "G20", "G21", "G22", "G25", "G26", "G27", "G28"],
+        "auto_pass": [],  # 原 auto_pass 均不在 quick.gates 内（死代码，B v2 清理）
         "fail_threshold": 2,
     },
 }
+
+# —— 模式B gate 隔离（双保险之一；2026-08-26 B v2）——
+# G65-G70 只在 profile_quick 实跑：A 报告（profile_full）结构上不含这些 gate；
+# A 快照即便误跑 quick 也被每个 check 顶部的 mode 短路放行（双保险之二）。
+B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70"]
+PROFILES["profile_full"]["gates"] = [g for g in ALL_GATES if g not in B_ONLY_GATES]
+PROFILES["profile_quick"]["gates"] = PROFILES["profile_quick"]["gates"] + B_ONLY_GATES
+
+# B_ONLY_GATES 须在 ALL_GATES 内且全部注册（防拼写漂移）
+assert set(B_ONLY_GATES) <= set(ALL_GATES), "B_ONLY_GATES 含未注册 gate"
+assert not (set(B_ONLY_GATES) & set(PROFILES["profile_full"]["gates"])), "B gate 泄漏进 profile_full"
 
 
 # ============================================================
@@ -2776,6 +2796,302 @@ def check_g64(report: str, data: dict) -> bool:
     return True
 
 
+# ============================================================
+# G65-G70（模式B专用 · 2026-08-26 B v2）
+# 双保险：① B_ONLY_GATES 从 profile_full 排除、并入 profile_quick；
+#         ② 每个 check 顶部 mode 短路（非 B 快照结构性 True，fixture 3 票 A 快照零扰）。
+# 四段范式仿 check_g1：拉取(status 三态) / 存放(键非空) / 读取(_snapshot_get) / 消费(报告对拍)。
+# 三态语义：enrich/场景 failed → 报告未写 = PASS（诚实降级），写了 = FAIL（禁编造）。
+# ============================================================
+
+_B_STE = "s4_technical.data.short_term_enrich"
+
+
+def _b_gate_active(data) -> bool:
+    """B 专用 gate 的模式短路：非 B 快照结构性放行。"""
+    return isinstance(data, dict) and data.get("mode") == "B"
+
+
+def _nums_in(text: str):
+    """提取行内数值（去千分位/百分号），用于价位容差对拍。
+
+    排除中文/字母前缀紧贴的数字（「止损1」序号、「MA20」型号）——它们不是量值，
+    会以 1.0≈1.045±5% 这类巧合污染容差对拍。"""
+    cleaned = re.sub(r'\d+(?:\.\d+)?\s*%', '', text)
+    return [float(x.replace(",", "")) for x in
+            re.findall(r'(?<![A-Za-z\u4e00-\u9fff])\d+(?:,\d{3})*(?:\.\d+)?', cleaned)]
+
+
+def _match_count(nums, truths, tol=0.05):
+    """贪心一对一匹配计数：每个报告数字只归属一个真值（多档价位接近时防单数字连 hit）。"""
+    pairs = sorted(
+        (abs(abs(n) - abs(t)) / abs(t), i, j)
+        for i, n in enumerate(nums) for j, t in enumerate(truths)
+        if t and abs(abs(n) - abs(t)) <= tol * abs(t))
+    used_n, used_t, cnt = set(), set(), 0
+    for _, i, j in pairs:
+        if i in used_n or j in used_t:
+            continue
+        used_n.add(i)
+        used_t.add(j)
+        cnt += 1
+    return cnt
+
+
+def _hit_tol(n, truth, tol=0.05):
+    return truth is not None and abs(abs(n) - abs(truth)) <= tol * abs(truth)
+
+
+def check_g65(report: str, data: dict) -> bool:
+    """G65: forecast block 对拍（direction/confidence/probability ±0.03；
+    置信分级如实；neutral 在规则未覆盖时必现；p 必带 sample_win_rate）。HARD(weight2)。
+    真相源：s4.data.short_term_enrich.direction_forecast。"""
+    if not _b_gate_active(data):
+        return True
+    df = _snapshot_get(data, _B_STE + ".direction_forecast")
+    if not isinstance(df, dict) or not df.get("status"):
+        if re.search(r'方向预测[：:]\s*(bull|bear)|"direction_15d"', report):
+            return GateResult(passed=False, reasons=[
+                "short_term_enrich.direction_forecast 缺失而报告写方向预测——禁编造（引擎未出方向）"])
+        return True
+    status, direction = df.get("status"), df.get("direction")
+    probability = df.get("probability")
+    confidence = df.get("confidence") or ""
+    swr = df.get("sample_win_rate")
+    if status in ("insufficient_history", "failed") or not direction:
+        # 降级路径：报告不得出具体方向
+        if re.search(r'方向预测[：:]\s*(bull|bear)|"direction"\s*:\s*"(bull|bear)"', report):
+            return GateResult(passed=False, reasons=[
+                f"direction_forecast.status={status}（上市历史不足/拉取失败）——分级规则不适用，禁出方向"])
+        return True
+    # ---- 消费段：status=ok 出方向，报告必须引用且一致 ----
+    asserts = re.findall(r'方向预测[：:]\s*(bull|bear|neutral)', report) + \
+        re.findall(r'"direction"\s*:\s*"(bull|bear|neutral)"', report)
+    if not asserts:
+        return GateResult(passed=False, reasons=[
+            f"forecast block 缺失：方向预测（{direction}）未引用 direction_forecast（禁自造/禁省略）"])
+    bad_dir = [a for a in asserts if a != direction]
+    if bad_dir:
+        return GateResult(passed=False, reasons=[
+            f"方向对拍不一致：报告 {bad_dir} vs 引擎 {direction}（direction_forecast.direction 原样引用）"])
+    # probability ±0.03（p=0.66 / 66% 双刻度）
+    p_repr = set()
+    if isinstance(probability, (int, float)):
+        p_repr = {round(probability, 4), round(probability * 100, 2)}
+    p_asserts = [float(g) for tup in
+                 re.findall(r'(?<![A-Za-z0-9_])p=(\d*\.?\d+)|"probability"\s*:\s*(\d*\.?\d+)', report)
+                 for g in tup if g]
+    if p_asserts and p_repr:
+        bad_p = [x for x in p_asserts if not any(abs(x - v) <= 0.03 for v in p_repr)]
+        if bad_p:
+            return GateResult(passed=False, reasons=[
+                f"概率对拍超 ±0.03：报告 {bad_p} vs 引擎 p={probability}（G65 对拍，禁自造数字）"])
+    if not p_asserts and confidence != "NEUTRAL":
+        return GateResult(passed=False, reasons=[
+            "probability 未引用：写方向预测必带 p 值（direction_forecast.probability 原样引用）"])
+    # sample_win_rate 同源（p 与回测胜率一致；非 neutral 须引用）
+    if confidence != "NEUTRAL" and isinstance(swr, (int, float)):
+        swr_repr = {round(swr, 4), round(swr * 100, 2)}
+        line = re.search(r'胜率[：:]?\s*(\d*\.?\d+)', report)
+        if not line:
+            return GateResult(passed=False, reasons=[
+                "sample_win_rate 未引用：写 p 必带该规则回测胜率（direction_forecast.sample_win_rate）"])
+        if not any(abs(float(line.group(1)) - v) <= 0.03 for v in swr_repr):
+            return GateResult(passed=False, reasons=[
+                f"胜率对拍不一致：报告 {line.group(1)} vs sample_win_rate={swr}"])
+    # 置信分级如实
+    conf_assert = re.findall(r'置信\s*(HIGH|MED|NEUTRAL)|"confidence"\s*:\s*"(HIGH|MED|NEUTRAL)"', report)
+    conf_tokens = [c for tup in conf_assert for c in tup if c]
+    bad_conf = [c for c in conf_tokens if c != confidence]
+    if bad_conf:
+        return GateResult(passed=False, reasons=[
+            f"置信分级不实：报告 {bad_conf} vs 引擎 {confidence}（HIGH/MED 如实分级）"])
+    # neutral 必现区间表述
+    if direction == "neutral" and not re.search(r'方向不明|neutral|区间震荡|波动区间', report):
+        return GateResult(passed=False, reasons=[
+            "direction=neutral 须如实写「方向不明+预期波动区间」（neutral 是诚实结论不是失败）"])
+    return True
+
+
+def check_g66(report: str, data: dict) -> bool:
+    """G66: m36 周期状态表（月/周/日/60m）≥3 周期 + 共振等级原样 + 行级状态反义对拍。SOFT(weight1)。
+    真相源：s4.data.short_term_enrich.multi_period。"""
+    if not _b_gate_active(data):
+        return True
+    mp = _snapshot_get(data, _B_STE + ".multi_period")
+    if not isinstance(mp, dict) or not mp.get("resonance_level"):
+        if re.search(r'共振[（(]?[：:]?\s*(long_resonance|short_resonance|divergent)', report):
+            return GateResult(passed=False, reasons=[
+                "multi_period 缺失而报告写共振等级——禁编造"])
+        return True
+    periods = ["月线", "周线", "日线", "60分钟"]
+    n_present = sum(1 for p in periods if p in report)
+    if n_present < 3:
+        return GateResult(passed=False, reasons=[
+            f"周期状态表覆盖不足：月线/周线/日线/60分钟 须 ≥3 个周期呈现（现 {n_present}）"])
+    rl = mp["resonance_level"]
+    # divergent 中文备选收窄：勿用裸「背离」（m3 背离节合法表述会误兜底）
+    zh = {"divergent": "无单向共振|共振发散|周期背离|多周期背离",
+          "long_resonance": "多头共振|向上共振", "short_resonance": "空头共振|向下共振"}
+    if rl not in report and not re.search(zh.get(rl, rl), report):
+        return GateResult(passed=False, reasons=[
+            f"共振等级未引用/不一致：resonance_level={rl}（原样引用，只描述不预测）"])
+    # 行级反义对拍（表格行；描述对立结构的语境行豁免）
+    opp = {"up": ("down",), "down": ("up",), "below": ("above",), "above": ("below",),
+           "long": ("short",), "short": ("long",)}
+    for key, cname in (("monthly", "月线"), ("weekly", "周线"), ("daily", "日线"), ("h60", "60分钟")):
+        st = (mp.get(key) or {}).get("state")
+        if st not in opp:
+            continue
+        for ln in report.splitlines():
+            # 只对周期状态表首列行执法（| 月线 | ... ）；矩阵/全景行多周期混提是合法表述
+            if re.match(r'^\|\s*' + cname + r'\s*\|', ln.strip()) and \
+                    not re.search(r'反向|divergent|背离|共振', ln):
+                if any(o in ln for o in opp[st]):
+                    return GateResult(passed=False, reasons=[
+                        f"{cname} 状态对拍矛盾：快照 state={st}，周期表行含反义词（multi_period.{key}.state 原样引用）"])
+    return True
+
+
+def check_g67(report: str, data: dict) -> bool:
+    """G67: 量价分档消费（成交倍数/量比数值 ±5% 对拍 + amplified/pullback_shrink 键值如实）。SOFT(weight1)。
+    真相源：s4.data.short_term_enrich.volume_check。"""
+    if not _b_gate_active(data):
+        return True
+    vc = _snapshot_get(data, _B_STE + ".volume_check")
+    if not isinstance(vc, dict) or vc.get("state") != "ok":
+        return True  # 缺席/降级：G65 已管 enrich 整体编造；此处不重复执法
+    truths = {k: vc.get(k) for k in ("vol_ratio_5d", "amount_mult_20d", "week_volume_mult")
+              if isinstance(vc.get(k), (int, float))}
+    if not truths:
+        return True
+    nums = _nums_in(report)
+    hit = sum(1 for v in truths.values() if any(_hit_tol(n, v) for n in nums))
+    if hit == 0:
+        return GateResult(passed=False, reasons=[
+            "量价分档未消费：量比/成交倍数数值（volume_check.vol_ratio_5d/amount_mult_20d/week_volume_mult）"
+            "无一出现在报告中（±5% 容差对拍）"])
+    for flag in ("amplified", "pullback_shrink"):
+        truth = vc.get(flag)
+        m = re.search(flag + r'\s*[=：]\s*(True|False|true|false)', report)
+        if m and truth is not None:
+            rep = m.group(1).lower() == "true"
+            if rep != truth:
+                return GateResult(passed=False, reasons=[
+                    f"{flag} 键值不实：报告 {m.group(1)} vs 引擎 {truth}（volume_check.{flag} 原样引用）"])
+    return True
+
+
+def check_g68(report: str, data: dict) -> bool:
+    """G68: 分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利 f* 对拍）。HARD(weight2)。
+    真相源：s4.data.short_term_enrich.risk_control。"""
+    if not _b_gate_active(data):
+        return True
+    rc = _snapshot_get(data, _B_STE + ".risk_control")
+    if not isinstance(rc, dict):
+        if re.search(r'止损[表档]|atr_stop|kelly_fraction', report):
+            return GateResult(passed=False, reasons=[
+                "risk_control 缺失而报告写止损档/凯利——禁编造"])
+        return True
+    stops = [st.get("price") for st in (rc.get("stops") or [])
+             if isinstance(st, dict) and isinstance(st.get("price"), (int, float))]
+    # 对拍范围：止损价位聚集在均线区（档间差 <5%），±5% 全文匹配必互 hit——
+    # 改为首列档位行（m6 B 收口规定的表格式）±1% 逐档对拍 + forecast block stop_loss 按序对拍
+    if stops:
+        level_price = {st.get("level"): st.get("price") for st in (rc.get("stops") or [])
+                       if isinstance(st, dict) and isinstance(st.get("price"), (int, float))}
+        row_pat = {"h60_ma60": r'^\|\s*(?:60m|60分钟|h60)\s*MA60',
+                   "daily_ma20": r'^\|\s*日\s*MA20',
+                   "weekly_ma20": r'^\|\s*周\s*MA20',
+                   "monthly_ma20": r'^\|\s*月\s*MA20'}
+        hit = 0
+        for lv, pat in row_pat.items():
+            pr = level_price.get(lv)
+            if pr is None:
+                continue
+            for ln in report.splitlines():
+                if re.match(pat, ln.strip()) and any(_hit_tol(n, pr, 0.01) for n in _nums_in(ln)):
+                    hit += 1
+                    break
+        if hit < min(3, len(stops)):
+            m = re.search(r'stop_loss"\s*:\s*\[([^\]]*)\]', report)
+            if m:
+                blk = _nums_in(m.group(1))
+                hit = _match_count(blk, stops, 0.01)
+        if hit < min(3, len(stops)):
+            return GateResult(passed=False, reasons=[
+                f"分级止损表不足：快照 {len(stops)} 档带价位，止损表行/forecast block 须 ≥{min(3, len(stops))} 档"
+                "（risk_control.stops[].price ±1% 对拍；表式见 m6 模式B收口）"])
+    atr = (rc.get("atr") or {}).get("atr_stop")
+    if isinstance(atr, (int, float)):
+        atr_nums = [n for ln in report.splitlines()
+                    if re.search(r'atr_stop|ATR\s*止损', ln) for n in _nums_in(ln)]
+        if not any(_hit_tol(n, atr, 0.01) for n in atr_nums):
+            return GateResult(passed=False, reasons=[
+                f"ATR 止损未呈现：atr_stop={round(atr, 2)}（risk_control.atr 必现一行，±1%）"])
+    kf = (rc.get("kelly") or {}).get("kelly_fraction")
+    if isinstance(kf, (int, float)):
+        kelly_lines = [ln for ln in report.splitlines()
+                       if "凯利" in ln or "kelly" in ln.lower()]
+        kelly_nums = [n for ln in kelly_lines for n in _nums_in(ln)]
+        if not kelly_lines or not any(abs(n - kf) <= 0.01 for n in kelly_nums):
+            return GateResult(passed=False, reasons=[
+                f"凯利仓位未引用/不一致：kelly_fraction={kf}（risk_control.kelly 原样引用，"
+                "凯利行须含 f* 数值 ±0.01）"])
+    return True
+
+
+def check_g69(report: str, data: dict) -> bool:
+    """G69: 筹码/资金结构 ≥3 维 [src:] 消费（四维：资金流/融资/估值分位/获利盘）。SOFT(weight1)。
+    真相源：s3_fund_flow / s_margin / valuation_snapshot.valuation_percentile / s4 chip。"""
+    if not _b_gate_active(data):
+        return True
+    dims = [
+        ("s3_fund_flow.data.fund_flow", ("资金流", "主力", "净流入", "净流出"), "s3_fund_flow"),
+        ("s_margin.data", ("融资", "杠杆"), "s_margin"),
+        ("valuation_snapshot.data.valuation_percentile", ("估值分位", "分位"), "valuation_snapshot"),
+        ("s4_technical.data.chip", ("获利", "筹码", "平均成本"), "s4_technical"),
+    ]
+    ok_dims, consumed = [], []
+    for path, kws, src_token in dims:
+        if not _scene_has_data(_snapshot_get(data, path)):
+            continue  # 缺席/failed 维不计分母（如实降级不算消费失败）
+        ok_dims.append(path)
+        if (src_token in report) and any(k in report for k in kws):
+            consumed.append(path)
+    need = min(3, len(ok_dims))
+    if len(consumed) < need:
+        miss = [d for d in ok_dims if d not in consumed]
+        return GateResult(passed=False, reasons=[
+            f"筹码/资金结构消费不足：{miss} 有数据未消费（四维须 ≥{need} 维 [src:] 锚 + 维度关键词）"])
+    return True
+
+
+def check_g70(report: str, data: dict) -> bool:
+    """G70: 大盘/板块 verdict 对拍（regime 一致；market_context 缺席禁编 regime 断言）。SOFT(weight1)。
+    真相源：market_context.data.index_sh.verdict。"""
+    if not _b_gate_active(data):
+        return True
+    v = _snapshot_get(data, "market_context.data.index_sh.verdict")
+    regime = v.get("regime") if isinstance(v, dict) else None
+    asserts = re.findall(r'regime[=：]\s*\**\s*(trend_up|trend_down|choppy)', report)
+    if not regime:
+        if asserts:
+            return GateResult(passed=False, reasons=[
+                "market_context 缺失/降级而报告写 regime 断言——禁编造（如实写大盘数据降级）"])
+        return True
+    bad = [a for a in asserts if a != regime]
+    if bad:
+        return GateResult(passed=False, reasons=[
+            f"大盘 regime 对拍不一致：报告 {bad} vs market_context verdict={regime}"
+            "（regime 是引擎输入，报告表述须一致；勿据大盘单独推方向）"])
+    if not re.search(r'大盘|上证|指数|market_context', report):
+        return GateResult(passed=False, reasons=[
+            "大盘环境未消费：B 报告须呈现 market_context（regime+证据；板块降级如实标注）"])
+    return True
+
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G11": check_g11, "G12": check_g12,
@@ -2804,6 +3120,8 @@ GATE_CHECKERS = {
     "G59": check_g59,
     "G60": check_g60,
     "G61": check_g61, "G62": check_g62, "G63": check_g63, "G64": check_g64,
+    "G65": check_g65, "G66": check_g66, "G67": check_g67,
+    "G68": check_g68, "G69": check_g69, "G70": check_g70,
 }
 
 # ============================================================
@@ -3041,6 +3359,31 @@ GATE_REGISTRY = {
             "data_dim": "s3_fund_flow.data.fund_flow",
             "requires": "「大单」行数值只准用 items[] 大单行 in/out；主力趋势(trend_5/10/20d)/全单净额(net_flow)须标「主力/净额」",
             "fail_hint": "主力/全单口径数值错标成「大单」"},
+    # —— 模式B专用（B_ONLY_GATES；A 快照 mode 短路 True，2026-08-26 B v2）——
+    "G65": {"checker": check_g65, "weight": 2, "owner": ["m6"],
+            "data_dim": "s4_technical.data.short_term_enrich.direction_forecast",
+            "requires": "forecast block 三字段逐字引用（direction/confidence/probability ±0.03 + sample_win_rate）",
+            "fail_hint": "方向/概率/置信与引擎不一致，或降级路径(insufficient_history/failed)出方向"},
+    "G66": {"checker": check_g66, "weight": 1, "owner": ["m36"],
+            "data_dim": "s4_technical.data.short_term_enrich.multi_period",
+            "requires": "周期状态表 ≥3 周期 + resonance_level 原样引用",
+            "fail_hint": "周期覆盖不足/共振等级缺失或状态反义"},
+    "G67": {"checker": check_g67, "weight": 1, "owner": ["m36"],
+            "data_dim": "s4_technical.data.short_term_enrich.volume_check",
+            "requires": "量比/成交倍数数值消费（±5%）+ amplified/pullback_shrink 如实",
+            "fail_hint": "量价分档数值未消费或键值错标"},
+    "G68": {"checker": check_g68, "weight": 2, "owner": ["m6"],
+            "data_dim": "s4_technical.data.short_term_enrich.risk_control",
+            "requires": "止损表行 ≥3 档（±1% 逐档，表式见 m6 模式B收口）+ ATR 止损行 + 凯利 f*（±0.01）",
+            "fail_hint": "止损表档数/价位不达标（支撑位数字不能冒充止损档），ATR 或凯利缺失"},
+    "G69": {"checker": check_g69, "weight": 1, "owner": ["m37"],
+            "data_dim": "s3_fund_flow+s_margin+valuation_snapshot+s4 chip",
+            "requires": "四维（资金流/融资/估值分位/获利盘）≥3 维 [src:] 锚消费",
+            "fail_hint": "有数据维度未消费（ok 维计入分母）"},
+    "G70": {"checker": check_g70, "weight": 1, "owner": ["m36"],
+            "data_dim": "market_context.data.index_sh.verdict",
+            "requires": "大盘 regime 表述与 verdict.regime 一致；market_context 必现",
+            "fail_hint": "regime 断言与快照不一致，或缺失时编造 regime"},
 }
 
 # GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）
@@ -3120,10 +3463,13 @@ _EXPECTED_SCENES = [
     # 整个 consensus_forecast 失败/缺失才扣分。
     ("consensus_forecast", "一致预期/业绩预告"),
 ]
-# profile_quick（模式B）的覆盖分母：runner fetch_for_mode 只拉 s2 行情K线 + s4 技术
+# profile_quick（模式B）的覆盖分母：B fan-out 拉行情/技术/资金流/大盘（2026-08-26 B v2 扩容；
+# s_margin/valuation/intraday 为 best-effort 或复用，failed 不误扣 → 不进分母）
 _QUICK_EXPECTED_SCENES = [
     ("s2_quote_kline", "行情K线"),
     ("s4_technical", "技术指标"),
+    ("s3_fund_flow", "资金流向"),
+    ("market_context", "大盘环境"),
 ]
 
 

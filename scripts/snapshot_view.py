@@ -42,6 +42,10 @@ VIEW_PATHS = {
     "events":    ("s5_events", "data", "risk_signals", "report_view"),
     "timeline":  ("s5_events", "data", "risk_signals", "processed", "report_view"),
     "technical": ("s4_technical", "data", "report_view"),
+    # 模式B v2 三视图（2026-08-26）：short_term presence-gated（A 快照缺席时 no-op）
+    "short_term":    ("s4_technical", "data", "short_term_enrich", "report_view"),
+    "market_context": ("market_context", "data", "report_view"),
+    "fund_flow":     ("s3_fund_flow", "data", "fund_flow"),
     "valuation": ("valuation_snapshot", "data", "report_view"),
     "consensus": ("consensus_forecast", "data", "report_view"),
     "peer":      ("s11_peer", "data", "report_view"),
@@ -340,6 +344,70 @@ def _print_annual(v):
 
 
 # ---------------------------------------------------------------------------
+# 模式B v2 视图（2026-08-26）：short_term / market_context / fund_flow
+# ---------------------------------------------------------------------------
+
+def _print_short_term(v):
+    """short_term_enrich.report_view 投影（presence-gated：A 快照无此键 → 调用前已 no-op）。"""
+    f = v.get("forecast_line")
+    print(f"## 短期走势视图  {f or '—'}")
+    print(f"  regime={_fmt(v.get('regime'))}  共振={_fmt(v.get('resonance'))}")
+    ev = v.get("evidence") or {}
+    if ev:
+        print(f"  证据: ret20={_fmt(ev.get('ret20_pct'))}% bias20={_fmt(ev.get('bias20_pct'))}% "
+              f"close={_fmt(ev.get('close'))} 指数={_fmt(ev.get('idx_state'))}")
+    er = v.get("expected_range")
+    if er:
+        print(f"  预期区间[{_fmt(er.get('low'))} ~ {_fmt(er.get('high'))}] "
+              f"std20={_fmt(er.get('daily_std20'))} tier={_fmt(er.get('vol_tier'))} "
+              f"P(|ret10|>8%)={er.get('prob_abs_ret10_gt_8pct')}")
+    ps = v.get("period_states") or {}
+    print(f"  周期态: 月={_fmt(ps.get('monthly'))} 周={_fmt(ps.get('weekly'))} "
+          f"日={_fmt(ps.get('daily'))} 60m={_fmt(ps.get('h60'))}")
+    vol = v.get("volume") or {}
+    print(f"  量能: 放量={_fmt(vol.get('amplified'))} 回调缩量={_fmt(vol.get('pullback_shrink'))} "
+          f"量比5d={_fmt(vol.get('vol_ratio_5d'))} 倍数20d={_fmt(vol.get('amount_mult_20d'))}")
+    dv = v.get("divergence") or {}
+    print(f"  背离: 日={_fmt(dv.get('daily'))} 周={_fmt(dv.get('weekly'))} 计数={_fmt(dv.get('multi_count'))}")
+    for s in v.get("stops") or []:
+        print(f"  止损 {s.get('level')}: {s.get('price')} ({_fmt(s.get('dist_pct'))}%) "
+              f"{'🔴已触发' if s.get('triggered') else ''}")
+    atr = v.get("atr") or {}
+    if atr:
+        print(f"  ATR14={_fmt(atr.get('atr14'))} ({_fmt(atr.get('atr_pct'))}%) ATR止损={_fmt(atr.get('atr_stop'))}")
+    k = v.get("kelly") or {}
+    print(f"  凯利 f*={_fmt(k.get('kelly_fraction'))} cap={_fmt(k.get('capped_at'))} {k.get('note', '')}")
+    print(f"  失效: {_fmt(v.get('invalidation'))}")
+
+
+def _print_market_context(v):
+    print("## 大盘/板块环境视图")
+    print(f"  上证 regime={_fmt(v.get('sh_regime'))} close={_fmt(v.get('sh_close'))} "
+          f"创业板ret5={_fmt(v.get('cyb_ret5'))}")
+    b = v.get("board")
+    if b:
+        print(f"  板块 {b.get('name')}: last={_fmt(b.get('last'))} ret20={_fmt(b.get('ret20'))} "
+              f"{b.get('reason', '') if b.get('status') == 'degraded' else ''}")
+    bf = v.get("board_fund_flow")
+    if bf:
+        print(f"  行业资金流 rank={_fmt(bf.get('rank'))} "
+              f"{bf.get('reason', '') if bf.get('status') == 'degraded' else ''}")
+
+
+def _print_fund_flow(v):
+    print(f"## 资金流视图 status={_fmt(v.get('status'))} source={_fmt(v.get('source'))} "
+          f"as-of {v.get('end_date', '—')}")
+    print(f"  净流入={_fmt(v.get('net_flow'))} 类型={_fmt(v.get('net_flow_type'))} "
+          f"收盘={_fmt(v.get('close_price'))}")
+    print(f"  趋势 5d={_fmt(v.get('trend_5d'))} 10d={_fmt(v.get('trend_10d'))} 20d={_fmt(v.get('trend_20d'))}")
+    print(f"  排名 市场={_fmt(v.get('rank_market'))} 行业={_fmt(v.get('rank_industry'))} "
+          f"流通占比={_fmt(v.get('circ_rate'))}")
+    for it in (v.get("items") or [])[:6]:
+        print(f"    {it.get('name')}: 流入 {_fmt(it.get('in'))} 流出 {_fmt(it.get('out'))} "
+              f"(占比 {_fmt(it.get('in_ratio'))}/{_fmt(it.get('out_ratio'))})")
+
+
+# ---------------------------------------------------------------------------
 # any 两级探查：任意节键树（深度可调，扁平小节首选读取方式）
 # ---------------------------------------------------------------------------
 
@@ -350,6 +418,8 @@ PRINTERS = {
     "balance": _print_balance, "timeline": _print_timeline,
     "technical": _print_technical, "valuation": _print_valuation,
     "consensus": _print_consensus, "peer": _print_peer, "annual": _print_annual,
+    "short_term": _print_short_term, "market_context": _print_market_context,
+    "fund_flow": _print_fund_flow,
 }
 
 

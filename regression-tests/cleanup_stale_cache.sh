@@ -39,6 +39,14 @@ clean_dir "$CACHE/skill-snapshots"  "_${TODAY}.json"   "skill-snapshots"
 clean_dir "$CACHE/skill-probes"     "/${TODAY_DASH}.json" "skill-probes"
 clean_dir "$CACHE/westock_api_cache" "/${TODAY}.json"   "westock_api_cache"
 
+# full/ 合并存档白名单（模式B v2 §2.5）：A/B 每次运行的全量数据存档，"不删"是用户硬指令。
+# 上方 clean_dir 的 "$dir"/*.json 只匹配顶层文件，full/ 子目录天然不中——此处显式声明 +
+# 清点留痕，防未来有人改成 find -delete / globstar 时误伤。
+if [ -d "$CACHE/skill-snapshots/full" ]; then
+  n=$(ls "$CACHE/skill-snapshots/full"/*.json 2>/dev/null | wc -l)
+  echo "  skill-snapshots/full: 白名单保留 $n 个存档（A/B 全量数据持久层，永不清理）"
+fi
+
 # 可选：研报 PDF（静态历史文档，cninfo 重下较慢）
 if [ "${1:-}" = "--pdfs" ]; then
   if [ -d "$CACHE/em_research_pdfs" ]; then

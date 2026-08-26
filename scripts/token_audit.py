@@ -43,12 +43,15 @@ from datetime import datetime
 MODULE_RE = re.compile(r"modules/(m\d[\w-]*)\.md")
 
 VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder",
-              "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual"]
+              "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual",
+              # 模式B视图（2026-08-26 B v2）
+              "short_term", "market_context", "fund_flow"]
 # 视图 → 消费模块（报告归因用；events 双消费取 m4）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
                   "news": "m4", "events": "m4", "holder": "m4",
                   "balance": "m2", "timeline": "m4", "technical": "m3",
-                  "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9"}
+                  "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
+                  "short_term": "m36", "market_context": "m36", "fund_flow": "m37"}
 
 # 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
 VIEW_MOUNT_PREFIXES = [
@@ -58,6 +61,8 @@ VIEW_MOUNT_PREFIXES = [
     "s5_events.data.risk_signals", "s8_a_share.data.shareholder_count",
     "s4_technical.data", "valuation_snapshot.data", "consensus_forecast.data",
     "s11_peer.data", "s36_annual_analysis.data",
+    # 模式B挂载点（short_term_enrich 天然落在 s4_technical.data 前缀内）
+    "market_context.data", "s3_fund_flow.data.fund_flow",
 ]
 # 扁平小节（≤4K，any --depth 2 一条命令即全量；V9 尺寸采样结论，视图化收益<维护成本）
 FLAT_SECTIONS = ["segment_composition", "financial_indicators", "rd_expense",
@@ -325,6 +330,7 @@ def main():
     field_calls, field_chars = 0, 0                    # A5：--field 外科投影分布
     gate_src_bash_n, gate_src_bash_chars = 0, 0        # A2：gate 源码 Bash 侧访问（透明度）
     compact_turns, snapshot_cli_events = [], []        # v4：compact 段起点轮 / CLI 取数事件(turn, cmd)
+    b_mode_cmds = []                                   # 模式B会话检测（runner.py B <code>）
     hw_turn = -1
     for l in lines:
         # v4：compact 段起点——顶层键判定（禁子串 grep：正文提及 isCompactSummary 会 16→2 假阳）
@@ -355,6 +361,9 @@ def main():
                 gate_src_bash_chars += result_chars_by_id.get(b.get("id"), 0)
             if "gate_definitions" in fp and n == "Read":
                 gate_src_reads.append(fp)
+            # 模式B会话检测（runner.py B <code> 调用形态；模块基线标注用）
+            if re.search(r"runner\.py[\"']?\s+B\s", c):
+                b_mode_cmds.append(c[:60])
             # 写回检测：以写模式 open 的文件参数本身命中快照路径（目标同一，
             # 防「读快照+写报告 md」跨文件假阳——688048 轮212-246 曾 7 处误报）；
             # 合法生产者 runner.py 除外；Path.write_text(json.dumps) 形态为已知限制
@@ -423,6 +432,8 @@ def main():
     view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
     any_flat_hits = sum(1 for c in any_calls if any(s in c for s in FLAT_SECTIONS))
     BASE_MOD_PCT = 32.3   # 瑞丰 300243 旧路径基线（2026-08-20 审计）
+    # 模式B会话：模块面 m3/m36/m37/m6 与 A 不同，基线暂沿 A（P5 盲测后单列校准）
+    IS_B_SESSION = bool(b_mode_cmds)
 
     # ---- v4：compact 分叉段（RCA 2026-08-25：compact 后首取数动作锚定段内写作期行为；
     #      诊断项不进验收线。手写=HANDWRITE_PAT 命中集，CLI=snapshot_view.py 调用）----
@@ -439,7 +450,7 @@ def main():
                 "hw_n": sum(1 for h in handwrite_hits if ct <= h["turn"] < seg_end),
                 "kind": first[1] if first else "无",
                 "gap": (first[0] - ct) if first else -1,
-                "cmd": (first[2] or "")[:60]})
+                "cmd": (first[2] or "")[:60] if first else ""})
 
 
     # ---- A4：总账行 + 环比历史（TOKEN_AUDIT_NO_HISTORY=1 时回归测试防污染） ----
@@ -567,7 +578,8 @@ def main():
             mark = " ⚠️ 注入写" if h.get("inj_write") else ""
             L.append(f"  - 轮{h['turn']} ({h['chars']:,}c){mark} `{h['cmd'][:90]}`")
 
-    L.append("\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）\n")
+    _b_tag = " · **模式B会话**（模块面 m3/m36/m37/m6，基线暂沿 A，P5 盲测后单列）" if IS_B_SESSION else ""
+    L.append(f"\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）{_b_tag}\n")
     checks = [
         ("模块 JIT 加载", jit_span >= 10, f"跨度 {jit_span} 轮（旧：Phase3 开头集中全量 Read）"),
         ("m11 延迟加载", m11_delayed,

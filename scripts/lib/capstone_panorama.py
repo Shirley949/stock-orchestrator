@@ -118,8 +118,19 @@ QUAL_THEMES = [
                 "成长空间", "渗透率", "国产替代", "新产品", "扩产"]),
 ]
 
+# 模式B定性维度（B 报告的叙事面：技术结构解读而非基本面主题，2026-08-26 B v2）
+QUAL_THEMES_B = [
+    ("多周期共振解读", ["月线", "周线", "日线", "60分钟", "60分钟", "共振", "多周期",
+                       "MA20", "排列", "上升趋势", "下降趋势"]),
+    ("大盘环境", ["大盘", "上证", "指数", "regime", "trend_up", "trend_down",
+                "创业板", "板块", "市场环境"]),
+    ("量价与背离结构", ["放量", "缩量", "量比", "成交额", "换手", "背离", "顶背离",
+                       "底背离", "MACD", "量价配合", "尾盘"]),
+]
+
 QUANT_KW = {t: kw for t, _, kw in QUANT_THEMES}
 QUAL_KW = {t: kw for t, kw in QUAL_THEMES}
+QUAL_KW_B = {t: kw for t, kw in QUAL_THEMES_B}  # B 主题→关键词（gate G30 合并查找，2026-08-26 B v2）
 
 
 # M-code presence 关键词表（G30#1 信号覆盖用·精确词拒 K线/换手冒充；path-agnostic，timeline/M-code 共用）。
@@ -322,14 +333,20 @@ def _signal_direction_tally(values: dict, data: dict, fatal_events: list) -> dic
 
 
 def panorama(data: dict) -> dict:
-    """读 snapshot → 证据全景结构（只抽值，不映射概率/方向）。"""
+    """读 snapshot → 证据全景结构（只抽值，不映射概率/方向）。
+    模式感知（B v2）：snapshot.mode=="B" 时定性维度换短期叙事清单（共振/大盘/量价），
+    量化维度照抽（B 缺 s1/s5 场景自然落 gap，gap 不 gate）。"""
+    _is_b = isinstance(data, dict) and data.get("mode") == "B"
+    _themes = QUAL_THEMES_B if _is_b else QUAL_THEMES
     out = {
         "present_quant": [], "gap_quant": [],
-        "qual_required": [t for t, _ in QUAL_THEMES],
+        "qual_required": [t for t, _ in _themes],
         "values": {}, "interpretation_flags": [], "draft_lines": [],
         "present_signals": [],
         "stock_type": _snapshot_get(data, "classification.primary_type") or _snapshot_get(data, "stock_type"),
     }
+    if _is_b:
+        out["mode"] = "B"   # 消费方可读（m6 B 收口叙事锚）
 
     for theme, paths, _ in QUANT_THEMES:
         present = any(_scene_has_data(_snapshot_get(data, p)) for p in paths)

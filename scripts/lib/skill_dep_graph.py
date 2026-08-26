@@ -31,6 +31,7 @@ MODE_FORCED_SKILLS = {
         "stock-orchestrator",
         "data-source-registry",
         "financial-data-routing",
+        "stock-analysis-quality",   # B 报告模块 m3/m6/m36/m37/m11 在此仓（2026-08-26 B v2 补）
     ],
 }
 
@@ -97,7 +98,12 @@ MODE_SCENARIO_FILES = {
     ],
     "B": [
         "financial-data-routing/references/scenarios/s2-quote-kline.md",
+        "financial-data-routing/references/scenarios/s3-fund-flow.md",
+        "financial-data-routing/references/scenarios/market-context.md",
+        "financial-data-routing/references/scenarios/intraday-60min.md",
         "stock-analysis-quality/references/modules/m3-technical.md",
+        "stock-analysis-quality/references/modules/m36-short-term.md",
+        "stock-analysis-quality/references/modules/m37-positioning.md",
         "stock-analysis-quality/references/modules/m6-decision.md",
         "stock-analysis-quality/references/modules/m11-gates.md",
     ],
@@ -154,6 +160,9 @@ def resolve_required_files(mode: str, user_prompt: str) -> list[dict]:
 
     # 3. 用户关键词触发的额外文件
     for rel_path in get_keyword_files(user_prompt):
+        # 模式B v2：走势/分时/做T 关键词不再路由 intraday-t-analyzer（B 的 60min 信号已覆盖其职责）
+        if mode == "B" and "stock-intraday-t-analyzer" in rel_path:
+            continue
         if rel_path not in seen:
             seen.add(rel_path)
             result.append({

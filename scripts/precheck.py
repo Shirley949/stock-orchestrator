@@ -34,11 +34,17 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
         print(f"🔴 snapshot 格式错误: {e}", file=sys.stderr)
         return False
 
+    # 模式感知核心场景（与 data_snapshot.finalize 同款）：B 不拉 s1/s5，缺场景≠失败
+    if snapshot.get("mode") == "B":
+        core_scenes = ["s2_quote_kline", "s4_technical", "s3_fund_flow"]
+    else:
+        core_scenes = ["s1_financial", "s2_quote_kline", "s5_events"]
+
     # 检查 _critical_failure 标记
     if snapshot.get("_critical_failure"):
         failure_summary = snapshot.get("_failure_summary", [])
         failed_scenes = []
-        for scene in ["s1_financial", "s2_quote_kline", "s5_events"]:
+        for scene in core_scenes:
             scene_data = snapshot.get(scene, {}).get("data", {})
             if scene_data and all(
                 v.get("status") not in ("ok", "cached")
@@ -56,8 +62,7 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
             print(f"     ... 还有 {len(failure_summary) - 5} 条", file=sys.stderr)
         return False
 
-    # 检查核心场景是否有至少一个成功
-    core_scenes = ["s1_financial", "s2_quote_kline", "s5_events"]
+    # 检查核心场景是否有至少一个成功（core_scenes 已按 mode 判定）
     has_any_data = False
     for scene in core_scenes:
         scene_data = snapshot.get(scene, {}).get("data", {})
@@ -84,16 +89,25 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
         # 不阻塞，但发出警告
 
     # 执行后验证三项（routing SKILL 手查①② + _warnings 的脚本化，全打 stderr 惯例）
-    # ① 财务摘要完整性（读三表双键兜底硬规则）
-    inc = snapshot.get("s1_financial", {}).get("data", {}).get("income_statement", {})
-    rows = inc.get("data") or inc.get("data_full") or []
-    print(f"   财务摘要: income {len(rows)} 期" + (" ⚠️ <8期" if len(rows) < 8 else ""),
-          file=sys.stderr)
-    # ② 主营构成三态（dimension_status 自解释：真空/降级/ok 语义同黄金范式）
-    seg = snapshot.get("s1_financial", {}).get("data", {}).get("segment_composition", {})
-    ds = seg.get("dimension_status") or {}
-    print(f"   主营构成: {seg.get('status', '—')} 维度={list(ds.keys()) or '—'}",
-          file=sys.stderr)
+    if snapshot.get("mode") == "B":
+        # 模式B：无 s1 财务/主营构成，改查技术面/短期子树三态
+        s4_data = snapshot.get("s4_technical", {}).get("data", {})
+        enrich = s4_data.get("short_term_enrich", {})
+        dfc = enrich.get("direction_forecast", {})
+        print(f"   技术面: s4 keys={len(s4_data)} short_term_enrich={'有' if enrich else '无'}"
+              + (f" 方向={dfc.get('direction', '—')}/{dfc.get('confidence', '—')}" if dfc else ""),
+              file=sys.stderr)
+    else:
+        # ① 财务摘要完整性（读三表双键兜底硬规则）
+        inc = snapshot.get("s1_financial", {}).get("data", {}).get("income_statement", {})
+        rows = inc.get("data") or inc.get("data_full") or []
+        print(f"   财务摘要: income {len(rows)} 期" + (" ⚠️ <8期" if len(rows) < 8 else ""),
+              file=sys.stderr)
+        # ② 主营构成三态（dimension_status 自解释：真空/降级/ok 语义同黄金范式）
+        seg = snapshot.get("s1_financial", {}).get("data", {}).get("segment_composition", {})
+        ds = seg.get("dimension_status") or {}
+        print(f"   主营构成: {seg.get('status', '—')} 维度={list(ds.keys()) or '—'}",
+              file=sys.stderr)
     # ③ 拉取警告（前 5 条，手验的另一半）
     for w in snapshot.get("_warnings", [])[:5]:
         print(f"   ⚠️ {w[:110]}", file=sys.stderr)

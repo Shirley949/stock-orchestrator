@@ -137,3 +137,18 @@
 
 - **`lib/gate_definitions.py` compute_self_score**：data_coverage 分母原固定 `_EXPECTED_SCENES`（全量 11 scene），profile_quick（模式B runner 只拉 s2+s4）数学上限 ≈64 分，c70 的 `self_score>=80` 出口契约结构性不可达（update_checklist 实测 exit 1）。修复：`profile=="profile_quick"` 时分母收缩为 `_QUICK_EXPECTED_SCENES`（s2_quote_kline + s4_technical，与 runner fetch_for_mode 模式B场景集对齐）；full profile 分母不变。dimensions.total 同步随分母。
 - **验证**：600089 模式B报告 sidecar self_score 64→100，c70 打勾通过；正例（quick 两 scene has_data=True）+ 反例（full 分母不变）已验。回归 run_regression.sh exit 0（契约层全绿 + parity 3票 + 运行时层 55门×3票 漏报=0）。
+
+## 2026-08-26 模式B v2 深度重构：G65-G70 + full/ 存档 + token_audit B 接入 + 盲测 PASS（plan lexical-marinating-lamport）
+
+**P5 盲测终局（两层）**：LLM 全流程层（12 份 as-of 报告，12/12 gate 100/100）——HIGH 15d **4/5=80% ✅ ≥70% 验收线**（5d 80%/10d 100%）；MED 15d 3/4=75%（如实标注不进门禁）；NEUTRAL 0/3（诚实输出区，±2% 容差对高波股偏苛，已知局限）。引擎层（20 as-of 快照全量）HIGH 15d 11/13=84.6%。miss 归因：002008@0804（前 10 天 +11% 后回落——「冲高减仓」动作建议恰好覆盖）、300243@0723 5d miss 后 10d/15d 兑现（印证 15d 视野设计）。
+
+- **`lib/gate_definitions.py` +6 gates（G65-G70，B_ONLY_GATES 双保险）**：①`B_ONLY_GATES` 清单→profile_full 排除+profile_quick 追加；②每 check_gNN 顶部 `mode != "B"` 短路。**五方注册同步**（GATE_REGISTRY/ALL_GATES/GATE_CHECKERS/GATE_DESCS/GATE_WEIGHTS，漏则 import 崩）。G65 forecast block 对拍（direction/confidence/p=±0.03 双刻度/胜率同源引用；NEUTRAL 不对拍 p 但区间必现）；G66 多周期状态表（≥3 周期词+resonance 原词+**行级反义对拍**——周期状态行内禁 up↔down 反义词除非行内有背离词）；G67 量价分档键值如实；G68 分级止损（首列档位行 `60m|日|周|月 MA*` 档价 ±1%+ATR 行+凯利 ±0.01——kelly=0.0 中性股也须写数值）；G69 筹码资金结构三态分母（`_scene_has_data`：缺席/degraded/failed 不计分母，as-of 批 fund_flow/valuation/chip 全降级→need 收缩至 margin 1，300243 四维全降级→need=0 PASS）；G70 大盘 verdict 对拍。`_QUICK_EXPECTED_SCENES` +s3_fund_flow+market_context（结构性必在场；valuation best-effort 不进分母 failed 不误扣）。全部反例 FAIL/正例 PASS 两极验证。
+- **`scripts/backtest_score.py`（新）**：读报告 forecast block → 拉 T+1~今天日K → 5/10/15d 方向命中（bull/bear 符号、neutral=|ret|≤预期区间半宽缺席 ±2%；insufficient_history/failed 不计分母）→ `--aggregate` 按置信层汇总（isinstance list/dict 两态，单份 dict 不再炸）。
+- **`scripts/token_audit.py` B 接入（零 LLM 成本）**：VIEW_NAMES/VIEW_TO_MODULE +short_term/market_context/fund_flow 条目（不扩则 B 合法视图调用误判手写假阳性）；Phase 推断 B 规则；B 模块占比单列基线（m3/m6/m36/m37，不与 A 32.3% 混比）。**用户拍板：模式 B 报告 c70 后必跑 token 审计（推翻 2026-08-25 旧指令，memory 已同步）**。P5 批审计 `~/analysis_report/token_audits/blindtest-P5-20260826-1947.md`（覆盖率 41.9%）——**归因结论：开发会话（1210 轮含 gate 调试）不代表 B 常规流程；datapack 模式（一次投影 N 票全字段）比逐票视图更省 token，是审计口径未覆盖的合法形态，列给用户 review**。
+- **`scripts/lib/data_snapshot.py`**：`__init__(stock_code, as_of=None)` 加法式参数（构造期分片：缓存路径/staleness 基准/存档日期三处随 as-of）；`save_full_archive()` full/ 合并存档（场景级 merge，旧档为底本次覆盖同名键）；`detect_prior_data()` 复用诊断。
+- **`scripts/snapshot_view.py`**：+VIEW_PATHS short_term/market_context/fund_flow；`build_short_term_view` presence-gated（short_term_enrich 缺席 no-op）。**未扩展 build_technical_view（3 份 parity golden 面）**。
+- **`scripts/lib/capstone_panorama.py`**：`panorama(data)` 读 `data.get("mode")` → B 用短期定性维度清单替换 qual_required（forecast block/多周期共振/止损表/凯利）。
+- **`scripts/generate_checklist.py`**：PHASE_STEPS["B"] 幽灵步清理（c62 m9→m36/m37、c12 自算→确认预计算、c13 分时→60min 信号）；B runner 命令补重定向；detect_mode 词表 v2（见 routing 仓条目）。`precheck.py`/`question_to_data_map.json` mode 感知（B core=[s2,s4,s3]；资金流 API 修正 stock_individual_fund_flow）。
+- **`regression-tests/test_full_archive.py`（新，入回归）**：5 断言——full/ 全量性/同日 B 复用 stderr+场景复制/B 存档=A∪B/cleanup 后 full/ 完好/90 天旧档识别。
+- **`scripts/lib/data_contracts.py`**：+market_context/intraday_60min 契约（mode=[B] 起步）；valuation_snapshot/s_margin 翻转 [A,B]；m36/m37 消费方注册（`^m\d+$` 合规）。
+- 数据层引擎/场景/存档细节见 financial-data-routing 仓同日条目；模块文档 m36/m37 见 stock-analysis-quality 仓。A 零扰动：parity 3 票 byte-parity 绿贯穿全程（P1/P2/P3/P4/P6 五个回归跑点 exit 0）。

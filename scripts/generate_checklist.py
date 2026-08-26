@@ -38,33 +38,50 @@ from parse_user_question import parse_user_question
 # ============================================================
 
 def detect_mode(user_prompt: str) -> str:
-    """根据用户 prompt 自动判定分析模式。只支持 A/B 两种模式。"""
-    # 按长度降序排列，优先匹配更长的触发词
-    mode_b_triggers = sorted([
-        "今天买不买", "要不要卖", "当日操作", "盘中建议",
-        "现在能买吗", "现在能加仓吗", "要不要减仓", "盘中", "能加仓"
-    ], key=len, reverse=True)
-    mode_a_triggers = sorted([
-        "深度分析", "整体分析", "财报分析", "全面分析",
-        "值不值得买", "分析一下", "帮我看看", "怎么样",
-        "买不买", "估值", "分析", "看看",
-        # 原 C/D 模式触发词现在也触发 A
-        "有没有风险", "最近有什么公告", "事件扫描", "有没有雷", "风险", "事件",
-        "估值多少", "贵不贵", "PE多少"
-    ], key=len, reverse=True)
+    """根据用户 prompt 自动判定分析模式。只支持 A/B 两种模式。
 
-    # 🔴 强触发词 early override：这些词一旦出现，直接判定 A，不被后续短词截胡
-    a_strong_triggers = ["深度分析", "整体分析", "财报分析", "全面分析", "帮我看看"]
+    优先级（2026-08-26 v2 重排，模式B深度重构 P1）：
+      显式模式B > 显式模式A > B 时间窗/走势操作词 > A-strong（深度/整体/财报/全面）> 普通 A > 默认 A
+    「帮我看看」降为普通 A 词（原 a_strong 截胡导致「帮我看看最近几天走势」误判 A）。
+    """
+    # 显式模式声明最高优先
+    if "模式B" in user_prompt or "模式b" in user_prompt or "只看技术面" in user_prompt or "只看技术" in user_prompt:
+        return "B"
+    if "模式A" in user_prompt or "模式a" in user_prompt:
+        return "A"
+
+    # B 时间窗词（短期视野）+ 走势操作词（当日/短线操作语义）
+    b_time_words = ["今天", "明天", "后天", "本周内", "本周", "近日", "最近几天",
+                    "短期", "短线", "接下来几天", "未来几天", "几天内", "当日", "盘中", "尾盘"]
+    b_action_words = sorted([
+        "今天买不买", "要不要卖", "当日操作", "盘中建议", "还会跌", "还会涨",
+        "会不会涨", "会不会反弹", "能不能买", "现在买", "现在卖",
+        "现在能买吗", "现在能加仓吗", "要不要减仓", "能加仓",
+        "加仓", "减仓", "做T", "做t", "低吸", "高抛", "抄底", "止盈",
+        "止损位", "止损", "支撑位", "压力位", "支撑", "压力", "现价",
+        "涨还是跌", "走势",
+    ], key=len, reverse=True)
+    has_b_time = any(w in user_prompt for w in b_time_words)
+    has_b_action = any(w in user_prompt for w in b_action_words)
+    # 走势词自带短期语义；时间窗词需叠加操作/走势词避免「今天的年报」误判
+    if any(w in user_prompt for w in b_action_words):
+        return "B"
+    if has_b_time and any(w in user_prompt for w in ["走势", "涨", "跌", "买", "卖", "反弹", "加仓", "减仓"]):
+        return "B"
+
+    # A-strong（仅四词；「帮我看看」已降级）
+    a_strong_triggers = ["深度分析", "整体分析", "财报分析", "全面分析"]
     for trigger in a_strong_triggers:
         if trigger in user_prompt:
             return "A"
 
-    # 再检查 B（更具体的短操作词）
-    for trigger in mode_b_triggers:
-        if trigger in user_prompt:
-            return "B"
-
-    # 最后检查 A 的触发词
+    # 普通 A 词
+    mode_a_triggers = sorted([
+        "值不值得买", "分析一下", "帮我看看", "怎么样",
+        "买不买", "估值", "分析", "看看",
+        "有没有风险", "最近有什么公告", "事件扫描", "有没有雷", "风险", "事件",
+        "估值多少", "贵不贵", "PE多少", "股息", "分红", "长期", "价值",
+    ], key=len, reverse=True)
     for trigger in mode_a_triggers:
         if trigger in user_prompt:
             return "A"
@@ -151,14 +168,14 @@ PHASE_STEPS = {
         "phase_0": [
             {"id": "c01", "desc": "Skills 加载（orchestrator + routing + registry）"},
             {"id": "c02", "desc": "用户问题映射表已生成"},
-            {"id": "c04", "desc": "运行 routing/runner.py B <stock_code> → 拉取行情+K线"},
+            {"id": "c04", "desc": "运行 routing/runner.py B <stock_code> → 拉取行情+K线+资金流+技术面（⚠️ 必须 > file 重定向，禁止 | head/tail pipe截断）"},
             {"id": "c06", "desc": "检查 runner._warnings → 处理降级/失败项"},
         ],
         "phase_1": [
             {"id": "c10", "desc": "runner 返回的实时行情数据确认", "agent": 1},
             {"id": "c11", "desc": "runner 返回的 K 线数据确认", "agent": 1},
-            {"id": "c12", "desc": "技术指标自算（MACD/KDJ/RSI/TD）", "agent": 1},
-            {"id": "c13", "desc": "分时数据与盘口解读", "agent": 1},
+            {"id": "c12", "desc": "确认 fetch_technical 预计算结果（MACD/KDJ/RSI/TD 已算好，勿自算）", "agent": 1},
+            {"id": "c13", "desc": "60min 信号解读（s4.short_term_enrich.intraday_60m）", "agent": 1},
         ],
         "phase_2": [
             {"id": "c50", "desc": "数据收单完成（来自 runner s10_checklist）"},
@@ -166,7 +183,7 @@ PHASE_STEPS = {
         "phase_3": [
             {"id": "c60", "desc": "m3 技术面"},
             {"id": "c61", "desc": "m6 操作建议"},
-            {"id": "c62", "desc": "m9 信号矩阵"},
+            {"id": "c62", "desc": "m36 短期多周期共振 + m37 筹码与资金结构"},
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）产出 sidecar，用其路径打勾"},
@@ -303,7 +320,9 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"# 订单数据已并入主 snapshot（合同负债+分地区+中标事件），无需独立 runner")
         elif mode == "B":
             lines.append(f"# 数据拉取（routing runner）")
-            lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc}")
+            lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
+            lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
+            lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
         lines.append("```")
         lines.append("")
 

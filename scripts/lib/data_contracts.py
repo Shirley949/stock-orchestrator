@@ -219,7 +219,7 @@ SCENES = {
 
     "valuation_snapshot": {
         "fetcher": "fetch_valuation_snapshot",        # runner.py（westock 腾讯源 + akshare baidu）
-        "mode": ["A"],
+        "mode": ["A", "B"],   # B: 估值分位（快照型，7d staleness 可跨日复用；best-effort 不进 B 分母）
         "produces": [
             {"path": "data.quote.price",          "confidence": CONFIRMED},
             {"path": "data.quote.peTtm",          "confidence": CONFIRMED},
@@ -295,7 +295,7 @@ SCENES = {
             "data.analystRating.source":     ["m10:10A.1"],   # 评级行来源标注（westock|eastmoney）
             "data.analystRating.em_counts":  ["m10:10A.1"],   # 5 档计数渲染（source=eastmoney 时）
             "data.analystRating.em_compre_rating": ["m10:10A.1"],
-            "data.valuation_percentile": ["m5", "m6", "capstone_panorama"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull（含 ev_ebitda 子键）
+            "data.valuation_percentile": ["m5", "m6", "capstone_panorama", "m37-positioning"],   # ST2 分位：m5 §5.1 行 + m6 Layer1 估值锚 + capstone L339 values pull（含 ev_ebitda 子键）；B: m37 估值分位维度
             "data.ev_metrics":           ["m5", "m6"],   # F-D1/D2 lixinger EV/EBITDA：m5 企业价值锚 + m6 Layer1 估值锚
         },
         "priority": P1,
@@ -672,12 +672,13 @@ SCENES = {
     },
 
     "s_margin": {
-        # _attach_westock_extras（runner.py）：westock fund margin 融资融券单日快照
-        "fetcher": "_attach_westock_extras",
-        "mode": ["A"],
+        # _fetch_margin_scene（runner.py）：westock fund margin 融资融券单日快照
+        # A 由 _attach_westock_extras 内部调用（输出同构保 parity），B 由 fan-out 直接调用
+        "fetcher": "_fetch_margin_scene",
+        "mode": ["A", "B"],
         "produces": [{"path": "data.finance_value_yi", "confidence": CONFIRMED,
                       "note": "融资余额(亿) + security_value_yi 融券 + finance_dod/security_dod 环比(DOD现成信号) + latest_period"}],
-        "consumers": {"data.finance_value_yi": ["m7-risk", "G42"]},  # m7 踩踏风险 / G42 消费校验（m4 杠杆情绪已删→归 m7）
+        "consumers": {"data.finance_value_yi": ["m7-risk", "G42", "m37-positioning"]},  # m7 踩踏风险 / G42 消费校验（m4 杠杆情绪已删→归 m7）/ B: m37 杠杆情绪
         "priority": P2,
         "cost": {"calls": 1, "latency": "low"},
         "depends_on": [],
@@ -685,6 +686,65 @@ SCENES = {
         "cacheable": True,
         "coverage_only": True,   # 不进 _EXPECTED_SCENES（次新/无两融标的 missing，进清单会误伤）
         "note": "Westock W1: 融资余额=杠杆拥挤度(高位+环比增=踩踏风险)，融券=空头；三态 ok/missing(次新)/failed。",
+    },
+
+    "market_context": {
+        # fetch_market_context（runner.py）：大盘/板块环境 —— short_term_engine regime 判定的输入
+        # mode=["B"] 起步：A 未来启用只需在 A _TASKS 加一行（plan §2.5④ 统一格式约定）
+        "fetcher": "fetch_market_context",
+        "mode": ["B"],
+        "produces": [
+            {"path": "data.index_close", "confidence": CONFIRMED,
+             "note": "上证指数最近60根 close 数组（westock 腾讯源无限流）；short_term_engine.classify_regime 的直接输入"},
+            {"path": "data.index_sh.verdict", "confidence": CONFIRMED,
+             "note": "{regime: trend_up|trend_down|choppy|unknown, idx_close, idx_ma20, idx_ret5}——verdict 由 engine 同一实现算"},
+            {"path": "data.board", "confidence": CONFIRMED,
+             "note": "板块K线摘要（东财 best-effort：限流3次重试后 status=degraded 诚实标注）"},
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "sh_regime/sh_close/cyb_ret5/board/board_fund_flow 投影"},
+        ],
+        "consumers": {
+            "data.index_close":        ["short_term_engine", "m36-short-term"],
+            "data.index_sh.verdict":   ["short_term_engine", "m36-short-term", "G70"],
+            "data.board":              ["m36-short-term"],
+            "data.report_view":        ["m36-short-term", "G70"],
+        },
+        "priority": P1,
+        "cost": {"calls": 1, "calls_worst": 6, "latency": "low", "throttle_prone": True},   # worst=东财板块增强3重试
+        "depends_on": [],
+        "fallback": {"data.index_sh.verdict": "engine 内建 unknown regime → 规则全不触发 → 诚实 neutral"},
+        "cacheable": False,   # 大盘环境时效敏感（当日），不复用
+        "coverage_only": False,
+        "note": "模式B v2 新场景：engine regime 输入 + m36 大盘叙述。核心=westock 指数（必达），板块=东财增强（限流降级）。",
+    },
+
+    "intraday_60min": {
+        # fetch_intraday_60min（runner.py）：60分钟K线信号（指南第六部分）
+        "fetcher": "fetch_intraday_60min",
+        "mode": ["B"],
+        "produces": [
+            {"path": "data.ma60_state", "confidence": CONFIRMED,
+             "note": "above|below|unknown —— 60m MA60 得失（风控首档止损锚）"},
+            {"path": "data.tail_signal", "confidence": CONFIRMED,
+             "note": "尾盘抢筹/砸盘/连阳/连阴/None（末3根方向+量能 vs 前10根均量）"},
+            {"path": "data.tail_10_bars", "confidence": CONFIRMED,
+             "note": "末10根摘要 [{dt,c,v}]（快照体积纪律：240根raw不落盘）"},
+            {"path": "data.report_view", "confidence": CONFIRMED,
+             "note": "ma60_state/ma60/last_close/tail_signal/t1_window 投影"},
+        ],
+        "consumers": {
+            "data.ma60_state":  ["short_term_engine", "m36-short-term"],
+            "data.tail_signal": ["m36-short-term"],
+            "data.tail_10_bars": ["m36-short-term"],
+            "data.report_view": ["m36-short-term"],
+        },
+        "priority": P1,
+        "cost": {"calls": 1, "latency": "low"},   # sina 源实测无限流
+        "depends_on": [],
+        "fallback": {},
+        "cacheable": False,   # 日内时效敏感
+        "coverage_only": False,
+        "note": "模式B v2 新场景：15/5分钟不进报告（plan 裁决），60min 是唯一日内级别。sina fetch_kline_sina(scale=60)。",
     },
 
     "s_esg": {
@@ -864,9 +924,14 @@ SCENES = {
             {"path": "data.signals",            "confidence": CONFIRMED, "note": "technical_signals：westock technical_series 历史序列→结构化 events(金叉/死叉/缺口/触轨)+state(macd/kdj/rsi/ma/boll态)+latest_period，三态 ok/degraded/never_traded"},
             {"path": "data.report_view", "confidence": CONFIRMED,
              "note": "报告视角投影（2026-08-20 终局版）：signals_state + td/weekly_td summary + technical{close,ma,macd,kdj,rsi,boll,dmi} + 支撑压力层 + fib + chip4 + turnover/volume_price/relative_strength/atr 全量"},
+            {"path": "data.short_term_enrich", "confidence": CONFIRMED,
+             "note": "模式B v2 集中子树（加法式，不动 s4 既有键）：short_term_engine 两层输出 "
+                     "direction_forecast(v11 冻结规则)/multi_period/volume_check/divergence/risk_control/intraday_60m + report_view 投影；"
+                     "presence-gate 单键可判；A 模式该键缺席（engine 仅 B 分支调用）"},
         ],
         "consumers": {
             "data.report_view":        ["m3-technical", "m6-decision"],
+            "data.short_term_enrich":  ["m36-short-term", "m6-decision", "G65", "G66", "G67", "G68"],  # m36 周期状态表、m6 forecast block、G65-68 消费对拍
             "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
             "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验）
             "data.td":                 ["m3-technical", "m6-decision", "G1", "G14"],  # m3 §3.1 TD、G14 数据驱动 setup≥9

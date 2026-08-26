@@ -168,9 +168,16 @@ class DataSnapshot:
     # 类级别实例注册表（单例模式，跨 runner 共享，替代 monkey-patch）
     _instances: dict = {}
 
-    def __init__(self, stock_code: str):
+    def __init__(self, stock_code: str, as_of: str = None):
         self.stock_code = stock_code
-        self._today = datetime.now().strftime("%Y%m%d")
+        # as_of（盲测回测用）：归一 YYYY-MM-DD → YYYYMMDD。生效点一石三鸟——
+        # 缓存文件名分片隔离(:_cache_path) + save date + staleness 基准(summary)。
+        # None=今天（A/live B 不传不受扰）。
+        if as_of:
+            _d = str(as_of).replace("-", "/").replace("/", "")[:8]
+            self._today = _d if len(_d) == 8 and _d.isdigit() else datetime.now().strftime("%Y%m%d")
+        else:
+            self._today = datetime.now().strftime("%Y%m%d")
         self._cache_dir = Path(os.path.expanduser("~/.cache/skill-snapshots"))
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache_path = self._cache_dir / f"{stock_code}_{self._today}.json"
@@ -578,6 +585,10 @@ class DataSnapshot:
         返回 {"critical_failure": bool, "failed_scenes": list, "failure_summary": list}
         """
         core_scenes = ['s1_financial', 's2_quote_kline', 's5_events']
+        # 模式B核心场景（2026-08-26 P1）：B 不拉 s1/s5（基本面/事件），缺场景≠失败；
+        # 硬编码 [s1,s2,s5] 会让 B 快照缺 2 个场景 → critical_scenes≥2 → critical_failure 误标
+        if isinstance(snapshot, dict) and snapshot.get("mode") == "B":
+            core_scenes = ['s2_quote_kline', 's4_technical', 's3_fund_flow']
         critical_scenes = []
 
         if snapshot:

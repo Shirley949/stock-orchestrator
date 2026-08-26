@@ -224,9 +224,9 @@
         "外资",
         "资金流入"
       ],
-      "data_needs": "个股资金流向（大单/小单/特大单净流入，同花顺源）",
+      "data_needs": "个股资金流向（大单/小单/特大单净流入，东财源）",
       "api_sources": [
-        "stock_fund_flow_individual"
+        "stock_individual_fund_flow"
       ],
       "related_skills": [
         "financial-data-routing/references/scenarios/s3-fund-flow.md"
