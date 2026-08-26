@@ -132,3 +132,8 @@
 - **`snapshot_view.py` +7 printer + any 两级探查**：`any <scene或路径> [--depth N]` 键树渲染（默认1，扁平小节建议2）；视图未挂载时报错自带 any 兜底路径。
 - **`token_audit.py` v2**：手写分级（路径∈14 视图挂载点=❌违规 / 视图外=info 建议 any）；复合命令（snapshot_view+json.load 并存）归「复合」不再误计手写；新检查项 gate 源码零读入（Read gate_definitions→❌）+ 视图覆盖率>80%；审计回放 002859 原会话验证分类变准（视图内 48/视图外 18/gate 读 1——历史事实，分类变准≠消失）。
 - **回归**：run_regression.sh exit 0（契约层 13+7+16 tests + parity 3票 + 运行时层 55门×3票 漏报=0）。
+
+## 2026-08-25 compute_self_score 覆盖分母 profile 感知（600089 模式B会话）
+
+- **`lib/gate_definitions.py` compute_self_score**：data_coverage 分母原固定 `_EXPECTED_SCENES`（全量 11 scene），profile_quick（模式B runner 只拉 s2+s4）数学上限 ≈64 分，c70 的 `self_score>=80` 出口契约结构性不可达（update_checklist 实测 exit 1）。修复：`profile=="profile_quick"` 时分母收缩为 `_QUICK_EXPECTED_SCENES`（s2_quote_kline + s4_technical，与 runner fetch_for_mode 模式B场景集对齐）；full profile 分母不变。dimensions.total 同步随分母。
+- **验证**：600089 模式B报告 sidecar self_score 64→100，c70 打勾通过；正例（quick 两 scene has_data=True）+ 反例（full 分母不变）已验。回归 run_regression.sh exit 0（契约层全绿 + parity 3票 + 运行时层 55门×3票 漏报=0）。

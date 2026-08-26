@@ -5,7 +5,7 @@
 尺的语义（去重 · result-only · 挂载前缀机械分层 · 写回目标同一 · v3 外科豁免/
 --field 分布/总账行/Bash 侧透明度/错目标告警/处数三分桶 + fetch 注入写标记）此后任何
 改动都由本脚本判定，不再需要 LLM 手跑模拟重验（2026-08-21 688048 审计重放口径；
-2026-08-23 v3 扩容；2026-08-24 3-bucket 处数——chars 口径不变）。
+2026-08-23 v3 扩容；2026-08-24 3-bucket 处数——chars 口径不变；2026-08-25 v4 compact 锚定）。
 
 跑：python3 test_token_audit.py（无网络，<2s）
 所有审计子进程统一带 TOKEN_AUDIT_NO_HISTORY=1 + 隔离 HOME（防污染真环比历史）。
@@ -255,6 +255,65 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertIn("--field 2 次/280c", r.stdout)
             # 普通视图调用不入分布行（快照调用总数 3 次 vs --field 2 次）
             self.assertIn("snapshot_view 调用 **3 次**", md)
+
+    def test_post_compact_anchor(self):
+        """v4 compact 锚定：compact 后首取数动作（CLI/手写）+ 段内手写计数；
+        手写首动作带 ⚠️、CLI 不带；无 compact 会话零输出（additive 不扰旧断言）。"""
+        with tempfile.TemporaryDirectory() as td:
+            fx = os.path.join(td, "fxc.jsonl")
+
+            def _asst(tid, cmd):
+                return {"type": "assistant", "message": {
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                    "content": [{"type": "tool_use", "id": tid, "name": "Bash",
+                                 "input": {"command": cmd}}]}}
+
+            def _res(tid, n=100):
+                return {"type": "user", "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": tid,
+                     "content": [{"type": "text", "text": "x" * n}]}]}}
+
+            rows = [
+                _asst("a1", "python3 snapshot_view.py /tmp/runner_snapshot_688048.json income"),
+                _res("a1", 500),
+                # compact#1（顶层键，非子串）→ 段起点轮 1
+                {"type": "user", "isCompactSummary": True,
+                 "message": {"role": "user", "content": "continued from previous conversation"}},
+                _asst("p1", "echo pad"), _res("p1", 10),          # 非取数垫轮 → gap=1
+                _asst("b1", _hw_cmd("section_y")), _res("b1", 200),
+                _asst("b2", _hw_cmd("section_z")), _res("b2", 200),
+                _asst("d1", "python3 snapshot_view.py /tmp/runner_snapshot_688048.json balance"),
+                _res("d1", 400),
+                # compact#2 → 段起点轮 5；首取数紧邻 → gap=0
+                {"type": "user", "isCompactSummary": True,
+                 "message": {"role": "user", "content": "second compact"}},
+                _asst("e1", "python3 snapshot_view.py /tmp/runner_snapshot_688048.json --list"),
+                _res("e1", 780),
+            ]
+            with open(fx, "w", encoding="utf-8") as fh:
+                for row in rows:
+                    fh.write(json.dumps(row) + "\n")
+            out = os.path.join(td, "outc.md")
+            r = _run_audit(fx, out)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            stdout, md = r.stdout, open(out, encoding="utf-8").read()
+
+            self.assertIn("[v4] compact锚定: c1⚠️手写@+1(段内手写2) | c2CLI@+0(段内手写0)",
+                          stdout)
+            self.assertIn("compact 锚定（v4 诊断，不进验收线", md)
+            self.assertIn("c1@轮1 → 首取数 **手写**@轮2(+1) | 段内手写 2 处", md)
+            self.assertIn("c2@轮5 → 首取数 **CLI**@轮5(+0) | 段内手写 0 处", md)
+            self.assertNotIn("c1CLI", stdout)      # ⚠️ 只跟手写首动作
+            self.assertNotIn("c2⚠️", stdout)
+
+            # 反例：无 compact 会话 → [v4] 行与 md 锚定段零输出（旧 fixture 不受扰）
+            fx2 = os.path.join(td, "fxn.jsonl")
+            _build_fixture(fx2)
+            out2 = os.path.join(td, "outn.md")
+            r2 = _run_audit(fx2, out2)
+            self.assertEqual(r2.returncode, 0, r2.stderr)
+            self.assertNotIn("[v4]", r2.stdout)
+            self.assertNotIn("compact 锚定", open(out2, encoding="utf-8").read())
 
     def test_a4_history_env_gate(self):
         """A4 防污染闸门：NO_HISTORY=1 不 append；未设时 append 到隔离 HOME。"""

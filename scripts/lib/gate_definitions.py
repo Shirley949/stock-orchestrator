@@ -3120,6 +3120,11 @@ _EXPECTED_SCENES = [
     # 整个 consensus_forecast 失败/缺失才扣分。
     ("consensus_forecast", "一致预期/业绩预告"),
 ]
+# profile_quick（模式B）的覆盖分母：runner fetch_for_mode 只拉 s2 行情K线 + s4 技术
+_QUICK_EXPECTED_SCENES = [
+    ("s2_quote_kline", "行情K线"),
+    ("s4_technical", "技术指标"),
+]
 
 
 def _scene_has_data(val) -> bool:
@@ -3178,9 +3183,11 @@ def compute_self_score(report: str, data: dict, gate_result: dict) -> dict:
       - source_traceability (20%): 报告 [src:] 标记中 snapshot 源占比（vs websearch）
     返回 {score, dimensions, weights, rubric_version}。
     """
-    # Dim 1: 数据覆盖
-    hit = sum(1 for path, _ in _EXPECTED_SCENES if _scene_has_data(_snapshot_get(data, path)))
-    coverage_pct = round(hit / len(_EXPECTED_SCENES) * 100)
+    # Dim 1: 数据覆盖（分母按 profile 收缩：quick 只拉 s2/s4，全量分母下模式B上限≈64，
+    # c70 的 self_score≥80 出口契约结构性不可达）
+    expected_scenes = _QUICK_EXPECTED_SCENES if gate_result.get("profile") == "profile_quick" else _EXPECTED_SCENES
+    hit = sum(1 for path, _ in expected_scenes if _scene_has_data(_snapshot_get(data, path)))
+    coverage_pct = round(hit / len(expected_scenes) * 100)
 
     # Dim 2: gate pass（复用引擎分数）
     gate_pct = gate_result.get("score", 0)
@@ -3196,7 +3203,7 @@ def compute_self_score(report: str, data: dict, gate_result: dict) -> dict:
     return {
         "score": score,
         "dimensions": {
-            "data_coverage": {"score": coverage_pct, "hit": hit, "total": len(_EXPECTED_SCENES)},
+            "data_coverage": {"score": coverage_pct, "hit": hit, "total": len(expected_scenes)},
             "gate_pass": {"score": gate_pct},
             "source_traceability": {"score": src_pct, "snapshot_tags": snap_tags,
                                     "bare_scene_tags": bare_tags, "websearch_tags": web_tags},

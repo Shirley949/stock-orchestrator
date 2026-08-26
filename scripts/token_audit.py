@@ -324,8 +324,12 @@ def main():
     snapshot_calls, handwrite_hits, writeback_hits, gate_src_reads, any_calls = [], [], [], [], []
     field_calls, field_chars = 0, 0                    # A5：--field 外科投影分布
     gate_src_bash_n, gate_src_bash_chars = 0, 0        # A2：gate 源码 Bash 侧访问（透明度）
+    compact_turns, snapshot_cli_events = [], []        # v4：compact 段起点轮 / CLI 取数事件(turn, cmd)
     hw_turn = -1
     for l in lines:
+        # v4：compact 段起点——顶层键判定（禁子串 grep：正文提及 isCompactSummary 会 16→2 假阳）
+        if l.get("isCompactSummary"):
+            compact_turns.append(hw_turn + 1)          # compact 后首个 assistant 轮号
         if l.get("type") != "assistant":
             continue
         hw_turn += 1
@@ -337,6 +341,7 @@ def main():
             fp = str(inp.get("file_path", "")) if isinstance(inp, dict) else ""
             if "snapshot_view.py" in c:
                 snapshot_calls.append(c)
+                snapshot_cli_events.append((hw_turn, c[:60].replace("\n", " ")))
                 if re.search(r"\bany\b", c):
                     any_calls.append(c)
                 if "--field" in c:
@@ -418,6 +423,24 @@ def main():
     view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
     any_flat_hits = sum(1 for c in any_calls if any(s in c for s in FLAT_SECTIONS))
     BASE_MOD_PCT = 32.3   # 瑞丰 300243 旧路径基线（2026-08-20 审计）
+
+    # ---- v4：compact 分叉段（RCA 2026-08-25：compact 后首取数动作锚定段内写作期行为；
+    #      诊断项不进验收线。手写=HANDWRITE_PAT 命中集，CLI=snapshot_view.py 调用）----
+    compact_segs = []
+    if compact_turns:
+        fetch_events = ([(h["turn"], "手写", h["cmd"]) for h in handwrite_hits]
+                        + [(t, "CLI", cmd) for t, cmd in snapshot_cli_events])
+        fetch_events.sort(key=lambda e: (e[0], e[1] != "手写"))   # 同轮手写优先（保守判定）
+        for i, ct in enumerate(compact_turns):
+            seg_end = compact_turns[i + 1] if i + 1 < len(compact_turns) else float("inf")
+            first = next((e for e in fetch_events if ct <= e[0] < seg_end), None)
+            compact_segs.append({
+                "turn": ct,
+                "hw_n": sum(1 for h in handwrite_hits if ct <= h["turn"] < seg_end),
+                "kind": first[1] if first else "无",
+                "gap": (first[0] - ct) if first else -1,
+                "cmd": (first[2] or "")[:60]})
+
 
     # ---- A4：总账行 + 环比历史（TOKEN_AUDIT_NO_HISTORY=1 时回归测试防污染） ----
     total_pull = cli_chars + hw_chars
@@ -573,6 +596,14 @@ def main():
     L.append(f"- ℹ️ gate 源码 Bash 侧访问（sed/grep/cat/awk 撞 gate_definitions，sanctioned "
              f"fallback 透明度）：**{gate_src_bash_n} 次 / {gate_src_bash_chars:,}c**"
              f"（vs Read 全文 178K）")
+    if compact_segs:
+        L.append(f"- ℹ️ compact 锚定（v4 诊断，不进验收线；首取数动作锚定段内行为）："
+                 f"**{len(compact_segs)} 段**")
+        for i, s in enumerate(compact_segs, 1):
+            L.append(f"  - c{i}@轮{s['turn']} → 首取数 **{s['kind']}**"
+                     + (f"@轮{s['turn'] + s['gap']}(+{s['gap']})" if s["gap"] >= 0 else "")
+                     + f" | 段内手写 {s['hw_n']} 处"
+                     + (f" | {s['cmd']}" if s["cmd"] else ""))
 
     L.append("\n## ④ Top-15 最贵内容块（context 压力）\n")
     L.append("| 轮 | Phase | 类别 | chars | 压力% | 内容 |")
@@ -601,6 +632,11 @@ def main():
           + f"| gate源码Bash侧 {gate_src_bash_n} 次/{gate_src_bash_chars:,}c | "
           f"--field {field_calls} 次/{field_chars:,}c"
           + (f" | fetch 注入写 {fetch_inj_n} 处" if fetch_inj_n else ""))
+    if compact_segs:
+        print("   [v4] compact锚定: " + " | ".join(
+            f"c{i}{'⚠️' if s['kind'] == '手写' else ''}{s['kind']}"
+            + (f"@+{s['gap']}" if s["gap"] >= 0 else "") + f"(段内手写{s['hw_n']})"
+            for i, s in enumerate(compact_segs, 1)))
     print(f"   总取数 {total_pull:,} = CLI {cli_chars:,} + 手写 {hw_chars:,}"
           f"｜gate FAIL {gate_fails if gate_fails >= 0 else '—'}｜P4 dump {p4_dump_chars:,}c")
 
