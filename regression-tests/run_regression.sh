@@ -72,6 +72,8 @@ echo "[① 契约层] test_src_hidden_style.py（src 写法契约：gate 对注�
 python3 "$HERE/test_src_hidden_style.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组保真+KEEP 截断+by_code 投影闭合+三态 离线纯函数）"
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_full_archive.py（模式B full/ 存档：全量性+同日复用+A∪B合并+cleanup白名单+90天旧档识别）"
+python3 "$HERE/test_full_archive.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
 python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
