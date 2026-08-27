@@ -1272,12 +1272,12 @@ def _find_capstone(report: str) -> str:
 
 
 def _top_scenario(cap: str):
-    """最高概率情景 (label, prob)，锚定行首情景声明。"""
-    hdrs = list(re.finditer(
-        r"^[ \t]*[#*|\-]*[ \t]*(乐观|基准|中性|悲观)[^%\n]{0,15}?(\d+(?:\.\d+)?)\s*%", cap, re.MULTILINE))
-    if not hdrs:
-        return None
-    return max(((m.group(1), float(m.group(2))) for m in hdrs), key=lambda x: x[1])
+    """最高概率情景 (label, prob)。共享 gate_definitions._g30_find_scenarios（表优先，
+    与 G30#3 同源），消除孪生内联正则漂移。lazy import：gate_definitions 模块级已反向
+    import capstone_panorama，此处模块级 import 会循环。"""
+    from gate_definitions import _g30_find_scenarios
+    scens = _g30_find_scenarios(cap)
+    return max(((lbl, p) for lbl, p, _ in scens), key=lambda x: x[1], default=None)
 
 
 # ============================================================

@@ -141,5 +141,78 @@ class TestG30ProseScenarios(unittest.TestCase):
         self.assertEqual(gd._g30_scenario_probs(cap), [45.0, 30.0, 25.0])
 
 
+CAP_NOPROB = """### 综合研判 Capstone（G30）
+
+#### 证据全景
+
+量化：ROE/净利率/毛利率/杜邦/周转率/权益乘数/扣非、营收/收入/增速/同比/合同负债、PE/PB/估值/目标价、货币资金/有息负债/商誉/负债率/现金、信号/资金流/筹码/股东户数/换手/支撑/阻力、一致预期/评级/研报/预测、龙虎榜/上榜/席位、北向/外资/持股比例、分产品/分行业/分地区/海外/关税。
+定性：护城河/龙头/市占率/技术优势/规模优势，治理/管理层/战略，前瞻/催化/展望/渗透率/扩产/新产品。
+[src: snapshot.s1_financial][src: snapshot.s4_technical][src: 见模块前述]
+
+#### 情景矩阵
+
+**中性**（45%）：目标价 348 元，应对观望。然而资金承压。
+
+**乐观**（30%）：目标价 450 元，应对建仓。但是均线空头排列。
+
+**悲观**（25%）：目标价 342 元，应对减仓。尽管外资重仓托底。
+
+| 情景（概率） | 目标价 | 应对动作 | 成立条件 | 反方证据 |
+|------|------|--------|---------|---------|
+| 中性 45% | 348元 | 观望 | 若区间震荡反复 | 然而资金承压 |
+| 乐观 30% | 450元 | 建仓 | 触发放量突破压力位 | 但是均线空头排列 |
+| 悲观 25% | 342元 | 减仓 | 一旦跌破强支撑 | 尽管外资重仓托底 |
+
+综合建议：信号矛盾，观望为主，突破确认后跟进。
+"""
+
+
+class TestG30ProbFromTableColumn(unittest.TestCase):
+    """B 修复（2026-08-27）：#3 概率改读情景表「概率」列（表优先+全行守卫+正则回退）。
+
+    背景：旧 TABLE_RE 行正则要求带 %，裸数字概率列 → probs=[0,0,0]→#3 假 FAIL；
+    声明+表格行双吃 → 6 情景重复计数（8/170 本地语料实锤）。表路径复用
+    _g30_parse_matrix_table 选表结果，与 #2/#4 同表同源。"""
+
+    def test_bare_digit_prob_column(self):
+        """① 概率列裸数字（无 %）→ 表路径精确取值（旧路径 probs=[0,0,0]→#3 假 FAIL）。"""
+        cap = gd._g30_find_capstone(_cap(p1="40", p2="35", p3="25"))
+        self.assertEqual(gd._g30_scenario_probs(cap), [40.0, 35.0, 25.0])
+        self.assertEqual(len(gd._g30_find_scenarios(cap)), 3, "表路径应返回 3 情景，非声明+表格双吃")
+
+    def test_tolerant_prob_cell_formats(self):
+        """② 约/％ 全角/尾部文字容忍 → 表路径 PASS。"""
+        r = gd._g30_run(_cap(p1="约 40%", p2="约35％", p3="25%"), {})
+        self.assertTrue(r["passed"], f"容忍格式应 PASS，failed={r['failed']}, reasons={r['reasons']}")
+        cap = gd._g30_find_capstone(_cap(p1="约 40%", p2="约35％", p3="25%"))
+        self.assertEqual(gd._g30_scenario_probs(cap), [40.0, 35.0, 25.0])
+
+    def test_no_prob_col_falls_back_to_declarations(self):
+        """③ 「情景（概率）」合并列形态（688308 实案）→ 无 prob 列 → 回退行首声明路径 PASS。"""
+        rep = "# 报告\n\n" + CAP_NOPROB + "\n\n## 模块七\n"
+        cap = gd._g30_find_capstone(rep)
+        self.assertEqual(gd._g30_scenario_probs(cap), [45.0, 30.0, 25.0],
+                         "无概率列应回退声明正则，而非表路径硬吃")
+        r = gd._g30_run(rep, {})
+        self.assertTrue(r["passed"], f"合并列形态应 PASS，failed={r['failed']}, reasons={r['reasons']}")
+
+    def test_partial_parse_falls_back(self):
+        """④ 概率列 1 行无数字（约）→ 整表回退正则（None 守卫，非表路径硬吃 None）。
+        回退 TABLE_RE 对无 % 行给 0.0（旧 lenient 语义保持）→ 和=70 → #3 照 FAIL（执法不弱化）。"""
+        cap = gd._g30_find_capstone(_cap(p2="约"))
+        probs = gd._g30_scenario_probs(cap)
+        self.assertEqual(probs, [45.0, 0.0, 25.0], f"部分解析应整表回退 TABLE_RE，实际 {probs}")
+        self.assertTrue(all(p is not None for p in probs), "回退路径概率不得为 None")
+        r = gd._g30_run(_cap(p2="约"), {})
+        self.assertIn(3, r["failed"], "部分解析回退后 #3 仍应执法（和=70≠100）")
+
+    def test_top_scenario_shared_impl(self):
+        """⑤ capstone_panorama._top_scenario 共享 _g30_find_scenarios（lazy import）→ 与表 max 一致。"""
+        import capstone_panorama as cp
+        cap = gd._g30_find_capstone(_cap())
+        self.assertEqual(cp._top_scenario(cap), ("中性", 45.0))
+        self.assertIsNone(cp._top_scenario("无情景文本"), "空手文本应返回 None")
+
+
 if __name__ == "__main__":
     unittest.main()

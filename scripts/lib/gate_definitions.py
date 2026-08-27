@@ -1181,8 +1181,24 @@ def _g30_next_section_end(capstone: str, start: int) -> int:
     return start + m.start() if m else len(capstone)
 
 
+def _g30_prob_cell_to_float(cell: str):
+    """概率单元格 → float；无阿拉伯数字 → None（触发整表回退）。容忍 约/％/全角/尾部文字。"""
+    m = re.search(r'(\d+(?:\.\d+)?)\s*[％%]?', cell or "")
+    return float(m.group(1)) if m else None
+
+
 def _g30_find_scenarios(capstone: str) -> list:
-    """结构化情景声明 → [(label, prob, block_text), ...]。优先行首情景标签，回退表格行。"""
+    """结构化情景声明 → [(label, prob, block_text), ...]。
+    表优先：情景矩阵表「概率」列 ≥3 行全可解析 → 取表值（根治声明+表格行双吃重复计数，
+    裸数字/带%/全角/约 前缀均可）；概率列缺失或部分不可解析 → 回退行首声明正则 → 表格行。"""
+    tbl = _g30_parse_matrix_table(capstone)
+    if tbl:
+        rows_t, col_t = tbl
+        if "prob" in col_t:
+            out_t = [(r["_label"], _g30_prob_cell_to_float(r.get("prob", "")), r.get("prob", ""))
+                     for r in rows_t]
+            if len(out_t) >= 3 and all(p is not None for _, p, _ in out_t):
+                return out_t
     hdrs = list(_G30_SCENARIO_HEADER_RE.finditer(capstone))
     out = []
     for i, m in enumerate(hdrs):
