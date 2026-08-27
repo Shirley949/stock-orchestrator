@@ -95,7 +95,7 @@ GATE_DESCS = {
     "G59": "m5 §5.3 估值结论 verdict presence（必含偏贵/偏贱/高估/低估/估值合理/估值适中/估值偏低/估值偏高 判定词；无 §5.3 豁免）",
     "G60": "m6 定性三行结构化锚点+反捏造（Layer1 ⑪护城河/⑫治理战略/⑬前瞻催化 各须含 ≥1 [src:] 锚点或标「无源」；研发强度X%须≈snapshot；裸奔或捏造=FAIL；限证据全景子节防投资建议叙事误伤）",
     "G62": "m6 tally 跨章一致（正文「N偏多/N中性/N偏空」自称数 == 证据表第2列裸方向词实数；治自称 7/5/1 实际 5/6/4；无自称/无表 no-op）",
-    "G63": "m3 技术位数值对拍（fib/S&R/成本位数值 == snapshot levels ±0.5%；转录错区间 (0.5%,5%]=FAIL；治 666→662；无 m3/无真值豁免）",
+    "G63": "m3 技术位数值对拍（真值集 fib/S&R/筹码成本/ATR止损/TDST ±0.5%；渲染值 MA/BOLL/close/VWAP/千股千评锚精确到分豁免；转录错区间 (0.5%,5%]=FAIL 且 reasons 全量清单；治 666→662；无 m3/无真值豁免）",
     "G64": "资金流术语口径（「大单」行数值禁命中主力 trend_5/10/20d / 全单 net_flow 真值——万/亿双刻度；治主力误标大单；无 fund_flow/无提及豁免）",
     "G65": "模式B方向预测对拍（direction/confidence/probability ±0.03 + sample_win_rate 同源；insufficient_history/failed 禁出方向；neutral 必现区间）",
     "G66": "模式B周期状态表（月/周/日/60m ≥3 周期 + resonance_level 原样 + 行级反义对拍）",
