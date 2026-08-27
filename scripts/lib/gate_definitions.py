@@ -2817,20 +2817,31 @@ def check_g63(report: str, data: dict) -> bool:
     truths = [t for t in truths if t]
     if not truths:
         return True
+    rendered = set()       # 渲染值豁免集（MA/BOLL/close/VWAP/券商锚），后续 commit 填充
     sec = _m3_section(report)
     if not sec:
         return True
+    violations = []          # (n, near, rel, line)：全量收集一轮修完，替代逐轮打地鼠
+    seen = set()             # (n, near) 去重：同数字多处转录错只报首处
     for ln in sec.splitlines():
         if not re.search(r'(斐波|fib|Fib|回撤|支撑|压力|成本|套牢|获利盘)', ln):
             continue
         for n in _extract_price_candidates(ln):
+            if any(abs(n - r) < 1e-9 for r in rendered):
+                continue          # 合法照抄的渲染值（精确到分）
             rel = min(abs(n - t) / abs(t) for t in truths)
             if 0.005 < rel <= 0.05:
                 near = min(truths, key=lambda t: abs(n - t))
-                return GateResult(passed=False, reasons=[
-                    f"m3 技术位转录错：『{ln.strip()[:50]}』中 {n} ≈但≠ 真值 {near}"
-                    "（偏差>0.5%）——照抄 snapshot levels（fibonacci/support_resistance/chipAvgCost），"
-                    "禁手抄改动（666→662 类）"])
+                if (n, near) not in seen:
+                    seen.add((n, near))
+                    violations.append((n, near, rel, ln.strip()[:40]))
+    if violations:
+        reasons = [f"m3 技术位转录错：『{v[3]}』中 {v[0]} ≈但≠ 真值 {v[1]}（偏 {v[2]:.1%}）——"
+                   "照抄 snapshot 真值（fib/S&R/筹码成本/ATR止损/TDST/MA/BOLL/券商锚），禁手抄改动"
+                   for v in violations[:5]]
+        if len(violations) > 5:
+            reasons.append(f"另有 {len(violations) - 5} 处同类转录错（本清单为全量，一轮修完再重跑）")
+        return GateResult(passed=False, reasons=reasons)
     return True
 
 
