@@ -2770,6 +2770,12 @@ def check_g62(report: str, data: dict) -> bool:
 def _extract_price_candidates(text: str) -> list:
     """提取疑似价位数字：剥 % 值与已知 fib 比率/百分数值、年份、<3 的小数（比率）。"""
     t = re.sub(r'\d+(?:\.\d+)?\s*%', '', text)          # 百分数先剥
+    # ASCII 标识符整体剥（MA20/ATR14/BIAS_12/RS_20D/td9_done/s4_technical/ADX22.56…）：粘连
+    # 数字是参数或路径序号，非价位。中文标签（支撑位14.18）不受影响——标识符须 ASCII 起头。
+    t = re.sub(r'[A-Za-z_][A-Za-z_0-9]*\s*[(（][^)）]*[)）]|[A-Za-z_][A-Za-z_0-9]*(?:\.\d+)?', ' ', t)
+    # TD countdown 进度 N/13（整数对）与时间窗 N日/N天 非价位
+    t = re.sub(r'(?<![\d.])(?:[1-9]|1[0-3])\s*/\s*13(?![\d.])', ' ', t)
+    t = re.sub(r'\d+\s*[日天]', ' ', t)
     out = []
     for tok in re.findall(r'\d+(?:,\d{3})*(?:\.\d+)?', t):
         n = float(tok.replace(",", ""))
