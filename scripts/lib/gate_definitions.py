@@ -2820,10 +2820,46 @@ def check_g63(report: str, data: dict) -> bool:
             v = atr.get(k)
             if isinstance(v, (int, float)) and v:
                 truths.append(v)
+    # TDST 参考位（日线 td.tdst + 周线 weekly_td.tdst 的 buy/sell；null 跳过）：
+    # 报告照抄「TDST 阻力 93.68」曾被误判转录错（撞 fib 2%）——照抄=精确命中
+    for td_node in (s4d.get("td"), s4d.get("weekly_td")):
+        tdst = td_node.get("tdst") if isinstance(td_node, dict) else None
+        if isinstance(tdst, dict):
+            for k in ("buy_tdst", "sell_tdst"):
+                v = tdst.get(k)
+                if isinstance(v, (int, float)) and v:
+                    truths.append(v)
     truths = [t for t in truths if t]
     if not truths:
         return True
-    rendered = set()       # 渲染值豁免集（MA/BOLL/close/VWAP/券商锚），后续 commit 填充
+    # 渲染值豁免集（tier-2）：报告合法照抄的其它价位——均线/布林/close/VWAP/千股千评
+    # 券商锚与主力成本（曾被迫把券商锚数值迁出 m3 段——引擎侧根治，恢复 inline 自由）。
+    # 精确到分（round 2）相等才豁免；不等仍走 truths 对拍——密集渲染值若按 0.5% 带豁免
+    # 会吞掉 (0.5%,5%] 检测带（实测 13.3/13.9/15.2 类编造价全部逃逸）。
+    # 只收价格单位值；振荡量（RSI/KDJ/ADX 0-100）不入集——入集会掩护同量级编造价位。
+    rendered = set()
+    tech = s4d.get("technical") or {}
+    if isinstance(tech, dict):
+        ma = tech.get("ma") or {}
+        if isinstance(ma, dict):
+            rendered |= {round(ma[k], 2) for k in ("MA_5", "MA_10", "MA_20", "MA_30", "MA_60",
+                         "MA_120", "MA_250") if isinstance(ma.get(k), (int, float))}
+        boll = tech.get("boll") or {}
+        if isinstance(boll, dict):
+            rendered |= {round(boll[k], 2) for k in ("BOLL_UPPER", "BOLL_MID", "BOLL_LOWER")
+                         if isinstance(boll.get(k), (int, float))}
+        if isinstance(tech.get("closePrice"), (int, float)) and tech["closePrice"]:
+            rendered.add(round(tech["closePrice"], 2))
+    for path, keys in (("s2_quote_kline.data.realtime_quote.vwap", ("vwap",)),
+                       ("s_stock_evaluation.data.processed.metrics",
+                        ("support", "resistance", "prime_cost_1d", "prime_cost_20d",
+                         "prime_cost_60d"))):
+        node = _snapshot_get(data, path)
+        if isinstance(node, dict):
+            for k in keys:
+                v = node.get(k)
+                if isinstance(v, (int, float)) and v:
+                    rendered.add(round(v, 2))
     sec = _m3_section(report)
     if not sec:
         return True
