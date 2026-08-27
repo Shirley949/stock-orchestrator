@@ -152,3 +152,17 @@
 - **`regression-tests/test_full_archive.py`（新，入回归）**：5 断言——full/ 全量性/同日 B 复用 stderr+场景复制/B 存档=A∪B/cleanup 后 full/ 完好/90 天旧档识别。
 - **`scripts/lib/data_contracts.py`**：+market_context/intraday_60min 契约（mode=[B] 起步）；valuation_snapshot/s_margin 翻转 [A,B]；m36/m37 消费方注册（`^m\d+$` 合规）。
 - 数据层引擎/场景/存档细节见 financial-data-routing 仓同日条目；模块文档 m36/m37 见 stock-analysis-quality 仓。A 零扰动：parity 3 票 byte-parity 绿贯穿全程（P1/P2/P3/P4/P6 五个回归跑点 exit 0）。
+## 2026-08-27 Gate 引擎执法精度修复批：G30#3 概率读表列 / G59 候选∪级联 / G16 主体归因豁免（plan peaceful-tinkering-rabbit；688630 三轮迭代触发）
+
+触发：芯碁微装 688630 全量分析三轮迭代暴露 5 类 gate 执法缺陷，专家评审定案 B/C/D′/F/E（A 撤回、G64-lookbehind 撤回、D/24字窗口否决改 D′）。目标=引擎语义对齐 m5/m6 模板已文档化的写作契约，消灭三类真阳性误伤。**准入门槛=全量本地语料回测 100%**（170 份唯一文本 / 140 份配真实快照，md5 去重，monkeypatch 旧新对照）；**终局复验=真补丁引擎 vs pre-fix worktree 分进程逐票对拍**。
+
+- **`_g30_find_scenarios` 表优先（Fix B）**：情景矩阵表「概率」列 ≥3 行全可解析（新增 `_g30_prob_cell_to_float`，容忍裸数字/约/%/全角％）→ 直取表值；概率列缺失/部分不可解析 → 回退行首声明正则（旧报告兼容，含 688308「情景（概率）」合并列形态）。根治两类：①裸数字概率列 probs=[0,0,0]→#3 假 FAIL；②声明+表格行双吃重复计数（8/170 实锤返回 6 情景）。`capstone_panorama._top_scenario` 删孪生内联正则改**函数内 lazy import** 共享实现（模块级反向 import 会循环；其唯一消费方 panorama_advisory #7 软建议，gate verdict 零波及）。
+- **`check_g59` 候选∪级联锚定（Fix C）**：`_G59_ANCHOR_PATTERNS` 三级（①编号+估值同标题→②估值结论/估值判定标题→③裸 5.3 兜底），复用 `_module_section` 层级感知切片，任一锚定切片含复合判定词即 PASS。根治 m4「### 5.3 机构动向」劫持与「#### 7.5.3」子节号误匹配。结构保证 new-FAIL ⊆ old-FAIL（old-PASS 的首个裸 5.3 切片必在候选集内）。**执行中修正**：①③ 的 `[^\d]*` 会跨行（`\n` 属非数字字符类）→「### 模块五
+无 5.3 结论段」被 ③ 泄漏锚定，单测抓住后改 `[^\d\n]*`——语义更贴旧引擎，回归面更小。
+- **`check_g16` 前方最近主体 token 归因（Fix D′）**：新增 `_G16_CL_TOKENS`/`_G16_OTHER_SUBJECT_TOKENS`/`_g16_nearest_subject`——行内数字归**前方最近**主体 token（中文财务行文主体在数字前），前方无主体才看后方；最近者属 CL 族或无主体→保守执法。数字端点必须 `m.start(1)~m.start(1)+len(m.group(1))`（纯数字组，勿用含「亿」的 m.end()——前向距离被人为缩短，分号句实测踩坑）。消灭 publish 稿剥 [src:] 后「在手订单 8 亿/净现金 35 亿/经营现金流 3.2 亿」与 CL 同行误判编造（6 份真实 publish 实锤）；编造照抓（CL 归因的 12 亿两代皆 FAIL）。
+- **F+E 文案层（零行为变更）**：G30#2 reason 精确化（指明反方列加在情景表勿加 Layer1 矩阵）；GATE_HINTS G16 改写（防御性 [src:] 教条退役→归因豁免语义）/G30 补概率读表列/G59 级联语义/**新增 G64 key**（主力=特大单+大单口径纪律、「特大单」含触发词「大单」的子串陷阱、主力-guard 整行跳过宽松区）；m11-gates.md 两行镜像同步（quality 仓 4324178）。
+- **测试资产**：test_g30_label_format.py +TestCase（裸数字/约全角容忍/合并列回退/部分解析回退+执法保持/_top_scenario 共享）15 测试全绿；test_m5_gates.py CheckG59 +6（劫持修复/7.5.3 不劫持/002025 形态/改号执法 FAIL/真缺失 FAIL/无锚豁免+正文 5.3 不泄漏）；test_g16_subject_attribution.py（新）8 判例（统一 grounding 行单变量隔离）；SECTION_PROBES +3（G59 劫持 True、G16 订单豁免 True、G16 编造 False，4→7 段）。
+
+**终局对拍（真补丁 vs pre-fix worktree 分进程）**：170 份唯一文本逐票——**新 FAIL（回归）=0** ✅；误伤修复 7 处全部 old-FAIL→new-PASS（G16×5：沃尔核材002130/瑞华泰688323/蓝特688127/凯盛600552/芯碁微装688630 publish；G59×2：rp_7.md、answer.md 劫持草稿。长光华芯688048 publish 两代皆无 CL 快照配对→G16 均不评估，一致非回归）；probsΔ=8（炬光/太辰光/晶方 主稿+发布稿双吃 6→3 根治）。688630 归档 sidecar 前后仅 timestamp 差异（55 过/100 分不动，干净报告零波及）。全量回归 exit 0（61 门×3 票 + 7 段探针漏报=0）。
+
+**known-limits**：① G64 主力-guard 整行跳过=已知宽松区（数值在但口径词缺失不执法）；② D′ 双族前方同现保守：「订单金额是合同负债两倍达 12 亿」12 归因 CL 仍 FAIL（宁紧勿松，判例⑦钉死）；③ G59 多 5.3 节取文档序、688059 无结论子节形态恒豁免、603019/000657 裸 5.3 走 ③ 级锚；④ G30#4 不查概率列（概率存在性已由 #3 求和执法，避免双重执法）；⑤ C 级联②级锚（估值结论/估值判定标题）对改号报告扩执法面——唯一收紧点，判例④钉死为预期行为。
