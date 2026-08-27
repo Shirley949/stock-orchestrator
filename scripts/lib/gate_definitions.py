@@ -118,10 +118,12 @@ GATE_HINTS = {
     "G1": "技术面四段：tq=ok 时 m3 必须消费换手/量比/成交额任一词（量价漏消费=最常见 FAIL）；"
           "failed→禁编造技术结论。修法：m3 补量价段并带 [src: snapshot.s4_technical]。",
     "G16": "合同负债核对：报告「合同负债」行数值若与 snapshot 偏离>50% 且无 [src:] → FAIL。"
-           "修法：数值照抄 snapshot（亿元两位小数）+ 行带 [src:]，或写明核对结论；"
-           "⚠️ 行内勿混入其他科目数值（行级数值冲突扫描会双命中）。",
+           "修法：数值照抄 snapshot（亿元两位小数）+ 行带 [src:]，或写明核对结论。"
+           "他主体数字（在手订单/净现金/经营现金流等）已按前方最近主体 token 归因豁免，"
+           "与 CL 同行不再误伤；但 CL 归因的偏离值照抓（编造仍 FAIL），正道仍是 [src:]。",
     "G30": "capstone 六硬检查。高频败因：①情景表条件列写 N%（禁——条件必须可判定）"
            "②矩阵行列结构缺 ③主情景结论与矩阵矛盾 ④该观望却写可买。"
+           "概率读情景表「概率」列（裸数字/带%/约/全角均可，无概率列回退行首声明）；"
            "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）；"
            "#1 未 surface 信号看 reasons 携带的底层事件（notice_date+类型+code）直接甄别。"
            "数据核对：python3 …/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot <S>"
@@ -164,8 +166,10 @@ GATE_HINTS = {
            "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。"
            "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field valuation_percentile"
            "（pe_ttm/pb/ev_ebitda 各项 applicable+pct_5y 真值）。",
-    "G59": "m5 §5.3 估值结论必须含判定词（偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高）。"
-           "高频误伤：判定词落在 §5.3 之外的段（切片边界）——判定词必须写在 5.3 节内。",
+    "G59": "m5 §5.3 估值结论必须含判定词（偏贵/偏贱/高估/低估/估值合理/估值适中/估值偏低/估值偏高，"
+           "复合词表——裸「偏低」不算）。候选∪级联锚定：编号+估值同标题 / 估值结论·估值判定标题 / "
+           "裸 5.3 标题（[^\d\n] 挡 7.5.3 且不跨行）任一切片含词即 PASS；m4「### 5.3 机构动向」"
+           "不再劫持；无任何锚豁免（report-only）。",
     "G61": "千股千评每个 ok 结论维度报告须 surface 对应词 + [src: snapshot.s_stock_evaluation] 锚；"
            "failed 禁编结论；missing（金融股/次新）豁免。高频误伤：报告用了结论词但无 src 锚。"
            "数据核对：snapshot_view <S> any s_stock_evaluation.data.processed --depth 2"
@@ -179,6 +183,11 @@ GATE_HINTS = {
            "chipAvgCost / ATR stop_ref_price，±0.5%）。高频败因：手抄改数（666→662）；"
            "高频误伤：非技术位数字落进技术位语境行——日期/比率/RS60 这类数字勿写在"
            "含「支撑/压力/回撤/成本」的行内（拆行隔离），VWAP 勿标成本位。",
+    "G64": "资金流口径纪律：主力 = 特大单 + 大单（futu 分层命名，勿混称超大单）。高频败因："
+           "①主力语境行（trend_5/10/20d / net_flow）混入「特大单」token——「特**大单**」含"
+           "触发词「大单」，特大单数值会被逐数对拍主力真值 → 误标 FAIL；②把特大单数值标成主力。"
+           "写法：主力行只写主力口径数值；分层细节另起一行（避开主力语境行）。"
+           "已知宽松区：主力-guard 整行跳过（数值在但口径词缺失时不执法）。",
 }
 
 # GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
@@ -1614,7 +1623,8 @@ def _g30_run(report: str, data: dict) -> dict:
         rows_t, col_idx_t = tbl
         if "counter" not in col_idx_t:
             failed.append(2)
-            reasons.append("#2 诚实性 FAIL — 矩阵表缺'反方证据/风险'列")
+            reasons.append("#2 诚实性 FAIL — 选中的情景-动作矩阵（表头含『情景+应对/动作』签名）"
+                           "缺'反方证据/风险'列——反方列加在情景表上（m6 模板 7 列），勿加到 Layer1 证据全景矩阵")
         else:
             lacking = [r["_label"] for r in rows_t if not r.get("counter", "").strip()]
             if lacking:
