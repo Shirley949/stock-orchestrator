@@ -589,6 +589,46 @@ def _extract_contract_liab(data: dict):
     return None
 
 
+# G16 冲突扫描的数字主体归因（D′ 修复 2026-08-27）：合同负债行内他主体数字
+# （在手订单 8 亿、净现金 35 亿）不再误判编造。规则：数字归行内前方最近主体 token，
+# 前方无主体才看后方；最近者属 CL 族或无主体 → 保守执法（编造照抓）。
+_G16_CL_TOKENS = ("合同负债", "合同债", "预收")
+_G16_OTHER_SUBJECT_TOKENS = (
+    "订单", "中标", "存货", "应收", "商誉", "货币资金", "净现金", "现金",
+    "回购", "增持", "减持", "质押", "担保", "营收", "收入", "净利", "利润",
+    "市值", "产能", "产量", "研发", "费用", "借款", "总负债", "资产",
+)
+_G16_SUBJECT_TOKENS = sorted(
+    [(t, "cl") for t in _G16_CL_TOKENS] + [(t, "ot") for t in _G16_OTHER_SUBJECT_TOKENS],
+    key=lambda x: -len(x[0]))  # 长词在前（净现金 先于 现金 命中同 span，族一致无冲突）
+
+
+def _g16_nearest_subject(ln: str, num_start: int, num_end: int):
+    """数字主体归因：前方最近 token（中文财务行文主体在数字前，'订单 8 亿'）；
+    行内前方无任何主体 → 后方最近（后置形态 'X 亿为合同负债'）；都无 → None（保守执法）。
+    num_start/num_end 必须是纯数字组端点（m.start(1)~m.start(1)+len(m.group(1))），
+    勿用含'亿'的 m.end()——前向距离被人为缩短会误判（分号句实测踩坑）。"""
+    back = fwd = None
+    for tok, fam in _G16_SUBJECT_TOKENS:
+        pos = 0
+        while True:
+            i = ln.find(tok, pos)
+            if i < 0:
+                break
+            if i + len(tok) <= num_start:
+                d = num_start - (i + len(tok))
+                if back is None or d < back[0]:
+                    back = (d, fam)
+            elif i >= num_end:
+                d = i - num_end
+                if fwd is None or d < fwd[0]:
+                    fwd = (d, fam)
+            pos = i + 1
+    if back is not None:
+        return back[1]
+    return fwd[1] if fwd is not None else None
+
+
 def check_g16(report: str, data: dict) -> bool:
     """G16: 订单Layer6核对（合同负债核对偏差≤15%）
 
@@ -631,10 +671,10 @@ def check_g16(report: str, data: dict) -> bool:
                 rv = float(m.group(1))
             except ValueError:
                 continue
-            if rv > 0 and cl_yi > 0:
-                ratio = max(rv, cl_yi) / min(rv, cl_yi)
-                if ratio > 1.5:
-                    return False  # 数值冲突，疑似编造
+            s, e = m.start(1), m.start(1) + len(m.group(1))  # 纯数字端点（勿用含'亿'的 m.end()）
+            if rv > 0 and cl_yi > 0 and _g16_nearest_subject(ln, s, e) != "ot" \
+               and max(rv, cl_yi) / min(rv, cl_yi) > 1.5:
+                return False  # 数值冲突，疑似编造（前方/后方最近主体属他主体 → 豁免）
 
     # (b) 数值对齐
     aligned_candidates = {f"{cl_yi:.2f}", f"{round(cl_yi, 1):.1f}"}
