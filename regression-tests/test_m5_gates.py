@@ -81,6 +81,37 @@ class CheckG59(unittest.TestCase):
     def test_no_conclusion_section_exempt(self):
         self.assertTrue(check_g59("### 模块五\n无 5.3 结论段。", {}))
 
+    # ---- C 修复（2026-08-27）：候选∪级联锚定，根治 5.3/7.5.3 章节号劫持 ----
+    def test_hijack_by_m4_5_3_fixed(self):
+        """① m4 情绪章「### 5.3 机构动向」(无词)在前不再劫持——真 5.3 估值节含词 → PASS（旧 FAIL）。"""
+        rep = "### 5.3 机构动向\n调研频繁。\n\n#### 5.3 估值结论\n估值偏低。\n"
+        self.assertTrue(check_g59(rep, {}), "级联后真 5.3 节含判定词应 PASS")
+
+    def test_hijack_by_subsection_7_5_3_fixed(self):
+        """② 「#### 7.5.3」子节号（[^\d]* 挡板）不劫持——真 5.3 节含词 → PASS（旧 FAIL）。"""
+        rep = "#### 7.5.3 宏观跟踪\n平稳。\n\n#### 5.3 估值结论\n显著偏贵。\n"
+        self.assertTrue(check_g59(rep, {}), "7.5.3 子节号不应被 ③ 级锚误匹配")
+
+    def test_002025_shape_verdict_in_prev_summary(self):
+        """③ 002025 形态：5.3 节小结含词 + 5.4 估值结论节无词 → PASS（级联任一切片含词即可）。"""
+        rep = ("### 5.3 一致预期与机构目标价\n目标价 543 元。小结：PE 处于历史偏贵水位。\n\n"
+               "### 5.4 估值结论\n各项指标平稳。\n")
+        self.assertTrue(check_g59(rep, {}), "5.3 节小结含词即应 PASS")
+
+    def test_renumbered_conclusion_enforced(self):
+        """④ 改号执法（唯一收紧点）：无 5.3 + 「### 8.4 估值结论」无词 → FAIL（② 扩执法面）。"""
+        self.assertFalse(check_g59("### 8.4 估值结论\n各项平稳。\n", {}))
+
+    def test_true_miss_still_fails(self):
+        """⑤ 判定词真缺失（有锚无词）→ FAIL 保持。"""
+        self.assertFalse(check_g59("#### 5.3 估值结论\n各项指标平稳。\n", {}))
+
+    def test_no_anchor_exempt(self):
+        """⑥ 无任何 5.3/估值结论锚 → 豁免（report-only / 非估值报告）；
+        正文裸提「5.3」不泄漏锚定（[^\d\n]* 不跨行——「### 模块五\n无 5.3 结论段」须仍豁免）。"""
+        self.assertTrue(check_g59("### 6.1 风险提示\n市场有风险。\n", {}))
+        self.assertTrue(check_g59("### 模块五\n无 5.3 结论段。", {}))
+
 
 # ---------- G45 (F-G4 收紧) ----------
 class CheckG45(unittest.TestCase):

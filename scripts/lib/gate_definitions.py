@@ -2518,25 +2518,37 @@ def check_g58(report: str, data: dict) -> bool:
     return True
 
 
+_G59_VERDICT_WORDS = ("偏贵", "偏贱", "高估", "低估", "估值合理", "估值适中", "估值偏低", "估值偏高")
+
+_G59_ANCHOR_PATTERNS = (
+    r'^#{1,4}\s[^\d\n]*5\.3(?!\d)[^#\n]*估值',  # ① 编号+主题同标题（m5 模板形态；[^\d\n]* 挡 7.5.3/10A.5.3 且不跨行）
+    r'^#{1,4}\s.*(?:估值结论|估值判定)',          # ② 标题词（覆盖改号报告；无 5.3 锚时扩执法面）
+    r'^#{1,4}\s[^\d\n]*5\.3(?!\d)',             # ③ 裸 5.3 兜底（旧语义等价回退；\n 挡板防正文 5.3 泄漏锚定）
+)
+
+
 def check_g59(report: str, data: dict) -> bool:
     """G59: m5 §5.3 估值结论 verdict presence（F-G2）。SOFT(weight1)。
-    m5 §5.3 估值结论必含判定词（偏贵/偏贱/高估/低估/估值合理/估值适中/估值偏低/估值偏高）。
-    纯 presence——定性结论无法验正确性，但确保 m5 给读者明确贵贱判定（无 verdict → FAIL）。
-    无 §5.3 段→PASS（report-only / 非估值报告）。
+    候选∪级联锚定（复用 _module_section 层级感知切片）：任一锚定切片含判定词
+    （偏贵/偏贱/高估/低估/估值合理/估值适中/估值偏低/估值偏高）→ PASS；有锚但全部切片
+    无词 → FAIL；无任何锚 → 豁免（report-only / 非估值报告）。
+    根治两类劫持：m4 情绪章「### 5.3 机构动向」抢首个 5.3 切片、「#### 7.5.3」子节号误匹配。
+    结构保证 new-FAIL ⊆ old-FAIL（old-PASS 的首个裸 5.3 切片必在候选集内）→ 零回归。
     """
-    m = re.search(r'^#{1,4}\s.*5\.3', report, re.MULTILINE)
-    if not m:
+    anchored = False
+    for pat in _G59_ANCHOR_PATTERNS:
+        found, sec = _module_section(report, pat, full_report_fallback=False)
+        if not found:
+            continue
+        anchored = True
+        if any(k in sec for k in _G59_VERDICT_WORDS):
+            return True
+    if not anchored:
         return True
-    rest = report[m.end():]
-    nxt = re.search(r'^#{1,4}\s', rest, re.MULTILINE)
-    sec = rest[:(nxt.start() if nxt else len(rest))]
-    if not any(k in sec for k in ("偏贵", "偏贱", "高估", "低估", "估值合理",
-                                  "估值适中", "估值偏低", "估值偏高")):
-        # B2 原生 reasons：§5.3 估值结论缺判定词（纯 presence，但给作者可执行指引）
-        return GateResult(passed=False, reasons=[
-            "§5.3 估值结论缺判定词——须含 偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高 之一，"
-            "给读者明确贵贱判定"])
-    return True
+    # B2 原生 reasons：§5.3 估值结论缺判定词（纯 presence，但给作者可执行指引）
+    return GateResult(passed=False, reasons=[
+        "§5.3 估值结论缺判定词——须含 偏贵/偏贱/高估/低估/估值合理/适中/偏低/偏高 之一，"
+        "给读者明确贵贱判定"])
 
 
 def check_g60(report: str, data: dict) -> bool:
