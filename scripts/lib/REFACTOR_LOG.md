@@ -6,6 +6,49 @@
 
 ---
 
+## 2026-08-28 章节定位器劫持根修（section_locator 候选迭代+切片验签，P1-P4）
+
+### 动机
+定位器「单向取首个匹配 + 无验签」被前置诱饵标题劫持，下游连锁 FAIL 且报内容层症状
+（写手多轮误诊改内容不改标题）。事故 12 起：G30 标题 6（赛微 Q6「三情景裁决」+7.5.1
+「定性研判」双诱饵、君正 §11.4「LLM 研判」、唯特偶 4.2「股东行为综合研判（ST3）」、
+株冶 3.5.4「±30% 情景」、厦钨 §7.3「研判」、东田微 m4 小节）、G58 5（阳谷/晶方/福晶/
+领益 m0「股票分类与估值框架」同模式 ×4 复发 + 康强 Q&A）、m3 定位器 1（康强 Q1「技术面」，
+波及 G52-55/G63 六门）。措辞纪律（report-ui-guide 禁 5 词）存续期内失效 4 次，概率性
+执法不可依赖。附带发现两存量 bug：capstone_panorama._find_capstone 双实现且切到文末
+无边界；G60 边界 `^#{1,3}` 在 ## 级 capstone 第一个 ### 子节即截断 → Layer1 恒不可达
+→ 26 份归档全程空转（植入裸奔定性行仍 PASS，实测 25/25）。
+
+### 变更
+- 新增 `section_locator.py`（中立模块：gate_definitions:20 已 import capstone_panorama，
+  反向委托成环）：`slice_of`（_module_section 切段算法收编单一实现）+ `locate`
+  （遍历全部候选→首个切片过 heading 级验签→weak 词→旧取首兜底，diagnosis 四态）。
+- G30：`_g30_find_capstone`/`_module_section` 委托；`_g30_run` 定位层分流——
+  no_anchor 显式 FAIL（m4 致命事件 surface 保留执法）、fallback@first reason 置顶
+  「定位层异常」、ok@weak PASS-with-note（模式 B，落 verified.json details）。
+- G58/m3：候选+内容验签（估值/技术特征词）。
+- G60：切片改 locate（修空转）；`_SKIP` 增 tally/信号方向（helper tally 汇总行含
+  维度名，非三定性维度行——曾误伤 6 归档+模式 B）。
+- capstone_panorama._find_capstone 委托 locate。
+
+### 取舍与残留
+- 取尾修法否决：回放证明末次命中常为 capstone 内部 `### 情景-动作矩阵`（817 字符半切片，
+  #1 FAIL #2-#4 PASS 伪装内容缺陷），且 4/26 终态破裂。
+- T9b 残留（已拍板接受）：`## 诱饵标题含综合研判 + 其下恰有 ### 投资建议 等特征子节标题`
+  仍可劫持（=旧语义，无已知事故形态），fixture 锁定
+  `test_g30_label_format::test_h2_tldr_subheading_residual`；提高验签阈值至 ≥2 会把
+  芯碁微装形态（单特征子节）挤入 weak 车道产生备注噪音。
+- G60 执法恢复后 2 份归档真阳性（华锐 688059/腾景 688195：Layer1 表格行无 [src:]/无源
+  标注），历史报告不回改。
+
+### 验证
+26 份归档切片 byte-compare 0 漂移、诊断全 ok@heading；四起事故形态全引擎 A/B（真实快照）
+改前 FAIL[1,1,2,3,4] 改后全 PASS；既有套件 88 用例不翻向；回归全绿。新增
+test_section_locator 20 用例 + TestG30CapstoneHijack 9 + CheckG58Hijack 3 +
+TestM3SectionHijack 2 + G60 空转组 5。
+
+---
+
 ## 2026-08-09 新鲜度阈值统一 180d（120 → 180）
 
 ### 动机

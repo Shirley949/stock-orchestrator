@@ -124,6 +124,8 @@ GATE_HINTS = {
            "与 CL 同行不再误伤；但 CL 归因的偏离值照抓（编造仍 FAIL），正道仍是 [src:]。",
     "G30": "capstone 六硬检查。高频败因：①情景表条件列写 N%（禁——条件必须可判定）"
            "②矩阵行列结构缺 ③主情景结论与矩阵矛盾 ④该观望却写可买。"
+           "⑤reasons 含「定位层」＝切片锚定异常（标题劫持/模板漂移）——改 capstone 前标题"
+           "（综合研判/情景/三档/概率/研判 勿用于其他标题），勿改情景内容。"
            "概率读情景表「概率」列（裸数字/带%/约/全角均可，无概率列回退行首声明）；"
            "修法：看 reasons 里的 #N 子检查逐项补；矩阵 label 用裸文本（勿加粗）；"
            "#1 未 surface 信号看 reasons 携带的底层事件（notice_date+类型+code）直接甄别。"
@@ -163,7 +165,7 @@ GATE_HINTS = {
            "反捏造：类型词 == classification.primary_type；占主营 Y% == dominant_business.revenue_ratio。"
            "数据核对（五块结构对拍须全结构，勿用 primary_type 单字段）："
            "snapshot_view <S> any classification --depth 2；SGR --raw computed_metrics --field sgr（capped）。",
-    "G58": "valuation_percentile 每项 applicable=true 时 m5 必须 surface 分位（带 [src:] 或对齐值）；"
+    "G58": "valuation_percentile 每项 applicable=true 时 m5 必须 surface 分位（带 [src:] 或对齐值；定位已候选+验签，m0「估值框架」标题不再劫持）；"
            "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。"
            "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field valuation_percentile"
            "（pe_ttm/pb/ev_ebitda 各项 applicable+pct_5y 真值）。",
