@@ -24,6 +24,7 @@ from capstone_panorama import QUAL_KW_B as _CAP_QUAL_KW_B  # noqa: E402
 _CAP_QUAL_KW = {**_CAP_QUAL_KW_A, **_CAP_QUAL_KW_B}
 from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
 from capstone_panorama import _TIMELINE_CODE_TO_M, _is_phantom_m5  # noqa: E402
+from section_locator import locate as _locate_section, slice_of  # noqa: E402  章节定位单一实现（候选迭代+验签，2026-08-28 劫持根修）
 
 
 class GateResult(dict):
@@ -1182,46 +1183,24 @@ _G30_FWD_MARKERS = ("未来", "前瞻", "预计", "将至", "待执行", "进行
 
 
 def _g30_find_capstone(report: str) -> str:
-    """定位综合研判章节：从匹配标题到下一个同级/更高级标题/分隔符。找不到回退全文。"""
-    m = _G30_CAPSTONE_HEAD_RE.search(report)
-    if not m:
-        return report
-    start = m.start()
-    head_match = re.match(r"^(#+)", report[m.start():m.end()])
-    head_level = len(head_match.group(1)) if head_match else 4
-    rest = report[m.end():]
-    stop = len(rest)
-    for hm in re.finditer(r"^(#{1,4})\s+\S", rest, re.MULTILINE):
-        if len(hm.group(1)) <= head_level:
-            stop = hm.start()
-            break
-    dm = re.search(r"\n---\s*\n", rest[:stop])
-    if dm:
-        stop = min(stop, dm.start())
-    return report[start:m.end() + stop]
+    """定位综合研判章节（向后兼容壳：str→str 签名保留，测试直调兼容）。
+    实现在 section_locator.locate：候选迭代 + 切片验签——遍历 _G30_CAPSTONE_HEAD_RE
+    全部候选，取首个切片含特征子节标题（证据全景/情景-动作矩阵/投资建议/观察清单）
+    者，防前置诱饵标题劫持（2026-08-28 G30 六起事故根修：唯特偶 4.2「股东行为综合
+    研判」/君正 §11.4「LLM 研判」/株冶 3.5.4「±30% 情景」/赛微双诱饵/厦钨/东田微）。
+    诊断（ok@heading/ok@weak/fallback@first/no_anchor）由 _g30_run 经 locate 获取。"""
+    return _locate_section(report)[0]
 
 
 def _module_section(report, head_pattern, *, full_report_fallback=True):
-    """统一 level-aware markdown 章节切片器（克隆 _g30_find_capstone 算法·根治 ^#{1,4}\\s 截断 bug）。
+    """统一 level-aware markdown 章节切片器（切片算法单一实现收编于 section_locator.slice_of）。
     head_pattern: 编译正则或裸 pattern 串（按 re.MULTILINE）。返回 (found, body)。
     body 含标题行到下一同级/更高级标题或 '\\n---\\n'（不截断 #### 子标题）。未找到 → (False, report 或 '')。"""
     pat = head_pattern if hasattr(head_pattern, "search") else re.compile(head_pattern, re.MULTILINE)
     m = pat.search(report)
     if not m:
         return (False, report if full_report_fallback else "")
-    start = m.start()
-    hm = re.match(r"^(#+)", report[m.start():m.end()])
-    head_level = len(hm.group(1)) if hm else 4
-    rest = report[m.end():]
-    stop = len(rest)
-    for h in re.finditer(r"^(#{1,4})\s+\S", rest, re.MULTILINE):
-        if len(h.group(1)) <= head_level:
-            stop = h.start()
-            break
-    dm = re.search(r"\n---\s*\n", rest[:stop])
-    if dm:
-        stop = min(stop, dm.start())
-    return (True, report[start:m.end() + stop])
+    return (True, slice_of(report, m))
 
 
 def _g30_next_section_end(capstone: str, start: int) -> int:
@@ -1575,7 +1554,28 @@ def _g30_run(report: str, data: dict) -> dict:
     failed = []
     reasons = []
     pan = _cap_panorama(data)
-    cap = _g30_find_capstone(report)
+    cap, cap_diag = _locate_section(report)
+
+    # ---- 定位层分流（2026-08-28 劫持根修配套）：先归因定位，再跑内容检查 ----
+    # no_anchor：旧=静默全文回退+#2 内容层症状（误诊形态）→ 显式定位层 FAIL；
+    #   m4 致命事件 surface 扫全文与 capstone 无关，保留执法不因缺段丢检查。
+    if cap_diag == "no_anchor":
+        na_reasons = ["G30 定位层：全文无 capstone 锚（无标题命中 综合研判/情景/三档/概率/研判）——"
+                      "模式A报告属漏写模块六；模式B/report-only 请检查管线模式路由"]
+        reg_findings_na = _g30_announcement_registry_findings(data, report)
+        if reg_findings_na:
+            na_reasons.append("#1 致命事件 surface FAIL — " + "; ".join(reg_findings_na))
+        return {"passed": False, "failed": [1] if reg_findings_na else [], "reasons": na_reasons}
+    if cap_diag == "fallback@first":
+        # 全部候选验签失败仍按旧取首语义执法（new-PASS ⊇ old-PASS），但 reason 置顶归因定位层
+        reasons.append("G30 定位层异常：锚定切片（首行『" + cap.splitlines()[0][:40] + "』）既无 "
+                       "证据全景/情景-动作矩阵/投资建议/观察清单 子节标题、也无 乐观/基准/中性/悲观 "
+                       "情景词——疑似标题劫持或模板漂移，先查 capstone 前标题，勿改情景内容")
+    elif cap_diag == "ok@weak":
+        # 模式B正常形态（情景 label 在、无 A 形态子节）；PASS 也随 reasons 落 verified.json
+        # details（verify_gates:171-172 无条件上浮），供漂移监控观测，不进 action_required
+        reasons.append("G30 定位层提示：capstone 经弱验签（无特征子节标题）——模式B正常形态；"
+                       "模式A请确认 m6 子节标题含 证据全景/情景-动作矩阵")
 
     # ---- #1 完整性（反片面核心）—— 覆盖判定限定在'证据全景'小节 ----
     cov = _g30_panorama_section(cap)

@@ -214,5 +214,95 @@ class TestG30ProbFromTableColumn(unittest.TestCase):
         self.assertIsNone(cp._top_scenario("无情景文本"), "空手文本应返回 None")
 
 
+class TestG30CapstoneHijack(unittest.TestCase):
+    """G30 capstone 定位劫持回归（2026-08-28 修复：候选迭代+切片验签）。
+
+    事故形态六起（唯特偶 4.2「股东行为综合研判」/ 君正 §11.4「LLM 研判」/ 株冶 3.5.4
+    「±30% 情景」/ 赛微 Q6「三情景裁决」+7.5.1「定性研判」双诱饵 / 厦钨 §7.3「研判」/
+    东田微 m4 小节）：旧 `_G30_CAPSTONE_HEAD_RE` 单向取首个匹配 → 前置诱饵标题劫持切片
+    → #1-#4 连锁 FAIL 且报内容层症状（写手误诊改内容不改标题）。
+    修复后定位走 section_locator.locate（迭代全部候选 + heading 级验签）。"""
+
+    @staticmethod
+    def _with_decoy(decoy: str) -> str:
+        """合规 CAP 前插诱饵标题（# 报告 与 capstone 之间）。"""
+        return "# 报告\n\n" + decoy + "\n\n" + CAP.format(
+            l1="中性", l2="乐观", l3="悲观", p1="45%", p2="30%", p3="25%"
+        ) + "\n\n## 模块七\n"
+
+    @staticmethod
+    def _h2_capstone_report(prefix: str) -> str:
+        """## 级 capstone 报告（真实报告形态）：CAP 模板首行（### 综合研判 Capstone（G30））
+        换成 ## 综合研判，诱饵 prefix 在前。"""
+        body = CAP.format(l1="中性", l2="乐观", l3="悲观", p1="45%", p2="30%", p3="25%")
+        return "# 报告\n\n" + prefix + "\n\n## 综合研判\n\n" + \
+            body.split("\n", 1)[1] + "\n\n## 模块七\n"
+
+    def test_pre_h3_weiteou_42(self):
+        """唯特偶形态：`### 4.2 股东行为综合研判（ST3）` 劫持 → 修复后 PASS。"""
+        r = gd._g30_run(self._with_decoy("### 4.2 股东行为综合研判（ST3）\n\n机构调研频繁。"), {})
+        self.assertTrue(r["passed"], f"诱饵应被跳过，failed={r['failed']}, reasons={r['reasons']}")
+
+    def test_pre_h3_junzheng_llm(self):
+        """君正形态：`### 11.4 …（LLM 研判）` 劫持 → 修复后 PASS。"""
+        r = gd._g30_run(self._with_decoy("### 11.4 资金流与共识（LLM 研判）\n\n主力净流入。"), {})
+        self.assertTrue(r["passed"], f"诱饵应被跳过，failed={r['failed']}, reasons={r['reasons']}")
+
+    def test_pre_h3_zhuye_sensitivity(self):
+        """株冶形态：`### 3.5.4 价格敏感性测算（±30% 情景）` 劫持 → 修复后 PASS。"""
+        r = gd._g30_run(self._with_decoy("### 3.5.4 价格敏感性测算（±30% 情景）\n\n敏感性测算表。"), {})
+        self.assertTrue(r["passed"], f"诱饵应被跳过，failed={r['failed']}, reasons={r['reasons']}")
+
+    def test_dual_decoy_saiwei(self):
+        """赛微双诱饵（Q6「三情景裁决」+ 7.5.1「定性研判」）→ 修复后 PASS。"""
+        r = gd._g30_run(self._with_decoy(
+            "### Q6：值不值得买？——三情景裁决\n\n结论一句话。\n\n"
+            "### 7.5.1 政策传导链（定性研判）\n\n传导路径。"), {})
+        self.assertTrue(r["passed"], f"双诱饵应被跳过，failed={r['failed']}, reasons={r['reasons']}")
+
+    def test_h2_tldr_prose_decoy(self):
+        """T9a：`## ⚡ 速览：综合研判结论` + 散文「投资建议」（非 heading）→ 验签拒诱饵，
+        锚 ## 级真 capstone → PASS。"""
+        rep = self._h2_capstone_report(
+            "## ⚡ 速览：综合研判结论（TL;DR）\n\n投资建议：观望。三档情景中中性概率 50%。")
+        r = gd._g30_run(rep, {})
+        self.assertTrue(r["passed"], f"散文投资建议不应过 heading 验签，failed={r['failed']}")
+        from section_locator import locate
+        sl, d = locate(rep)
+        self.assertEqual(d, "ok@heading")
+        self.assertTrue(sl.startswith("## 综合研判"), "应锚 ## 级真 capstone 而非速览诱饵")
+
+    def test_h2_tldr_subheading_residual(self):
+        """T9b 已接受残留（2026-08-28 拍板）：`## 速览：综合研判` + 其下 `### 投资建议`
+        子标题 → heading 级验签通过、仍锚诱饵（= 旧取首语义；该形态需双巧合，无已知
+        事故）。锁定现状防无意识变化；提高验签阈值须重评芯碁微装形态（单特征子节）。"""
+        rep = self._h2_capstone_report("## 速览：综合研判\n\n### 投资建议\n\n观望。")
+        from section_locator import locate
+        sl, d = locate(rep)
+        self.assertEqual(d, "ok@heading")
+        self.assertTrue(sl.startswith("## 速览：综合研判"), "残留形态行为变化=回归红线")
+        r = gd._g30_run(rep, {})
+        self.assertFalse(r["passed"], "残留形态下 capstone 内容不在切片 → 内容检查照常执法")
+
+    def test_m6_missing_reason_routes_to_locator_layer(self):
+        """m6 缺失：旧=静默全文回退+内容层症状（#2「情景块不足3」误诊形态）→
+        修复后显式定位层 reason，写手第一眼归因。"""
+        r = gd._g30_run("# 报告\n\n## 一、概况\n\n基本面描述。\n\n## 二、财务\n\n营收增长 20%。\n", {})
+        self.assertFalse(r["passed"])
+        self.assertIn("定位层", r["reasons"][0], f"reasons[0] 须定位层归因，实际: {r['reasons'][:1]}")
+
+    def test_trigger_in_prose_only_not_anchored(self):
+        """触发词仅在散文/表格行（无标题）→ 不锚，走定位层车道（heading 边界固化）。"""
+        rep = "# 报告\n\n本节做综合研判：中性概率 50%。\n\n| 乐观 | 42% |\n|---|---|\n\n"
+        r = gd._g30_run(rep, {})
+        self.assertFalse(r["passed"])
+        self.assertIn("定位层", r["reasons"][0])
+
+    def test_feat_word_heading_no_trigger_not_candidate(self):
+        """T2 边界：capstone 前的特征词标题（含「全景」但非 5 词候选）不会成为锚。"""
+        r = gd._g30_run(self._with_decoy("### 全景速览\n\n一览数据。"), {})
+        self.assertTrue(r["passed"], f"非候选标题不应扰动定位，failed={r['failed']}")
+
+
 if __name__ == "__main__":
     unittest.main()
