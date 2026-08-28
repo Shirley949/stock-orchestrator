@@ -2273,10 +2273,18 @@ def check_g51(report: str, data: dict) -> bool:
 # ============================================================
 
 def _m3_section(report: str) -> str:
-    """定位 m3 技术面段（首个匹配 header 到下一同级/更高级 header 之间文本，含标题行）。G52-G55 共用。
+    """定位 m3 技术面段。G52-G55/G63 共用。
     匹配「模块三/技术分析/技术面」header；无 m3 段 → ''（report-only / 非 m3 报告不执法）。
-    level-aware（克隆 _g30_find_capstone）：不在 #### 子标题截断，让 G52-55 消费校验真正读到技术正文。"""
-    return _module_section(report, r'^#{1,4}\s.*(?:模块三|技术分析|技术面)', full_report_fallback=False)[1]
+    level-aware：不在 #### 子标题截断，让 G52-55 消费校验真正读到技术正文。
+    2026-08-28 劫持根修：候选迭代+内容验签——首个切片含技术特征词者，防 Q&A
+    「Q1 …技术面…」前置诱饵劫持（康强事故，G52-55/G63 六门连锁假象）。
+    26 份终态实测切片与旧取首相等（电池 T14v2）。"""
+    sec, diag = _locate_section(
+        report,
+        head_re=re.compile(r'^#{1,4}\s.*(?:模块三|技术分析|技术面)', re.MULTILINE),
+        verify_re=re.compile(r"TD|支撑|压力|均线|MACD|RSI|斐波|共振|乖离|K线|量价"),
+        weak=())
+    return "" if diag == "no_anchor" else sec
 
 
 def check_g52(report: str, data: dict) -> bool:
@@ -2547,8 +2555,15 @@ def check_g58(report: str, data: dict) -> bool:
     逃逸致永远 PASS）；m5 段缺失 + 无 applicable 数据 = PASS。关键词拓宽至 估值分析/估值 兜住折叠标题。"""
     vp = _snapshot_get(data, "valuation_snapshot.data.valuation_percentile")
     vp = vp if isinstance(vp, dict) else {}
-    found, sec = _module_section(report, r'^#{1,4}\s.*(?:模块五|估值分析|估值)')
-    if not found:
+    # m5 定位（2026-08-28 劫持根修）：候选迭代+内容验签——首个切片含估值特征词者，
+    # 防 m0「股票分类与估值框架」/Q&A「估值框架」前置诱饵劫持（G58 五起事故：
+    # 阳谷/晶方/福晶/领益 m0 同模式 ×4 复发 + 康强 Q&A）。26 份终态实测切片与旧取首相等。
+    sec, _g58_diag = _locate_section(
+        report,
+        head_re=re.compile(r'^#{1,4}\s.*(?:模块五|估值分析|估值)', re.MULTILINE),
+        verify_re=re.compile(r"分位|市盈|PE|PB|市净|估值结论|目标价|同业对比"),
+        weak=())
+    if _g58_diag == "no_anchor":
         sec = ""
     # ① 漏报：applicable 分位须 surface（grounded via [src:] 或 pct 值对齐）；章节缺失 + applicable = FAIL
     for key in ("pe_ttm", "pb", "ev_ebitda"):

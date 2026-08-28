@@ -165,5 +165,25 @@ class TestSliceOf(unittest.TestCase):
         self.assertIn("Layer 1", sl)
 
 
+class TestM3SectionHijack(unittest.TestCase):
+    """m3 定位（gate_definitions._m3_section，G52-55/G63 共用）劫持回归。
+
+    康强事故：Q&A 报告 Q1 标题含「技术面」→ 旧取首语义锚 Q1 段 → G52/53/54/55/63
+    六门连锁假象。修复后候选迭代+内容验签（技术特征词）跳过 Q&A 诱饵。"""
+
+    def test_qa_tech_word_decoy_skipped(self):
+        import gate_definitions as gd
+        rep = ("## 〇、用户七大问题逐题直答\n\n"
+               "### Q1 是不是值得买？（技术面位置与风险）\n\n估值合理，风险中等。\n\n"
+               "## 五、技术分析（m3）\n\nTD 序列四步；支撑 87.01，压力 95.2；MA20 走平。\n")
+        sec = gd._m3_section(rep)
+        self.assertTrue(sec.startswith("## 五、技术分析"), f"应锚真 m3，实际: {sec.splitlines()[0]}")
+        self.assertIn("TD 序列四步", sec)
+
+    def test_no_m3_section_empty(self):
+        import gate_definitions as gd
+        self.assertEqual(gd._m3_section("# 报告\n\n## 一、概况\n\n内容。\n"), "")
+
+
 if __name__ == "__main__":
     unittest.main()

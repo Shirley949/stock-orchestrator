@@ -187,5 +187,36 @@ class CheckG21M5(unittest.TestCase):
         self.assertFalse(check_g21(self._rep(m5), _snap_full_m5_src()))
 
 
+class CheckG58Hijack(unittest.TestCase):
+    """G58 m5 定位劫持回归（2026-08-28 根修：候选迭代+内容验签）。
+
+    事故形态五起：阳谷/晶方/福晶/领益的 m0「股票分类与估值框架」同模式 ×4 复发 +
+    康强 Q&A「估值框架」。旧 `_module_section(模块五|估值分析|估值)` 单向取首——
+    前置标题含「估值」即劫持切片 → 分位永不 grounded → 误报漏报 FAIL。
+    修复后：首个切片含估值特征词（分位/市盈/PE/PB/市净/估值结论/目标价/同业对比）
+    者胜出，诱饵切片（纯分类/问答内容）被跳过。红验证：2026-08-28 改前引擎两诱饵
+    均 FAIL（m5 未 surface pe_ttm 估值分位）。"""
+
+    def test_m0_valuation_frame_decoy_pass(self):
+        """领益形态：`## 一、股票分类与估值框架（m0）` 前置 → 修复后锚真 m5，PASS。"""
+        rep = ("## 一、股票分类与估值框架（m0）\n\n本股属周期成长混合型。\n\n"
+               "## 七、估值分析（m5）\n\nPE(TTM) 21.52 近五年 26.8% 分位 "
+               "[src: snapshot.valuation_percentile.pe_ttm]")
+        self.assertTrue(check_g58(rep, _snap_pct()))
+
+    def test_qa_valuation_frame_decoy_pass(self):
+        """康强形态：Q&A 小节标题含「估值框架」→ 修复后跳过，锚真 m5，PASS。"""
+        rep = ("## 〇、用户七大问题逐题直答\n\n### Q1 定价与估值框架\n\n答：估值合理。\n\n"
+               "## 七、估值分析（m5）\n\nPE(TTM) 21.52 近五年 26.8% 分位 "
+               "[src: snapshot.valuation_percentile.pe_ttm]")
+        self.assertTrue(check_g58(rep, _snap_pct()))
+
+    def test_no_decoy_missing_percentile_still_fails(self):
+        """反极：无诱饵 + applicable 分位未 surface → 漏报照抓（执法不弱化）。"""
+        rep = ("## 一、股票分类（m0）\n\n周期股。\n\n"
+               "## 七、估值分析（m5）\n\nPE(TTM) 21.52，估值偏低。")
+        self.assertFalse(check_g58(rep, _snap_pct()))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
