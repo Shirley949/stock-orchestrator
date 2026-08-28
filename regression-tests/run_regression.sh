@@ -50,6 +50,8 @@ echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术�
 python3 "$HERE/test_g1_g14_dual_segment.py" 2>&1 | tail -3
 echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径对齐+#2/#3/#6 拦截）"
 python3 "$HERE/test_g30_label_format.py" 2>&1 | tail -3
+echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+切片验签 劫持免疫+零回归边界）"
+python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
 python3 "$HERE/test_freshness_helper.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 presence + G38 分红有效性）"
@@ -74,6 +76,10 @@ echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_full_archive.py（模式B full/ 存档：全量性+同日复用+A∪B合并+cleanup白名单+90天旧档识别）"
 python3 "$HERE/test_full_archive.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_s10_checklist_cached.py（收单三态语义两极：ok/cached→True，failed/缺失→False）"
+python3 "$HERE/test_s10_checklist_cached.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_market_context_order.py（market_context 排序契约两极：desc存储→最新消费+board键必挂载+统一信封）"
+python3 "$HERE/test_market_context_order.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
 python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
