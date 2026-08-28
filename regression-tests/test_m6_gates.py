@@ -145,5 +145,87 @@ class TallyAnnualRoeTests(unittest.TestCase):
         self.assertEqual(dict(t["per_dim"])["财务质量"], "偏空")
 
 
+# ---------- G60 空转根修（2026-08-28）：## 级 capstone 形态 ----------
+_H2_CAPSTONE = """## 🎯 模块六：综合研判（收口裁决）
+
+### 证据全景
+
+- ①财务质量：ROE 12.08% [src: snapshot.s1_financial.data.dupont]
+- {moha_line}
+- ⑫治理战略：P2注销型回购 [src: snapshot.s5_events.data.risk_signals.processed.catalyst]
+- ⑬前瞻催化：储能19.2%放量 [src: snapshot.s1_financial.data.segment_composition]
+
+### 情景-动作矩阵
+
+| 情景 | 概率 | 目标价 | 应对动作 | 成立条件 | 反方证据 |
+|------|------|--------|---------|---------|---------|
+| 中性 | 45% | 348元 | 观望 | 若区间震荡 | 然而资金承压 |
+| 乐观 | 30% | 450元 | 建仓 | 触发放量突破 | 但是均线空头 |
+| 悲观 | 25% | 342元 | 减仓 | 一旦跌破支撑 | 尽管外资托底 |
+
+### 投资建议
+
+观望为主。
+
+## 📋 模块八：数据时效与局限性
+
+略。
+"""
+
+
+class CheckG60H2Capstone(unittest.TestCase):
+    """真实报告形态（## 级 capstone + ### 子节）执法回归。
+
+    空转 bug：旧边界正则 ^#{1,3} 在 ## capstone 的第一个 ### 子节处截断 → sec 恒空
+    → 26 份归档全程不执法（植入裸奔定性行仍 PASS，2026-08-28 T18 实测 25/25）。
+    单测此前只测 ### 级 capstone（模板文档形态），恰好绕开此 bug。"""
+
+    MOHA_NAKED = "- ⑪护城河：品牌与渠道优势明显"
+    MOHA_SRC = "- ⑪护城河：研发强度4.11% [src: snapshot.s1_financial.data.income_statement]"
+
+    def test_h2_naked_qual_row_fails(self):
+        """## capstone 下裸奔定性行 → FAIL（旧引擎空转 PASS——红验证 2026-08-28）。"""
+        rep = _H2_CAPSTONE.format(moha_line=self.MOHA_NAKED)
+        self.assertFalse(check_g60(rep, _snap_rd()),
+                         "## 级 capstone 下裸奔护城河行应 FAIL（空转已修）")
+
+    def test_h2_src_qual_row_passes(self):
+        rep = _H2_CAPSTONE.format(moha_line=self.MOHA_SRC)
+        self.assertTrue(check_g60(rep, _snap_rd()))
+
+    def test_h2_decoy_layer1_still_reachable(self):
+        """诱饵（### 4.2 股东行为综合研判）在前，Layer1 仍可达并执法（裸奔行 FAIL）。"""
+        rep = "### 4.2 股东行为综合研判（ST3）\n\n机构调研频繁。\n\n" + \
+            _H2_CAPSTONE.format(moha_line=self.MOHA_NAKED)
+        self.assertFalse(check_g60(rep, _snap_rd()), "诱饵不应令 G60 退回空转")
+
+    def test_tally_summary_line_not_flagged(self):
+        """helper tally 汇总行（含维度名）非三定性维度行，不属 ① 执法对象——
+        锁定 2026-08-28 skip 修复（6/26 归档曾误伤：蓝思/中钨/宏明/赛微/领益/特变B）。"""
+        rep = _H2_CAPSTONE.format(moha_line=self.MOHA_SRC).replace(
+            "- ⑫治理战略：",
+            "**信号方向 tally：3 偏多 / 6 中性 / 5 偏空**——典型的\"深护城河\"结构。\n- ⑫治理战略：")
+        self.assertTrue(check_g60(rep, _snap_rd()), "tally 汇总行提及护城河不应触发裸奔 FAIL")
+
+
+class PanoramaLocatorUnified(unittest.TestCase):
+    """capstone_panorama._find_capstone 统一委托 section_locator（双实现收编）。"""
+
+    def test_decoy_anchors_real_capstone(self):
+        import capstone_panorama as cp
+        doc = ("### 4.2 股东行为综合研判（ST3）\n\n机构调研频繁。\n\n"
+               "## 🎯 模块六：综合研判（收口裁决）\n\n### 证据全景\n\n内容。\n")
+        cap = cp._find_capstone(doc)
+        self.assertTrue(cap.startswith("## 🎯 模块六"),
+                        f"应锚真 capstone（旧实现切到文末含诱饵），实际: {cap.splitlines()[0]}")
+
+    def test_bounded_slice(self):
+        """切片有界（不再切到文末）：后续模块不混入。"""
+        import capstone_panorama as cp
+        doc = ("## 🎯 模块六：综合研判（收口裁决）\n\n### 证据全景\n\n内容。\n\n"
+               "## 📋 模块八\n\n后续模块内容。\n")
+        self.assertNotIn("模块八", cp._find_capstone(doc))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

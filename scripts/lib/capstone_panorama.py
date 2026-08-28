@@ -1265,10 +1265,10 @@ def panorama_advisory(report: str, data: dict) -> list:
 
 
 def _find_capstone(report: str) -> str:
-    m = re.search(r"^#{1,4}\s.*(?:综合研判|情景|三档|概率|研判)", report, re.MULTILINE)
-    if not m:
-        return report
-    return report[m.start():]
+    """capstone 定位（#7 advisory 用）。统一走 section_locator（单一实现；
+    旧副本正则取首+切到文末，劫持面更大）。"""
+    from section_locator import locate
+    return locate(report)[0]
 
 
 def _top_scenario(cap: str):

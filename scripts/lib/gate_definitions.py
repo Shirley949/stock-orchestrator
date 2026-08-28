@@ -24,7 +24,7 @@ from capstone_panorama import QUAL_KW_B as _CAP_QUAL_KW_B  # noqa: E402
 _CAP_QUAL_KW = {**_CAP_QUAL_KW_A, **_CAP_QUAL_KW_B}
 from capstone_panorama import QUANT_KW as _CAP_QUANT_KW  # noqa: E402
 from capstone_panorama import _TIMELINE_CODE_TO_M, _is_phantom_m5  # noqa: E402
-from section_locator import locate as _locate_section, slice_of  # noqa: E402  章节定位单一实现（候选迭代+验签，2026-08-28 劫持根修）
+from section_locator import locate as _locate_section, slice_of  # noqa: E402  章节定位单一实现（候选迭代+验签）
 
 
 class GateResult(dict):
@@ -1183,12 +1183,8 @@ _G30_FWD_MARKERS = ("未来", "前瞻", "预计", "将至", "待执行", "进行
 
 
 def _g30_find_capstone(report: str) -> str:
-    """定位综合研判章节（向后兼容壳：str→str 签名保留，测试直调兼容）。
-    实现在 section_locator.locate：候选迭代 + 切片验签——遍历 _G30_CAPSTONE_HEAD_RE
-    全部候选，取首个切片含特征子节标题（证据全景/情景-动作矩阵/投资建议/观察清单）
-    者，防前置诱饵标题劫持（2026-08-28 G30 六起事故根修：唯特偶 4.2「股东行为综合
-    研判」/君正 §11.4「LLM 研判」/株冶 3.5.4「±30% 情景」/赛微双诱饵/厦钨/东田微）。
-    诊断（ok@heading/ok@weak/fallback@first/no_anchor）由 _g30_run 经 locate 获取。"""
+    """定位综合研判章节（str→str 兼容壳）。实现=section_locator.locate：
+    候选迭代+切片验签，防前置诱饵标题劫持。诊断由 _g30_run 经 locate 获取。"""
     return _locate_section(report)[0]
 
 
@@ -1556,9 +1552,9 @@ def _g30_run(report: str, data: dict) -> dict:
     pan = _cap_panorama(data)
     cap, cap_diag = _locate_section(report)
 
-    # ---- 定位层分流（2026-08-28 劫持根修配套）：先归因定位，再跑内容检查 ----
-    # no_anchor：旧=静默全文回退+#2 内容层症状（误诊形态）→ 显式定位层 FAIL；
-    #   m4 致命事件 surface 扫全文与 capstone 无关，保留执法不因缺段丢检查。
+    # ---- 定位层分流：先归因定位，再跑内容检查 ----
+    # no_anchor 显式 FAIL（旧=静默全文回退+内容层症状，误诊源）；m4 致命事件
+    # surface 扫全文与 capstone 无关，保留执法。
     if cap_diag == "no_anchor":
         na_reasons = ["G30 定位层：全文无 capstone 锚（无标题命中 综合研判/情景/三档/概率/研判）——"
                       "模式A报告属漏写模块六；模式B/report-only 请检查管线模式路由"]
@@ -1567,13 +1563,12 @@ def _g30_run(report: str, data: dict) -> dict:
             na_reasons.append("#1 致命事件 surface FAIL — " + "; ".join(reg_findings_na))
         return {"passed": False, "failed": [1] if reg_findings_na else [], "reasons": na_reasons}
     if cap_diag == "fallback@first":
-        # 全部候选验签失败仍按旧取首语义执法（new-PASS ⊇ old-PASS），但 reason 置顶归因定位层
+        # 仍按旧取首语义执法（new-PASS ⊇ old-PASS），reason 置顶归因定位层
         reasons.append("G30 定位层异常：锚定切片（首行『" + cap.splitlines()[0][:40] + "』）既无 "
                        "证据全景/情景-动作矩阵/投资建议/观察清单 子节标题、也无 乐观/基准/中性/悲观 "
                        "情景词——疑似标题劫持或模板漂移，先查 capstone 前标题，勿改情景内容")
     elif cap_diag == "ok@weak":
-        # 模式B正常形态（情景 label 在、无 A 形态子节）；PASS 也随 reasons 落 verified.json
-        # details（verify_gates:171-172 无条件上浮），供漂移监控观测，不进 action_required
+        # 模式B形态（情景 label 在、无 A 形态子节）；PASS 也随 reasons 落 verified.json details
         reasons.append("G30 定位层提示：capstone 经弱验签（无特征子节标题）——模式B正常形态；"
                        "模式A请确认 m6 子节标题含 证据全景/情景-动作矩阵")
 
@@ -2274,11 +2269,8 @@ def check_g51(report: str, data: dict) -> bool:
 
 def _m3_section(report: str) -> str:
     """定位 m3 技术面段。G52-G55/G63 共用。
-    匹配「模块三/技术分析/技术面」header；无 m3 段 → ''（report-only / 非 m3 报告不执法）。
-    level-aware：不在 #### 子标题截断，让 G52-55 消费校验真正读到技术正文。
-    2026-08-28 劫持根修：候选迭代+内容验签——首个切片含技术特征词者，防 Q&A
-    「Q1 …技术面…」前置诱饵劫持（康强事故，G52-55/G63 六门连锁假象）。
-    26 份终态实测切片与旧取首相等（电池 T14v2）。"""
+    匹配「模块三/技术分析/技术面」header；无 m3 段 → ''（不执法）。
+    level-aware 不截 #### 子节；候选迭代+内容验签防 Q&A「技术面」诱饵劫持。"""
     sec, diag = _locate_section(
         report,
         head_re=re.compile(r'^#{1,4}\s.*(?:模块三|技术分析|技术面)', re.MULTILINE),
@@ -2555,9 +2547,7 @@ def check_g58(report: str, data: dict) -> bool:
     逃逸致永远 PASS）；m5 段缺失 + 无 applicable 数据 = PASS。关键词拓宽至 估值分析/估值 兜住折叠标题。"""
     vp = _snapshot_get(data, "valuation_snapshot.data.valuation_percentile")
     vp = vp if isinstance(vp, dict) else {}
-    # m5 定位（2026-08-28 劫持根修）：候选迭代+内容验签——首个切片含估值特征词者，
-    # 防 m0「股票分类与估值框架」/Q&A「估值框架」前置诱饵劫持（G58 五起事故：
-    # 阳谷/晶方/福晶/领益 m0 同模式 ×4 复发 + 康强 Q&A）。26 份终态实测切片与旧取首相等。
+    # m5 定位：候选迭代+内容验签，防 m0/Q&A「估值框架」前置诱饵劫持
     sec, _g58_diag = _locate_section(
         report,
         head_re=re.compile(r'^#{1,4}\s.*(?:模块五|估值分析|估值)', re.MULTILINE),
@@ -2626,15 +2616,11 @@ def check_g60(report: str, data: dict) -> bool:
     三态：有锚/标无源 PASS / 无 m6 段豁免 / 裸奔或研发强度%捏造 FAIL。
     覆盖范围限定 Layer1「证据全景」子节——投资建议/观察清单的定性叙事（如「护城河深厚」）合法无 src，不误伤。
     """
-    m = re.search(r'^#{1,4}\s.*综合研判', report, re.MULTILINE)
-    if not m:
+    # 切片走 locate：## 级 capstone 覆盖全部子节。旧边界 ^#{1,3} 在第一个 ### 子节即截断
+    # → Layer1 恒不可达 → 真实报告（全 ## 级）上 gate 空转（2026-08-28 修）。
+    sec, _g60_diag = _locate_section(report)
+    if _g60_diag == "no_anchor":
         return True   # 无 m6 段不执法（report-only / 非 m6 报告）
-    rest = report[m.end():]
-    # ⚠️ sec 边界用 ^#{1,3}（停在下一个 ### 模块），让 sec 跨越整个 m6 模块**含其 #### 子节**。
-    # 若用 ^#{1,4} 会立即在 m6 第一个子节「#### Layer 1 — 证据全景」截断 → sec 仅剩标题尾，
-    # Layer1 全部内容被排除 → 定性行永不命中 → gate 恒 PASS（m6 版 G30 同款同级标题截断 bug）。
-    nxt = re.search(r'^#{1,3}\s', rest, re.MULTILINE)
-    sec = rest[:(nxt.start() if nxt else len(rest))]
     # 定位 Layer1「证据全景」子节（投资建议叙事不含 src 合法，须隔离；pnxt 仍用 ^#{1,4} 停于下一 #### 子节）
     pm = re.search(r'^#{1,4}\s.*(?:证据全景|证据盘点|证据矩阵|全景)', sec, re.MULTILINE)
     if pm:
@@ -2644,7 +2630,9 @@ def check_g60(report: str, data: dict) -> bool:
     else:
         layer1 = sec
     _SKIP = ("你须", "你判", "helper", "解读提示", "代码释义见", "定性锚点（helper",
-             "定性（你", "机械格式", "self-check", "tally 是")
+             "定性（你", "机械格式", "self-check", "tally 是",
+             # tally/信号方向汇总行常含维度名，属信号汇总非三定性维度行，不在 ① 执法面
+             "tally", "信号方向")
     _DIM_KWS = ("护城河", "治理战略", "前瞻催化")
     _PURE = ("无源", "定性补充")
     # ① 三定性维度数据行各须含 ≥1 [src:]（既无 src 又无「无源」标注 = 裸奔 FAIL）
