@@ -54,7 +54,9 @@ SCENES = {
             {"path": "data.financial_abstract",  "confidence": CONFIRMED},
             {"path": "data.financial_indicators","confidence": CONFIRMED},
             {"path": "data.segment_composition", "confidence": CONFIRMED},
-            {"path": "data.dupont",             "confidence": CONFIRMED},
+            {"path": "data.dupont",             "confidence": CONFIRMED,
+             "note": "杜邦四因子（主源 Sina vFD_DupontAnalysis；失败/空→东财 RPT_F10_FINANCE_DUPONT 单次 fallback，"
+                     "source 字段分辨；data._profile=financial/normal；ROE 口径=披露加权(中报/年报)或源端自算(Q1)，闭合校验已废弃 2026-08-30）"},
             {"path": "data.mainfinadata",       "confidence": CONFIRMED,
              "note": "东财 MAINFINADATA 指标 165 字段（wide 族，rows[0]=最新期 desc）；ZCFZL/LD/SD 偿债能力 + ROEJQ/ROIC + 同比/DJD 单季；G27③/m2§2.3"},
             {"path": "data.rd_expense",         "confidence": CONFIRMED,
@@ -89,7 +91,8 @@ SCENES = {
         "priority": P0,   # G6/G7/G8/G9/G16/G27 均读它
         "cost": {"calls": 12, "calls_worst": 33, "latency": "medium"},
         "depends_on": [],
-        "fallback": ["THS三表 → 东财datacenter → Sina三表 → all_failed"],  # runner.py:657-706
+        "fallback": ["THS三表 → 东财datacenter → Sina三表 → all_failed",   # runner.py:657-706
+                     "dupont: Sina → 东财RPT_F10_FINANCE_DUPONT(单次) → 终态failed"],  # runner._em_dupont_envelope
         "cacheable": True,
     },
 

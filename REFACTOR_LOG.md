@@ -1,7 +1,3 @@
-## 2026-08-30 收尾补挂载：两个游离测试入回归链（验收问句触发）
-
-全量盘点（regression-tests 全部 test_*.py vs run_regression.sh 挂载清单逐一对照）发现 `test_g16_subject_attribution.py`（G16 前方最近主体归因豁免两极）与 `test_latest_extract.py`（latest_period 信封/双键兜底/days_old helper 族）历史上未挂载进回归链——游离于总闸外，此前「回归 exit 0」不覆盖它们。补跑验证 8+29 tests OK 后挂载；`test_gate_throttled.py` 文件不存在（脚本内 if -f 保护自动跳过，预存状态）。同轮盘点：quality/registry 仓无测试文件；routing 仓 6 个测试（lixinger/sina/westock/dongcai/report_views/td_analyzer，23+35+37+9 checks）独立跑全过（不在 run_regression.sh 管辖，属 routing 仓自带回归）。全量回归重跑 exit 0。此后「本地测试全跑」由脚本保证。
-
 ## 2026-08-30 第4批机制层：R8 静默降级 fail-fast + R10 文档路径机器校验 + R12 fixture 真实正文探针（failure-family 修复执行令）
 
 触发：同执行令第4批（机制层是「彻底解决」构成要件）。gate 逻辑零改动（`scripts/lib/gate_definitions.py` 相对 HEAD 空 diff），全部为机制/测试/文档层：
@@ -13,6 +9,7 @@
 
 验证：全量回归 exit 0（gate_fixture_test 漏报=0 误伤=0 crash=0 drift=0，含 Level D；test_doc_src_paths 9 + test_r8_mechanism 3 新挂载全过）；/tmp/replay postfix4→postfix5 五维零变化（verdict/score/failed_gates/逐门向量/reasons 门集合，23 用例）；gate_definitions.py 相对 HEAD 空 diff（无 gate 逻辑改动=A/B 对照天然成立）。预存脏状态（parity corpus 3 gz / test_parity_gate / test_src_hidden_style / test_market_context_order / test_s10_checklist_cached / refresh_golden.py / strip_publish_sample.md / REFACTOR_LOG 预存条目）hunk 级隔离未混入。
 
+
 ## 2026-08-30 第3批族级清扫：F3 十门违规早退收集化 + F2 六处「收集后丢弃」reasons 化 + G63 词表补「阻力」（failure-family 修复执行令）
 
 触发：/tmp/failure_family_report.md 审计定稿的 F2/F3 两族全量灭绝 + F4 同构面审查。性质=纯 reasons 面强化（判决面零变化，A/B + 重放双证），全部在 `scripts/lib/gate_definitions.py`：
@@ -23,6 +20,19 @@
 - **F4 同构面四问裁定不修**（收紧=提升执法力需真实案例，公理④禁盲改）：G49/G69 全文双条件 AND、G25/G29/G13/G39/G47 单词 presence、G16:696/G67 全文数值对拍——全部第4批 R12 探针覆盖；新观察证据：G49 反编造臂或被「卖方一致预期」措辞误触发，记入探针清单。
 
 验证：全量回归 exit 0（61 门漏报=0 误伤=0，parity 3 票 byte-parity）；/tmp/replay 23 用例 HEAD A/B 276 组对照判决 0 翻转 + 全门 sanity 0 差异；postfix3→4 判决/分数/逐门向量零变化（reasons 面唯一变化=asis_tengjing G60 由笼统一句→4 条具体裸奔行，即改造目的本身）；新增 `regression-tests/test_f2f3_collection.py` 26 判例两极直调（11 门新收集路径 FAIL 必带真值/行摘录 + 干净输入 PASS）入回归链；AST 扫描全 check_g* 「循环内 FAIL return」残留仅 G67:3222（R7 观察档，不在 F3 清单）。
+
+## 2026-08-28 G63 打地鼠根治：批量 reasons + tokenizer 通用剥标识符 + 两层制真值集（plan lazy-dazzling-sifakis v3.1）
+
+触发：万润 002654 / 江海 002484 双会话 transcript 取证——gate 期 output 增量 91% 来自 G63 每轮只报一个违例的循环修复（5 轮/3 轮打地鼠），叠加 tokenizer 把 MA20/ATR14/BIAS_12/ADX22.56 类粘连参数数字解析为价位、真值集漏 TDST（江海 93.68/万润 14.18/中钨 000657 72.22/76.50 三例照抄 TDST 被误判转录错）与漏渲染值豁免通道（曾被迫把券商锚数值迁出 m3 段）。四 commits（730f368/6917829/8dbf91f/f2a8000）全在 `scripts/lib/gate_definitions.py` + fixture：
+
+- **批量收集（730f368）**：`check_g63` 执法循环由循环内 `return GateResult` 改全量收集——(n,near) 去重、top5 + 尾注（「另有 N 处同类转录错（本清单为全量，一轮修完再重跑）」），reasons 渲染走 verify_gates 既有循环、compute_score 只读 passed/failed 零分数影响。fixture +2 反极：双编造价批量照抓（≥2 条全量断言）+ TDST 手抄照抓（真值集补全≠豁免）。
+- **tokenizer（6917829）**：`_extract_price_candidates` 三条新剥——①ASCII 标识符整体剥（`[A-Za-z_][A-Za-z_0-9]*(?:\.\d+)?` + 括号调用交替分支，白名单制→通用制免维护）②TD countdown N/13 整数对 ③N日/N天时间窗。设计依据=江海语料实测教训：`ADX22.56` 剥成 `ADX22` 残留 `.56` 撞 S&R 56.87，故小数后缀必须吸收；中文标签行（支撑位14.18）不受影响。
+- **两层制真值集（8dbf91f）**：tier-1 对拍集补 TDST（`td.tdst`+`weekly_td.tdst` 的 buy/sell）；tier-2 `rendered` 豁免集（MA_5-250/BOLL×3/close/vwap/千股千评 support+resistance+prime_cost_1d/20d/60d）**精确到分（round 2）相等才豁免**。不并入 truths 的实测依据：密集渲染值按 0.5% 带豁免会吞 (0.5%,5%] 检测带（13.3/13.9/15.2 类编造价全部逃逸）；振荡量（RSI/KDJ/ADX 0-100）不入任何集——入集掩护同量级编造价位。
+- **GATE_HINTS 合并（f2a8000）**：与既有 hint（拆行隔离/VWAP 勿标成本位）合并一条，新增全量清单纪律 + 两层制豁免口径。预扫脚本方案降级为一句话流程纪律（三修后 run1 reasons 即全量清单，残余收益仅一次秒级往返）。
+
+验证：67 判例矩阵（反极/照抄正极/标识符/语境/000988 golden 五族）断言失败=0、新误伤=0；万润 run1 重建报告 old FAIL(1r)→new PASS；15 票语料 A/B 824 gate 组合 0 old-PASS→new-FAIL、唯一翻转=000657 G63 fail→pass（存量 tdst 误伤修复）；fixture 61 门×3 票+9 探针漏报=0 误伤=0；parity golden 6 文件 md5 全程未漂；全量回归 exit 0。消费侧同步：stock-analysis-quality 仓 m3-technical.md G63 指引一行收敛（措辞绕行类 workaround 全部作废）。
+
+known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数对作价格区间写法漏抓（A股价格带小数，实证语料未见）③渲染值 1 位小数舍入（如 15.17→15.2）仍报——照抄 2 位小数即免 ④振荡量值（RSI 57 等）与支撑压力同句且落 (0.5%,5%] 带仍报（不入集防编造掩护）⑤全角数字照抓（新旧一致）⑥rendered 字段集=当前已固化渲染字段，未来新增渲染字段需同步扩展。
 
 ## 2026-08-24 301682 复盘五修批：M5 幻影信号根因剔除 + G30 reason 携带事件 + 审计三分桶（plan fuzzy-swinging-marble）
 
@@ -178,6 +188,17 @@
 - **`regression-tests/test_full_archive.py`（新，入回归）**：5 断言——full/ 全量性/同日 B 复用 stderr+场景复制/B 存档=A∪B/cleanup 后 full/ 完好/90 天旧档识别。
 - **`scripts/lib/data_contracts.py`**：+market_context/intraday_60min 契约（mode=[B] 起步）；valuation_snapshot/s_margin 翻转 [A,B]；m36/m37 消费方注册（`^m\d+$` 合规）。
 - 数据层引擎/场景/存档细节见 financial-data-routing 仓同日条目；模块文档 m36/m37 见 stock-analysis-quality 仓。A 零扰动：parity 3 票 byte-parity 绿贯穿全程（P1/P2/P3/P4/P6 五个回归跑点 exit 0）。
+
+## 2026-08-27 parity 工具化 + 收单三态测试固化（000657 回归会话产品化；用户指令：禁手写一次性脚本）
+
+- **`regression-tests/parity/refresh_golden.py`（新工具）**：把「撞 parity FAIL → diff-scope 证明 → 离线外科刷新 golden」标准动作从会话手写脚本固化为一条命令。`--diff-scope [--expect-prefix $<路径>]...` 逐路径深比 golden vs 当前代码回放（冻结时钟+封 socket+both_nan 短路复用 test_parity_gate 单一实现），前缀白名单越界即 exit 1；`--refresh` 离线回放重算写回 *.gz（不联网不重 fetch）+ 写回自验 byte-parity。零代码参数自动遍历 corpus 全票。test_parity_gate 漂移断言消息追加工具指路（失败点即见修法）。
+- **`test_s10_checklist_cached.py`（新契约测试，已接线 run_regression.sh）**：收单 `check_data_completeness` 三态语义两极固化——ok/cached→True、failed/键缺失→False、macro_data 判定点同族覆盖。防 cached 漏计 bug 类复发（本次 financial-data-routing 仓修复的行为面）。
+
+## 2026-08-27 新增 test_market_context_order.py + strip invariant 测试去环境耦合（market_context 排序契约修复批）
+
+- **test_market_context_order.py**（新，接线 run_regression.sh）：固化 market_context 排序契约两极——desc 存储→`index_sh.last` 必取最新值、`classify_regime` 反转喂入 trend_up 正例 + 直喂 desc 的 naive 值必不同（反例面）、industry_name 缺失时 board/board_fund_flow 键必挂载 degraded、board ok 信封形状（pt 码择优/最新首/closes desc/latest_period）。零网络：mock westock_client.call/kline + sys.modules akshare 桩。
+- **test_src_hidden_style.py 断言收窄**：旧 `test_real_report_structure_invariant` 采样公共路径 `/tmp/analysis_report.md` 当「规范真实语料」——被中科曙光(603019)会话报告复写后，其正文非 src 模板占位注释 `<!-- PART-B -->` 造成脆断 FAIL（strip 职责只剥 src 隐藏注记，模板注释不在职责面）。修正为仓库内固化 fixture（fixtures/strip_publish_sample.md）+ 断言收窄至 [src:] 两式零残留 + 显式断言模板注释原样保留（职责边界自证）。回归全绿 exit 0，parity 3 票 byte-parity 零漂移。
+
 ## 2026-08-27 Gate 引擎执法精度修复批：G30#3 概率读表列 / G59 候选∪级联 / G16 主体归因豁免（plan peaceful-tinkering-rabbit；688630 三轮迭代触发）
 
 触发：芯碁微装 688630 全量分析三轮迭代暴露 5 类 gate 执法缺陷，专家评审定案 B/C/D′/F/E（A 撤回、G64-lookbehind 撤回、D/24字窗口否决改 D′）。目标=引擎语义对齐 m5/m6 模板已文档化的写作契约，消灭三类真阳性误伤。**准入门槛=全量本地语料回测 100%**（170 份唯一文本 / 140 份配真实快照，md5 去重，monkeypatch 旧新对照）；**终局复验=真补丁引擎 vs pre-fix worktree 分进程逐票对拍**。
@@ -192,3 +213,9 @@
 **终局对拍（真补丁 vs pre-fix worktree 分进程）**：170 份唯一文本逐票——**新 FAIL（回归）=0** ✅；误伤修复 7 处全部 old-FAIL→new-PASS（G16×5：沃尔核材002130/瑞华泰688323/蓝特688127/凯盛600552/芯碁微装688630 publish；G59×2：rp_7.md、answer.md 劫持草稿。长光华芯688048 publish 两代皆无 CL 快照配对→G16 均不评估，一致非回归）；probsΔ=8（炬光/太辰光/晶方 主稿+发布稿双吃 6→3 根治）。688630 归档 sidecar 前后仅 timestamp 差异（55 过/100 分不动，干净报告零波及）。全量回归 exit 0（61 门×3 票 + 7 段探针漏报=0）。
 
 **known-limits**：① G64 主力-guard 整行跳过=已知宽松区（数值在但口径词缺失不执法）；② D′ 双族前方同现保守：「订单金额是合同负债两倍达 12 亿」12 归因 CL 仍 FAIL（宁紧勿松，判例⑦钉死）；③ G59 多 5.3 节取文档序、688059 无结论子节形态恒豁免、603019/000657 裸 5.3 走 ③ 级锚；④ G30#4 不查概率列（概率存在性已由 #3 求和执法，避免双重执法）；⑤ C 级联②级锚（估值结论/估值判定标题）对改号报告扩执法面——唯一收紧点，判例④钉死为预期行为。
+
+## 2026-08-30 G28 杜邦 gate 重设计：闭合校验 → 纯快照完整性
+
+- **为什么**：旧 G28 读 `dupont._closure_check`（残差<0.25pp + 金融豁免），而 Sina ROE 口径随报告期切换（Q1=自算平均自闭合；中报/年报=披露加权值），恒等反算在披露期不成立 → 7 票中报季系统性误 FAIL（锡业股份 000960 RCA 起点）。用户裁决：gate 只管「拉到+存对」（status ok + 核心四字段非 None），面板值为权威，不自算。金融股无需 gate 豁免（字段在场即 PASS；三因子 N/A 是模块层事，m2 读 `data._profile`）。
+- **改动**：`check_g28` 重写（纯快照完整性）；GATE_DESCS/GATE_REGISTRY 述求同步（weight/owner/data_dim 不变）；data_contracts dupont 条目加双源 note + scene fallback 行；新增 `regression-tests/test_g28_dupont.py`（gate 两极/编排两极/reshape/max_retries=0 单次/runner 源码契约防漂移）挂载 run_regression.sh。
+- **兼容证明**：67 份真实归档重放（25 配对+41 report-only+000960）G28 翻转恰 7 份全 FAIL→PASS（预期变更面）；parity 冻结票 000988/002008/300394 与 600183_modeB 金票 old=new（EXPECTED 零改）；旧快照 `_closure_check` 残留不读（加法式无害）。

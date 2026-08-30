@@ -136,7 +136,9 @@ class ParityGateTest(unittest.TestCase):
         self.assertEqual(_canon(out1), _canon(out2),
                          f"{code}: 同输入两次回放不一致（非确定性）")
         self.assertEqual(_canon(out1), _canon(golden),
-                         f"{code}: 回放 != golden（行为漂移）")
+                         f"{code}: 回放 != golden（行为漂移）。有意变更？"
+                         f"跑 parity/refresh_golden.py --diff-scope "
+                         f"--expect-prefix '<变更面>' 证明后 --refresh 刷新")
         print(f"[parity] ✅ {code}: determinism + golden byte-parity "
               f"({len(_canon(out1))} bytes, frozen_at={raw['frozen_at']})")
 

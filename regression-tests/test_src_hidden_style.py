@@ -87,18 +87,24 @@ class StripForPublish(unittest.TestCase):
         self.assertIn("[verified:", out)          # 指针保留
         self.assertEqual(out.count("\n"), t.count("\n"))
 
-    def test_real_report_structure_invariant(self):
-        """真实报告剥离：行数/表格行数不变，零残留（出口断言同 strip 脚本 main）。"""
-        path = Path("/tmp/analysis_report.md")
-        if not path.exists():
-            self.skipTest("无真实报告语料 /tmp/analysis_report.md")
+    def test_fixture_structure_invariant(self):
+        """固化语料剥离不变性：行数/表格行数不变，[src:] 两式零残留，指针保留。
+
+        断言收窄说明（2026-08-27）：旧版曾全局断言零 `<!--` 并采样公共路径
+        /tmp/analysis_report.md——该路径被任意会话复写后，非 src 的模板占位注释
+        （如中科曙光样本的 `<!-- PART-B -->`）造成脆断。strip 职责只剥 src 隐藏
+        注记，不属其职责面的注释不再纳入契约；语料改用仓库内 fixture（消除环境耦合）。
+        """
+        path = Path(__file__).resolve().parent / "fixtures" / "strip_publish_sample.md"
         t = path.read_text(encoding="utf-8")
         out = strip_for_publish(t)
         self.assertEqual(out.count("\n"), t.count("\n"))
         self.assertNotIn("[src:", out)
-        self.assertNotIn("<!--", out)
+        # 模板类注释（无 src 标记）原样保留 = 职责边界自证
+        self.assertIn("<!-- PART-B -->", out)
         pipes = lambda s: sum(1 for l in s.splitlines() if l.strip().startswith("|"))
         self.assertEqual(pipes(t), pipes(out))
+        self.assertIn("[verified:", out)
 
 
 class ConverterRoundtrip(unittest.TestCase):

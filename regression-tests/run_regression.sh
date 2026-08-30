@@ -38,8 +38,10 @@ echo "[① 契约层] test_westock_integration.py（westock_client + fetcher res
 python3 -m pytest "$ROUTING/test_westock_integration.py" -q 2>&1 | tail -2
 echo "[① 契约层] test_dongcai_client.py（东财 client 三态+缓存命中/中毒双判+重试+URL 拼接）"
 python3 "$ROUTING/test_dongcai_client.py" 2>&1 | tail -3
-echo "[① 契约层] test_sina_client.py（S8 sina_client：行情 GBK 快照解析+杜邦 SSR HTML 切期/闭合校验 冻结响应 golden）"
+echo "[① 契约层] test_sina_client.py（S8 sina_client：行情 GBK 快照解析+杜邦 SSR HTML 切期/_profile/_dupont_is_empty 冻结响应 golden）"
 python3 "$ROUTING/test_sina_client.py" 2>&1 | tail -1
+echo "[① 契约层] test_g28_dupont.py（G28 纯快照完整性两极+东财 fallback 编排/reshape/max_retries=0 单次+runner 源码契约）"
+python3 "$HERE/test_g28_dupont.py" 2>&1 | tail -3
 echo "[① 契约层] test_report_views_kline.py（kline 视图内存态类型回归+except 加法式保 raw）"
 python3 "$ROUTING/test_report_views_kline.py" 2>&1 | tail -3
 echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"

@@ -64,7 +64,7 @@ GATE_DESCS = {
     "G25": "新闻分析流程完整性验证",
     "G26": "资金流向完整性（四档资金分布数据可用+报告已消费）",
     "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
-    "G28": "杜邦数据存在+三因子闭合（dupont.status=ok + 残差<0.25pp；金融股豁免；硬校验）",
+    "G28": "杜邦数据链路完整性（dupont.status=ok + 核心四字段非 None；拉到+存对；硬校验）",
     "G29": "资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）",
     "G30": "综合研判完整性（证据全景全维+反方诚实+概率闭合+情景-动作一致）",
     "G31": "估值数据有效性（quote.peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计'有数据'）",
@@ -1120,26 +1120,23 @@ def check_g27(report: str, data: dict) -> bool:
 
 
 def check_g28(report: str, data: dict) -> bool:
-    """G28: 杜邦数据存在 + 三因子闭合（Soft tier，weight 1，硬校验：失败=真 FAIL）。
+    """G28: 杜邦数据链路完整性（Soft tier，weight 1，硬校验：失败=真 FAIL）。
 
-    新浪杜邦 vFD_DupontAnalysis 经 runner._fetch_sina_dupont 总拉入 snapshot，源端统一平均口径，
-    残差<0.25pp。闭合判定在 fetcher 的 _dupont_check_closure 算好（绝对值反算
-    归母净利润/平均归母权益×100 vs 实测 ROE），gate 只读结果。
-    ① dupont.status == "ok"（拉取成功，否则硬 FAIL，真实反映数据缺失）；
-    ② _closure_check.applicable=False 放行（金融股无总资产周转率，三因子不适用）；
-    ③ applicable=True 时要求 closed=True 且残差<0.25pp。
-    新 snapshot 经 runner 升级后自然含 dupont；历史旧 snapshot 无该字段则 FAIL（weight=1 不硬阻断）。
-    """
+    纯快照完整性=「拉到+存对」：① dupont.status == "ok"（Sina 主源或东财 fallback
+    任一成功；失败/双源皆败=真 FAIL，如实反映数据缺失）；② 核心四字段
+    （净资产收益率/归母净利率/资产周转率/权益乘数）非 None。
+    ROE 字段口径随报告期切换（中报/年报=披露加权值，Q1=源端自算简单平均），
+    跨字段恒等反算（ROE=净利率×周转×乘数）在披露期根本不成立——闭合校验已于
+    2026-08-30 废弃（实证与用户裁决见 REFACTOR_LOG），新浪/东财面板值为权威，
+    本 gate 不做反算。金融股字段在场即 PASS（三因子无经济意义是模块层 N/A 事，
+    m2 读 data._profile 判定，不归 gate 管）。
+    旧 snapshot 的 _closure_check 残留字段不读（加法式遗留，无害）。"""
     dupont = _snapshot_get(data, "s1_financial.data.dupont")
     if not isinstance(dupont, dict) or dupont.get("status") != "ok":
         return False
-    cc = (dupont.get("data") or {}).get("_closure_check") or {}
-    if not cc.get("applicable", True):  # 金融股（无总资产周转率）→ 放行
-        return True
-    try:
-        return bool(cc.get("closed", False)) and float(cc.get("residual_pp", 99)) < 0.25
-    except (TypeError, ValueError):
-        return False
+    dd = dupont.get("data") or {}
+    core = ("净资产收益率", "归属母公司股东的销售净利率", "资产周转率(次)", "权益乘数")
+    return all(dd.get(k) is not None for k in core)
 
 
 def check_g29(report: str, data: dict) -> bool:
@@ -3459,8 +3456,8 @@ GATE_REGISTRY = {
             "fail_hint": "财务指标/同比与 snapshot 不一致或缺失"},
     "G28": {"checker": check_g28, "weight": 1, "owner": ["m2"],
             "data_dim": "s1_financial.data.dupont",
-            "requires": "杜邦三因子展示且闭合（ROE=净利率×周转×权益乘数，残差<0.25pp）；金融股豁免",
-            "fail_hint": "杜邦三因子不闭合或非 snapshot 驱动"},
+            "requires": "dupont.status=ok（Sina 主源或东财 fallback）且核心四字段非 None；不做反算闭合",
+            "fail_hint": "杜邦数据拉取失败（双源）或核心四字段缺失"},
     "G29": {"checker": check_g29, "weight": 2, "owner": ["m2"],
             "data_dim": "computed_metrics.asset_safety",
             "requires": "asset_safety 可用时须消费；缺失不许编造",
