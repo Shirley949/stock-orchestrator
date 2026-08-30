@@ -1,3 +1,14 @@
+## 2026-08-30 第3批族级清扫：F3 十门违规早退收集化 + F2 六处「收集后丢弃」reasons 化 + G63 词表补「阻力」（failure-family 修复执行令）
+
+触发：/tmp/failure_family_report.md 审计定稿的 F2/F3 两族全量灭绝 + F4 同构面审查。性质=纯 reasons 面强化（判决面零变化，A/B + 重放双证），全部在 `scripts/lib/gate_definitions.py`：
+
+- **F3 十门收集化**（循环内 FAIL 早退 → 全量收集+尾部统一 return，镜像 G63 范式 top5+「另有N处」尾注）：G16 冲突行（报告值/真值亿/行摘录入 reason）、G54 `_bad_types`（非 str 键全量）、G56 五块缺口全量、G57 反编造行收集（含 growth_tier=None 成因）、G58 三维分位缺口全量（带 pct_5y 真值）、G60 裸奔行+研发强度偏离合并清单、G61 ④ 消费缺口带维度词表、G66 四周期反义矛盾全量（G45/G64 第2批已修）。
+- **F2 六处 reasons 化**（FAIL 分支作用域已持信息却裸 False）：G15 peer 反编造（禁编造+诚实降级指引）、G23 维度覆盖（ok_count/threshold+缺失维名单）——G21 第1批、G53/G60/G61 本批 F3 改造顺带覆盖。
+- **G63 语境词表补「阻力」**（F4 审查产出）：m3-technical.md:22/120/129/163 教写「阻力位/TDST阻力/上方套牢盘阻力」，旧词表漏扫=文档-gate 失配（漏报方向）；加词只扩扫描面，old-FAIL ⊆ new-FAIL。
+- **F4 同构面四问裁定不修**（收紧=提升执法力需真实案例，公理④禁盲改）：G49/G69 全文双条件 AND、G25/G29/G13/G39/G47 单词 presence、G16:696/G67 全文数值对拍——全部第4批 R12 探针覆盖；新观察证据：G49 反编造臂或被「卖方一致预期」措辞误触发，记入探针清单。
+
+验证：全量回归 exit 0（61 门漏报=0 误伤=0，parity 3 票 byte-parity）；/tmp/replay 23 用例 HEAD A/B 276 组对照判决 0 翻转 + 全门 sanity 0 差异；postfix3→4 判决/分数/逐门向量零变化（reasons 面唯一变化=asis_tengjing G60 由笼统一句→4 条具体裸奔行，即改造目的本身）；新增 `regression-tests/test_f2f3_collection.py` 26 判例两极直调（11 门新收集路径 FAIL 必带真值/行摘录 + 干净输入 PASS）入回归链；AST 扫描全 check_g* 「循环内 FAIL return」残留仅 G67:3222（R7 观察档，不在 F3 清单）。
+
 ## 2026-08-24 301682 复盘五修批：M5 幻影信号根因剔除 + G30 reason 携带事件 + 审计三分桶（plan fuzzy-swinging-marble）
 
 触发：301682（宏明电子·次新）全量分析收尾审计——手写 9 处 > 验收线 ≤5 ❌。真实会话数据下钻拆成两个根因 + 一个度量缺陷：① **G30-M5 幻影信号**：`_TIMELINE_CODE_TO_M` 无条件 230→M5，把 2026-03-25「上市状态变动·新股上市」（IPO 事件）编码成 ST/退市 风险信号，三层代价全实证——(a) 触发 3 处手写 + gate 源码排查调试链；(b) reason 只给 code/name 无事件明细，LLM 被迫手挖 timeline 甄别；(c) **发布报告被污染**（analysis_report.md:270 被迫写 200+ 字「M5 属新股上市误编码…如实列示」托底段，给零 ST 风险股票写了 ST/退市 表面）。② 9 处 = 真提取 3 + gate 调试 3 + fetch 补救 3 混装——验收线量的是取数纪律，混装让 gate 失败谱重的会话永远过线且诱发错误工程修法；fetch 三条都含真 `json.dump(` 注入写（`open(p,'w')` 变量间接使 D4 漏报）。③ 度量缺陷：处数不分行為。

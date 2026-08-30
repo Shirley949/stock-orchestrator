@@ -558,8 +558,11 @@ def check_g15(report: str, data: dict) -> bool:
                 return False
         # F2: 删旧 "s11_peer" not in report 逃生口——无 peer 数据时报告同业措辞+peer 财务数字 = 编造
         #     （即使有 discovered_codes 限流披露，也不能编造具体 peer 财务数字）
+        # F2 族清扫（2026-08-30）：裸 False → reasons 直指成因（phrasing+number 同现=编造要件）
         if has_peer_phrasing and has_peer_number:
-            return False
+            return GateResult(passed=False, reasons=[
+                "无 peer 数据（items<2 或空）却写同业措辞+peer 财务数字——禁编造具体同业数值；"
+                "peer 缺位时只可写「同业对比数据不可得」类诚实降级（s11_peer.items 至少 2 家齐全才有对比面）"])
         return True
 
     # 2. 核心 6 计数（遍历 items 实际长度）
@@ -676,6 +679,8 @@ def check_g16(report: str, data: dict) -> bool:
     cl_lines = [ln for ln in report.split('\n') if '合同负债' in ln]
 
     # (a) 冲突检测：合同负债行里 X亿 若与 snapshot 偏离 >50% 且无溯源 → FAIL
+    # R4-族（2026-08-30，F3 早退族清扫）：violation 全量收集+尾部统一 return（镜像 G63）
+    conflicts = []   # (报告值, 真值亿, 行摘录)
     for ln in cl_lines:
         if '[src:' in ln:
             continue  # 该行已溯源，精确值交给 G21，不在此判冲突
@@ -687,7 +692,14 @@ def check_g16(report: str, data: dict) -> bool:
             s, e = m.start(1), m.start(1) + len(m.group(1))  # 纯数字端点（勿用含'亿'的 m.end()）
             if rv > 0 and cl_yi > 0 and _g16_nearest_subject(ln, s, e) != "ot" \
                and max(rv, cl_yi) / min(rv, cl_yi) > 1.5:
-                return False  # 数值冲突，疑似编造（前方/后方最近主体属他主体 → 豁免）
+                conflicts.append((rv, cl_yi, ln.strip()[:50]))   # 数值冲突，疑似编造（前后最近主体属他主体→豁免）
+    if conflicts:
+        reasons = [f"合同负债数值冲突：『{c[2]}』中 {c[0]}亿 vs snapshot 真值 {c[1]:.2f}亿"
+                   "（偏离>50% 且行内无 [src:]）——疑似编造；照抄真值或行内带 [src:] 溯源"
+                   for c in conflicts[:5]]
+        if len(conflicts) > 5:
+            reasons.append(f"另有 {len(conflicts) - 5} 处同类冲突（本清单为全量，一轮修完再重跑）")
+        return GateResult(passed=False, reasons=reasons)
 
     # (b) 数值对齐
     aligned_candidates = {f"{cl_yi:.2f}", f"{round(cl_yi, 1):.1f}"}
@@ -962,7 +974,12 @@ def check_g23(report: str, data: dict) -> bool:
     ok_count = sum(1 for m in dims if _ok(m))
     threshold = 3 if (prod_ok or ind_ok) else 2
     if ok_count < threshold:
-        return False
+        # F2 族清扫（2026-08-30）：裸 False → reasons 报哪几维缺（ok_count/threshold 都在作用域）
+        _dim_names = ["D3分红", "D4股东", "D5分产品", "D6分地区"]
+        _failed = [n for n, m in zip(_dim_names, dims) if not _ok(m)]
+        return GateResult(passed=False, reasons=[
+            f"调研维度覆盖不足：{ok_count}/{threshold}（缺 {'/'.join(_failed)}）——"
+            "D3-D6 至少达标阈值维须 fetch 成功（金融股无分业务时阈值降 2）"])
 
     # (b) segment dimension_status.{product,industry,geo} 不全 fetch_failed，镜像 G22 路径
     statuses = [(dim_status.get(d) or {}).get("status") for d in ("product", "industry", "geo")]
@@ -2357,20 +2374,30 @@ def check_g53(report: str, data: dict) -> bool:
     # 双口径如实转写放行（如"盘中放量/日终缩量"——两词各寻各的支撑）；volume_price 缺失 → skip（三态）。
     vp = _snapshot_get(data, "s4_technical.data.volume_price")
     if isinstance(vp, dict):
+        # F2 丢弃修复（2026-08-30）：两分支真值都在作用域却裸 False——改收集后统一放行
+        # （放量/缩量同时零支撑时一轮报完两条，不再只报首条）。
+        _vp_violations = []
         if "放量" in sec:
             _vr = vp.get("volume_ratio_rt")
             _vm = vp.get("volume_vs_ma20")
             if not (vp.get("volume_state") == "放量"
                     or (isinstance(_vr, (int, float)) and _vr > 1)
                     or (isinstance(_vm, (int, float)) and _vm > 1)):
-                return False   # "放量"零支撑（量价维捏造）
+                _vp_violations.append(
+                    f"「放量」零支撑（volume_state={vp.get('volume_state')}，"
+                    f"volume_ratio_rt={_vr}，volume_vs_ma20={_vm}——均不支持放量）")
         if "缩量" in sec:
             _vm = vp.get("volume_vs_ma20")
             if not (vp.get("volume_state") == "缩量"
                     or (isinstance(_vm, (int, float)) and _vm < 1)
                     or "缩量" in str(vp.get("consistency") or "")
                     or "缩量" in str(vp.get("divergence") or "")):
-                return False   # "缩量"零支撑（量价维捏造）
+                _vp_violations.append(
+                    f"「缩量」零支撑（volume_state={vp.get('volume_state')}，"
+                    f"volume_vs_ma20={_vm}，consistency={vp.get('consistency')}——均不支持缩量）")
+        if _vp_violations:
+            return GateResult(passed=False, reasons=[
+                f"m3 量价维捏造：{v}——量价表述须与 volume_price 同维" for v in _vp_violations])
     if not isinstance(to, dict):
         return True
     pct = to.get("pct_250")
@@ -2407,11 +2434,11 @@ def check_g54(report: str, data: dict) -> bool:
         return True
     # 三键存在性（渐进：任一 None 不硬 FAIL；存在则须是字符串）
     present = [k for k in ("adx_state", "bias_state", "obv_trend") if state.get(k) is not None]
-    for k in present:
-        if not isinstance(state.get(k), str):
-            return GateResult(passed=False, reasons=[
-                f"signals.state.{k} 非 None 但也不是字符串（{type(state.get(k)).__name__}）——"
-                "引擎数据形态异常，检查 runner _compute_indicator_trends"])
+    _bad_types = [k for k in present if not isinstance(state.get(k), str)]
+    if _bad_types:   # F3 族清扫（2026-08-30）：全量收集，一轮报完
+        return GateResult(passed=False, reasons=[
+            f"signals.state.{k} 非 None 但也不是字符串（{type(state.get(k)).__name__}）——"
+            "引擎数据形态异常，检查 runner _compute_indicator_trends" for k in _bad_types])
     # 反捏造：ADX 数值须 == snapshot technical.dmi.ADX
     dmi = _snapshot_get(data, "s4_technical.data.technical.dmi") or {}
     adx = dmi.get("ADX")
@@ -2511,10 +2538,12 @@ def check_g56(report: str, data: dict) -> bool:
     _MUST = [("类型", "估值框架"), ("主营", "业务", "产品"), ("历史", "上市", "阶段"),
              ("当前", "阶段定位", "所处"), ("同行", "差异化", "vs", "对比")]
     _MUST_NAMES = ["类型/估值框架", "主营/业务", "历史阶段", "当前阶段定位", "同行差异化"]
-    for grp, name in zip(_MUST, _MUST_NAMES):
-        if not any(k in sec for k in grp):
-            return GateResult(passed=False, reasons=[
-                f"m1 五块缺「{name}」——定性叙事须含：类型/身份主营/历史阶段/当前阶段定位/同行差异化"])
+    _missing_blocks = [name for grp, name in zip(_MUST, _MUST_NAMES)
+                       if not any(k in sec for k in grp)]
+    if _missing_blocks:   # F3 族清扫（2026-08-30）：五块缺口全量报，不再只报首块
+        return GateResult(passed=False, reasons=[
+            f"m1 五块缺「{name}」——定性叙事须含：类型/身份主营/历史阶段/当前阶段定位/同行差异化"
+            for name in _missing_blocks])
 
     # ④ 边界禁区（收敛核心）：禁新接线标记 + ST5/ST6 量化独立段
     if "🆕" in sec:
@@ -2556,10 +2585,17 @@ def check_g57(report: str, data: dict) -> bool:
             return False   # 漏报：数据 moderate 报告无中成长词
     else:
         # None/缺 → 禁在业绩语境编造成长强度（反编造，scope 业绩行避免行业「高成长」误伤）
-        for ln in report.splitlines():
-            if ("预增" in ln or "业绩预告" in ln or "业绩上修" in ln or "上修" in ln) and \
-                    (_HIGH.search(ln) or _MOD.search(ln)):
-                return False
+        # F3 族清扫（2026-08-30）：violation 行全量收集（原裸 False 无 reason=F2 双重身份）
+        _fabricated = [ln.strip()[:50] for ln in report.splitlines()
+                       if ("预增" in ln or "业绩预告" in ln or "业绩上修" in ln or "上修" in ln)
+                       and (_HIGH.search(ln) or _MOD.search(ln))]
+        if _fabricated:
+            reasons = [f"业绩语境编造成长强度：『{x}』——growth_tier=None（非预增/略增/缺字段），"
+                       "禁写高/中成长（company_guidance.latest_period.value.growth_tier 为准）"
+                       for x in _fabricated[:5]]
+            if len(_fabricated) > 5:
+                reasons.append(f"另有 {len(_fabricated) - 5} 处同类编造（本清单为全量，一轮修完再重跑）")
+            return GateResult(passed=False, reasons=reasons)
     return True
 
 
@@ -2582,15 +2618,18 @@ def check_g58(report: str, data: dict) -> bool:
     if _g58_diag == "no_anchor":
         sec = ""
     # ① 漏报：applicable 分位须 surface（grounded via [src:] 或 pct 值对齐）；章节缺失 + applicable = FAIL
+    # F3 族清扫（2026-08-30）：三维缺口全量报（原循环早退只报首个 missing 分位）
+    _unsurfaced = []
     for key in ("pe_ttm", "pb", "ev_ebitda"):
         blk = vp.get(key) or {}
         if blk.get("applicable") and blk.get("pct_5y") is not None:
             if not _check_value_freshness(sec, blk.get("pct_5y"), ["分位", "百分位"],
                                           scales=(0.01,), tol=0.15):
-                return GateResult(passed=False, reasons=[
-                    f"m5 未 surface {key} 估值分位（applicable，真值 pct_5y={blk.get('pct_5y')}）——"
-                    "估值分析段须写「NN% 分位」且值对齐 snapshot（分位值×0.01 口径，tol 15%），"
-                    "或行带 [src:] 锚"])
+                _unsurfaced.append(f"{key}(真值 pct_5y={blk.get('pct_5y')})")
+    if _unsurfaced:
+        return GateResult(passed=False, reasons=[
+            f"m5 未 surface {u} 估值分位（applicable）——估值分析段须写「NN% 分位」且值对齐 "
+            "snapshot（分位值×0.01 口径，tol 15%），或行带 [src:] 锚" for u in _unsurfaced])
     # ② 反编造：无分位数据（vp 整体空）却写具体分位百分比 → 编造
     if not vp:
         if "分位" in sec and re.search(r'[\d.]+\s*%', sec):
@@ -2662,14 +2701,13 @@ def check_g60(report: str, data: dict) -> bool:
     _DIM_KWS = ("护城河", "治理战略", "前瞻催化")
     _PURE = ("无源", "定性补充")
     # ① 三定性维度数据行各须含 ≥1 [src:]（既无 src 又无「无源」标注 = 裸奔 FAIL）
-    for ln in layer1.splitlines():
-        if not any(k in ln for k in _DIM_KWS):
-            continue
-        if any(s in ln for s in _SKIP):
-            continue
-        if "[src:" not in ln and not any(p in ln for p in _PURE):
-            return False
+    # F3+F2 族清扫（2026-08-30）：裸奔行全量收集+reasons（原裸 False，行内容在作用域被丢弃）
+    _bare_lines = [ln.strip()[:50] for ln in layer1.splitlines()
+                   if any(k in ln for k in _DIM_KWS)
+                   and not any(s in ln for s in _SKIP)
+                   and "[src:" not in ln and not any(p in ln for p in _PURE)]
     # ② 反捏造：研发强度X% 须≈snapshot（targeted regex「研发强度」后跟 %，避免「研发费N亿」绝对值误伤）
+    _rd_violations = []
     rd_val = None
     inc = _snapshot_get(data, "s1_financial.data.income_statement") or {}
     rows_inc = inc.get("data") or inc.get("data_full") or []
@@ -2686,7 +2724,17 @@ def check_g60(report: str, data: dict) -> bool:
             except ValueError:
                 continue
             if _x > 0 and max(_x, _rd_pct) / min(_x, _rd_pct) > 1.3:
-                return False   # 研发强度% 捏造（与 snapshot 研发费÷营收 不对齐）
+                _rd_violations.append((_x, _rd_pct))   # 研发强度% 捏造（与 snapshot 研发费÷营收 不对齐）
+    _g60_reasons = [f"m6 定性维度行裸奔（无 [src:] 也无「无源/定性补充」标注）：『{x}』——"
+                    "证据行须带 [src: snapshot.…] 锚，或显式标「无源/定性补充」" for x in _bare_lines[:5]]
+    if len(_bare_lines) > 5:
+        _g60_reasons.append(f"另有 {len(_bare_lines) - 5} 处裸奔行（本清单为全量，一轮修完再重跑）")
+    _g60_reasons += [f"研发强度捏造：报告 {x}% vs snapshot 研发费用÷营业总收入={t:.2f}%"
+                     "（偏离>30%）——照抄 snapshot 口径" for x, t in _rd_violations[:5]]
+    if len(_rd_violations) > 5:
+        _g60_reasons.append(f"另有 {len(_rd_violations) - 5} 处研发强度偏离（本清单为全量）")
+    if _g60_reasons:
+        return GateResult(passed=False, reasons=_g60_reasons)
     return True
 
 
@@ -2733,12 +2781,18 @@ def check_g61(report: str, data: dict) -> bool:
         "趋势量能": ("支撑位", "压力位", "强势上涨", "震荡上行", "弱势", "量能", "缩量", "放量"),
         "融资杠杆": ("融资余额", "融资", "杠杆", "两融", "保证金", "冲抵"),
     }
+    # F2 族清扫（2026-08-30）：④ 消费缺口全量收集（原裸 False 且已知缺哪维被丢弃）
+    _missing_dims = []
     for c in conclusions:
         words = DIM_WORDS.get(c.get("dimension"))
         if not words:
             continue                          # 未登记维度不强制（向前兼容新维度）
         if not any(w in report for w in words):
-            return False                      # 只拉不用：ok 结论维度未 surface
+            _missing_dims.append((c.get("dimension"), "/".join(words[:6])))
+    if _missing_dims:
+        return GateResult(passed=False, reasons=[
+            f"只拉不用：ok 结论维度「{d}」未 surface——报告须含对应词（{w} 之一）"
+            for d, w in _missing_dims])
     # 反编造：报告含结论词却无数据源锚 = 编造
     _HAS_CONCL = ("控盘", "主力资金介入", "主力资金流出", "支撑位", "压力位", "两融标的")
     if any(w in report for w in _HAS_CONCL) and "s_stock_evaluation" not in report:
@@ -2895,8 +2949,11 @@ def check_g63(report: str, data: dict) -> bool:
         return True
     violations = []          # (n, near, rel, line)：全量收集一轮修完，替代逐轮打地鼠
     seen = set()             # (n, near) 去重：同数字多处转录错只报首处
+    # 语境词表（2026-08-30 补「阻力」）：m3 文档 4 处教写「阻力位/TDST阻力/上方套牢盘阻力」
+    # （m3:22/120/129/163），词表缺「阻力」= 文档教的行不进扫描面（漏报方向）；加词只扩
+    # 扫描面，old-FAIL ⊆ new-FAIL 零 downgrade，四问见第3批报告。
     for ln in sec.splitlines():
-        if not re.search(r'(斐波|fib|Fib|回撤|支撑|压力|成本|套牢|获利盘)', ln):
+        if not re.search(r'(斐波|fib|Fib|回撤|支撑|压力|阻力|成本|套牢|获利盘)', ln):
             continue
         for n in _extract_price_candidates(ln):
             if any(abs(n - r) < 1e-9 for r in rendered):
@@ -3120,6 +3177,7 @@ def check_g66(report: str, data: dict) -> bool:
     # 行级反义对拍（表格行；描述对立结构的语境行豁免）
     opp = {"up": ("down",), "down": ("up",), "below": ("above",), "above": ("below",),
            "long": ("short",), "short": ("long",)}
+    _opp_violations = []   # F3 族清扫（2026-08-30）：四周期反义矛盾全量收集
     for key, cname in (("monthly", "月线"), ("weekly", "周线"), ("daily", "日线"), ("h60", "60分钟")):
         st = (mp.get(key) or {}).get("state")
         if st not in opp:
@@ -3129,8 +3187,11 @@ def check_g66(report: str, data: dict) -> bool:
             if re.match(r'^\|\s*' + cname + r'\s*\|', ln.strip()) and \
                     not re.search(r'反向|divergent|背离|共振', ln):
                 if any(o in ln for o in opp[st]):
-                    return GateResult(passed=False, reasons=[
-                        f"{cname} 状态对拍矛盾：快照 state={st}，周期表行含反义词（multi_period.{key}.state 原样引用）"])
+                    _opp_violations.append((cname, st, key))
+    if _opp_violations:
+        return GateResult(passed=False, reasons=[
+            f"{v[0]} 状态对拍矛盾：快照 state={v[1]}，周期表行含反义词（multi_period.{v[2]}.state 原样引用）"
+            for v in _opp_violations])
     return True
 
 
