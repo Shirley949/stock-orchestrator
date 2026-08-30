@@ -160,14 +160,18 @@ def update_checklist(
                 print(f"🔍 {cid}: Gate sidecar 校验通过 — {msg}")
             else:
                 ep = evidence_path or CHECKID_TO_SNAPSHOT_PATH.get(cid)
-                if ep:
-                    valid, msg = validate_evidence(evidence_from, ep)
-                    if not valid:
-                        print(f"❌ {cid}: evidence 校验失败 — {msg}")
-                        print(f"   路径: {ep}")
-                        sys.exit(1)
-                    else:
-                        print(f"🔍 {cid}: evidence 校验通过 — {msg}")
+                if not ep:
+                    # failure-family R8 机制档：未知 cid 无 evidence 映射 → 硬闸不旁路
+                    # （旧行为：静默跳过校验照常打勾 = 无证据打勾通道）
+                    print(f"❌ {cid}: 未知 cid（无 evidence 映射且未给 --evidence-path）"
+                          "——evidence 硬闸不旁路，拒绝打勾")
+                    sys.exit(1)
+                valid, msg = validate_evidence(evidence_from, ep)
+                if not valid:
+                    print(f"❌ {cid}: evidence 校验失败 — {msg}")
+                    print(f"   路径: {ep}")
+                    sys.exit(1)
+                print(f"🔍 {cid}: evidence 校验通过 — {msg}")
 
     # 打勾: [ ] <!--c01--> → [x] <!--c01-->
     for cid in check_ids:

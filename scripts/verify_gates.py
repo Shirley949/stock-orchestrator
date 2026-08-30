@@ -49,15 +49,25 @@ def load_report(report_path: str) -> str:
 
 
 def load_data_snapshot(data_path: str) -> dict:
-    """加载数据快照（可选）"""
+    """加载数据快照（可选）。
+
+    failure-family R8 机制档：区分「未传快照」（合法 report-only 模式，返回 {}）
+    与「传了读不到」（配置错误——静默降级 report-only 会让三态豁免吞掉大半执法面，
+    产出假 PASS）。后者 exit 1 拒跑。
+    """
     if not data_path:
         return {}
     path = Path(data_path)
     if not path.exists():
-        print(f"⚠️  数据快照文件不存在: {data_path}，仅基于报告内容校验")
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        print(f"❌ 已传 --data-snapshot 但文件不存在: {data_path}——拒静默降级 report-only"
+              "（未传才是 report-only），exit 1", file=sys.stderr)
+        sys.exit(1)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ --data-snapshot 解析失败: {e}——exit 1（同上，拒静默降级）", file=sys.stderr)
+        sys.exit(1)
 
 
 def _build_action_required(failed_gates: list, details: list) -> list:

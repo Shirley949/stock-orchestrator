@@ -12,27 +12,29 @@ precheck.py — 数据拉取完成后的停机检查（PR 7）
   0 = 数据充足，可以继续
   1 = 数据大面积失败，禁止生成报告
   2 = snapshot 文件不存在或格式错误
+  3 = ⚠️有条件通过（数据可用但 _warnings 非空——降级项须在报告如实披露，
+      failure-family R8 机制档：警告静默混进 exit 0 = 「通过」被高估）
 """
 
 import json
 import sys
 
 
-def precheck_critical_failure(snapshot_path: str) -> bool:
+def precheck_critical_failure(snapshot_path: str):
     """
     检查 snapshot 是否标记了 critical_failure。
-    返回 True 表示"数据充足，可以继续"。
-    返回 False 表示"数据不足，必须停机"。
+    返回 (ok, n_warnings)：ok=True 表示"数据充足，可以继续"；
+    ok=False 表示"数据不足，必须停机"；n_warnings = _warnings 条数（main 判 exit 3）。
     """
     try:
         with open(snapshot_path, "r", encoding="utf-8") as f:
             snapshot = json.load(f)
     except FileNotFoundError:
         print(f"🔴 snapshot 文件不存在: {snapshot_path}", file=sys.stderr)
-        return False
+        return False, 0
     except json.JSONDecodeError as e:
         print(f"🔴 snapshot 格式错误: {e}", file=sys.stderr)
-        return False
+        return False, 0
 
     # 模式感知核心场景（与 data_snapshot.finalize 同款）：B 不拉 s1/s5，缺场景≠失败
     if snapshot.get("mode") == "B":
@@ -60,7 +62,7 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
             print(f"     - {w[:100]}", file=sys.stderr)
         if len(failure_summary) > 5:
             print(f"     ... 还有 {len(failure_summary) - 5} 条", file=sys.stderr)
-        return False
+        return False, 0
 
     # 检查核心场景是否有至少一个成功（core_scenes 已按 mode 判定）
     has_any_data = False
@@ -75,7 +77,7 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
 
     if not has_any_data:
         print("🔴 核心场景无任何有效数据，禁止生成报告", file=sys.stderr)
-        return False
+        return False, 0
 
     # 检查数据收单
     checklist = snapshot.get("s10_checklist", {})
@@ -109,11 +111,16 @@ def precheck_critical_failure(snapshot_path: str) -> bool:
         print(f"   主营构成: {seg.get('status', '—')} 维度={list(ds.keys()) or '—'}",
               file=sys.stderr)
     # ③ 拉取警告（前 5 条，手验的另一半）
+    n_warnings = len(snapshot.get("_warnings") or [])
     for w in snapshot.get("_warnings", [])[:5]:
         print(f"   ⚠️ {w[:110]}", file=sys.stderr)
 
-    print(f"✅ 数据预检通过 ({completed}/{total} 项完成)", file=sys.stderr)
-    return True
+    if n_warnings:
+        print(f"⚠️ 有条件通过 ({completed}/{total} 项完成，_warnings={n_warnings} 条"
+              "——降级项须在报告如实披露)", file=sys.stderr)
+    else:
+        print(f"✅ 数据预检通过 ({completed}/{total} 项完成)", file=sys.stderr)
+    return True, n_warnings
 
 
 if __name__ == "__main__":
@@ -122,7 +129,10 @@ if __name__ == "__main__":
         sys.exit(2)
 
     snapshot_path = sys.argv[1]
-    if precheck_critical_failure(snapshot_path):
+    _ok, _nwarn = precheck_critical_failure(snapshot_path)
+    if _ok and _nwarn:
+        sys.exit(3)      # 有条件通过：数据可用但降级在场，与干净 exit 0 区分
+    if _ok:
         sys.exit(0)
     else:
         sys.exit(1)

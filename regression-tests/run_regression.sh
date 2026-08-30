@@ -72,6 +72,10 @@ echo "[① 契约层] test_m6_gates.py（m6 G60 定性三行结构化锚点+反�
 python3 "$HERE/test_m6_gates.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_f2f3_collection.py（第3批 F2/F3 族清扫 11 门收集化+G63 阻力词表 两极直调）"
 python3 "$HERE/test_f2f3_collection.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_doc_src_paths.py（第4批 R10 verify_doc_src_paths：dot-split 镜像 G21 语义+两极扫描+CLI exit）"
+python3 "$HERE/test_doc_src_paths.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_r8_mechanism.py（第4批 R8 机制档：precheck exit3/verify_gates 快照硬闸/update_checklist 未知 cid 两极）"
+python3 "$HERE/test_r8_mechanism.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_src_hidden_style.py（src 写法契约：gate 对注释包裹等价+G62 tally 禁区+strip_for_publish 发布剥离）"
 python3 "$HERE/test_src_hidden_style.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组保真+KEEP 截断+by_code 投影闭合+三态 离线纯函数）"

@@ -12,9 +12,17 @@
   · EXPECTED 清单 = 2026-08-15 逐门策展（docstring 定性 + 引擎口径实测冻结）。gate 集 =
     gate_definitions.py 的 check_g*（新增 gate 未策展 → 本测试 FAIL，强制补策展）。
   · Level C：段内省略探针（G59/G60 段存在但缺 verdict/[src:] → 必 FAIL；条件 no-op 的执法面）。
+  · Level D：真实正文探针（R12，failure-family 2026-08-30）——「诚实否定句 + 他处触发词」
+    形态。语料 = 龙磁 300835 初稿真实片段（G48 事故行 / G57 Q4 行 / G49 观点层）+ 归档
+    快照（parity 冻结池 000988 + 600183 模式B金票）+ 策展构造快照（degraded 中间态 /
+    千股千评 ok / 空 growth_tier——冻结票覆盖不到的三态分支）。三桶：
+    REAL_HONEST 诚实写法必须 PASS（回归红线：R5 片段级收窄等修复冻结在此，重引入即红）；
+    REAL_TWIN   反编造反例必须 FAIL（两极验证执法臂仍活）；
+    REAL_WATCH  疑似误伤/漏洞形态，冻结当前判决（观察档 R7：判决漂移即红，禁静默变化）。
 
-出口：stdout 末行「漏报=N 共M门」；N>0 或任何 crash/误伤 → exit 1（对接 run_regression grep）。
+出口：stdout 末行「漏报=N 共M门」；N>0 或任何 crash/误伤/watch漂移 → exit 1（对接 run_regression grep）。
 """
+import copy
 import glob
 import gzip
 import json
@@ -166,6 +174,98 @@ SECTION_PROBES = [
 ]
 
 
+# ── Level D：真实正文探针（R12）────────────────────────────────────────────
+# 快照键（load_level_d_snaps 构造）：
+#   A000988    = parity 冻结票原样；degraded_sd = sd.status→degraded（G47 反编造臂仅对
+#               ≠ok/≠failed 的中间态生效，failed 在 :2147 早退豁免）；no_bsp = 删
+#               buy_sell_pressure（G49 反编造臂执法态）；eval_ok = 千股千评 ok 最小构造
+#               （三张冻结 A 票均无 s_stock_evaluation，真空豁免盖不住 ①-④ 执法面）；
+#   empty      = {}（growth_tier None 分支）；B600183 = 模式B金票（G69 四维全在场）。
+# 依赖声明：degraded_sd 保留 000988 的 sd.verdict=净增持（has_direction=True 前提）——
+# 与 EXPECTED 表同级的冻结票依赖，corpus 刷新须同步复核。
+REAL_HONEST = [
+    ("G48", "A000988",
+     "| **股东层面风险** | 股东户数单季 +74.32%，散户化；无待执行增减持计划 |",
+     "龙磁事故行原样：R5 片段级收窄（|。；;\\n 切分）后否定句+同行他格 % 不再误伤"),
+    ("G48", "A000988",
+     "无待执行计划。\n当前 PE 分位 15%。",
+     "否定句 + 他处 %（R5 立项原始形态，两代正交验证均须 PASS）"),
+    ("G47", "degraded_sd",
+     "股东数据降级（部分源失败），内部人动向本季无从核实。",
+     "降级如实披露 + presence 词（内部人）+ 无具名动作 → 合法"),
+    ("G49", "A000988",
+     "买卖力量：近一季无材料级活动（unclear），观点层近乎空白。",
+     "unclear 豁免 + 诚实否定；presence 词（买卖力量）在场不触发反编造（无阵营词）"),
+    ("G57", "empty",
+     "Q4：2026 年中报预增吗？\n答：公司处于高成长赛道（行业景气叙事）。",
+     "业绩触发词与成长强度词分行 → 反编造行级 scope 不误伤行业叙事"),
+    ("G61", "eval_ok",
+     "千股千评：轻度控盘 [src: snapshot.s_stock_evaluation.data.processed.conclusions]",
+     "ok 结论 surface + 数据源锚 → 四段闭环（拉/存/读/消费）全通"),
+    ("G29", "A000988",
+     "资产安全：货币资金充裕、有息负债可控，整体风险一般。",
+     "非🚨 档消费词（货币资金/有息负债）surface + 危险词同场 → 双臂皆满足"),
+    ("G25", "A000988",
+     "事件扫描：近 3 月新闻分桶（高价值 1 条 / 中价值 60 条）[src: snapshot.s5_events.data.news]",
+     "python_layer=completed + src 锚 → 事件面消费合法"),
+    ("G69", "B600183",
+     "资金流 [src: snapshot.s3_fund_flow.data.fund_flow] 主力净流入明显；融资余额平稳 "
+     "[src: snapshot.s_margin.data]；估值分位 50% "
+     "[src: snapshot.valuation_snapshot.data.valuation_percentile]；获利盘接近成本 "
+     "[src: snapshot.s4_technical.data.chip]",
+     "B 门四维全消费（src 锚 + 维度词同行）→ 满配形态"),
+]
+REAL_TWIN = [
+    ("G48", "A000988",
+     "另有待执行减持计划，规模 2.5%",
+     "无活跃计划却写「待执行+%」同片段 → 反编造照抓（执法臂活跃证明）"),
+    ("G47", "degraded_sd",
+     "前十大流通股东增持明显。",
+     "status≠ok 却写具名「前十大…增持」→ 反编造 FAIL"),
+    ("G61", "eval_ok",
+     "轻度控盘，主力资金介入迹象明显",
+     "结论词在场却无 s_stock_evaluation 锚 → 编造 FAIL"),
+    ("G29", "empty",
+     "货币资金约 35 亿",
+     "无 asset_safety 数据却写具体数值 → 反编造 FAIL"),
+]
+# 观察档（R7）：冻结 2026-08-30 实测判决。漂移即 exit 1——改判须连注释一起更新（显性化）。
+REAL_WATCH = [
+    ("G49", "no_bsp", False,
+     "买卖力量：无结论。\n观点层：卖方研报 0 覆盖、机构评级仅 1 家。",
+     "疑似误伤：「卖方研报」= 覆盖度语境非阵营词，跨行与「买卖力量」共现触发反编造"
+     "（F4 同构面；诚实降级写法现须避开阵营词连用）"),
+    ("G57", "empty", False,
+     "Q4：2026 年中报预增吗？\n答：公司处于高成长赛道（行业叙事，非业绩预告结论）。",
+     "疑似误伤：诚实免责括号自身含「业绩预告」→ 同行与「高成长」共现触发反编造"
+     "（纯文本 regex 无否定语境识别；写作规避=否定表述不复用触发词）"),
+    ("G69", "B600183", True,
+     "资金流数据降级如实披露 [src: snapshot.s3_fund_flow.data.fund_flow]（本维未消费）。\n"
+     "融资 [src: snapshot.s_margin.data] 杠杆温和；估值分位 50% "
+     "[src: snapshot.valuation_snapshot.data.valuation_percentile]；获利 "
+     "[src: snapshot.s4_technical.data.chip] 筹码稳定。\n另注：主力动向中性（叙述语）。",
+     "漏洞形态：src_token 与维度词为两个独立全文条件，可跨行拼出「消费」——降级行如实"
+     "标 [src:] 反而计入消费维度（F4 同构面；根治须行级邻近判定，8-27 裁定窗口脆弱暂缓）"),
+]
+
+
+def load_level_d_snaps(stocks):
+    base = stocks["000988"]
+    deg = copy.deepcopy(base)
+    deg["s5_events"]["data"]["risk_signals"]["processed"]["shareholder_dynamics"]["status"] = "degraded"
+    nobsp = copy.deepcopy(base)
+    nobsp["s5_events"]["data"]["risk_signals"]["processed"].pop("buy_sell_pressure", None)
+    ev = {"s_stock_evaluation": {"data": {"status": "ok", "processed": {
+        "conclusions": [{"dimension": "控盘程度", "text": "轻度控盘",
+                         "severity": "info", "source_api": "em"}],
+        "latest_period": {"period": "2026-08-29", "value": "轻度控盘"}}}}}
+    b_gold = os.path.join(HERE, "600183_modeB_golden.json.gz")
+    snaps = {"A000988": base, "degraded_sd": deg, "no_bsp": nobsp,
+             "eval_ok": ev, "empty": {},
+             "B600183": json.load(gzip.open(b_gold)) if os.path.exists(b_gold) else None}
+    return snaps
+
+
 def engine_verdict(fn, report, snap):
     """镜像 verify_gates.py:146-153：dict 返回取 ret['passed']，bool 原样。"""
     ret = fn(report, snap)
@@ -227,8 +327,43 @@ def main():
                 + (f" reasons={reasons[:1]}" if reasons else "")
             )
 
+    # Level D：真实正文探针（R12）——诚实/孪生断言期望判决，观察档断言冻结判决
+    watch_drifts = []
+    snaps_d = load_level_d_snaps(stocks)
+    for bucket, probes in (("honest", REAL_HONEST), ("twin", REAL_TWIN)):
+        for gname, snap_key, report, _why in probes:
+            snap = snaps_d.get(snap_key)
+            if snap is None:
+                crashes.append(f"{gname}/D-{bucket}: 快照 {snap_key} 缺失")
+                continue
+            try:
+                got, reasons = engine_verdict(GATE_CHECKERS[gname], report, snap)
+            except Exception as e:  # noqa: BLE001
+                crashes.append(f"{gname}/D-{bucket}: {type(e).__name__}: {e}")
+                continue
+            exp = (bucket == "honest")   # honest 须 PASS；twin 须 FAIL
+            if got != exp:
+                (miss_reports if exp and not got else over_reports).append(
+                    f"{gname}/D-{bucket}[{snap_key}]: 期望{'PASS' if exp else 'FAIL'}"
+                    f" 实际{'PASS' if got else 'FAIL'}"
+                    + (f" reasons={reasons[:1]}" if reasons else ""))
+    for gname, snap_key, frozen, report, _why in REAL_WATCH:
+        snap = snaps_d.get(snap_key)
+        if snap is None:
+            crashes.append(f"{gname}/D-watch: 快照 {snap_key} 缺失")
+            continue
+        try:
+            got, _reasons = engine_verdict(GATE_CHECKERS[gname], report, snap)
+        except Exception as e:  # noqa: BLE001
+            crashes.append(f"{gname}/D-watch: {type(e).__name__}: {e}")
+            continue
+        if got != frozen:
+            watch_drifts.append(
+                f"{gname}/D-watch[{snap_key}]: 冻结={'PASS' if frozen else 'FAIL'}"
+                f" 实际={'PASS' if got else 'FAIL'}（改判须连 REAL_WATCH 注释一起显性更新）")
+
     total = len(GATE_CHECKERS)
-    n_bad = len(miss_reports) + len(over_reports) + len(crashes)
+    n_bad = len(miss_reports) + len(over_reports) + len(crashes) + len(watch_drifts)
     if miss_reports:
         print("❌ 漏报（省略未抓住）:")
         for m in miss_reports:
@@ -241,9 +376,15 @@ def main():
         print("❌ crash:")
         for m in crashes:
             print("   ", m)
+    if watch_drifts:
+        print("❌ watch 漂移（观察档判决变化，须显性裁决）:")
+        for m in watch_drifts:
+            print("   ", m)
     print(
         f"{'✅' if n_bad == 0 else '❌'} 漏报={len(miss_reports)} 共{total}门"
-        f"（×{len(stocks)}票 + {len(SECTION_PROBES)} 段探针；误伤={len(over_reports)} crash={len(crashes)}）"
+        f"（×{len(stocks)}票 + {len(SECTION_PROBES)} 段探针"
+        f" + {len(REAL_HONEST) + len(REAL_TWIN)} 真实正文探针/watch={len(REAL_WATCH)}；"
+        f"误伤={len(over_reports)} crash={len(crashes)} drift={len(watch_drifts)}）"
     )
     sys.exit(0 if n_bad == 0 else 1)
 

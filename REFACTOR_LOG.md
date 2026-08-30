@@ -1,3 +1,14 @@
+## 2026-08-30 第4批机制层：R8 静默降级 fail-fast + R10 文档路径机器校验 + R12 fixture 真实正文探针（failure-family 修复执行令）
+
+触发：同执行令第4批（机制层是「彻底解决」构成要件）。gate 逻辑零改动（`scripts/lib/gate_definitions.py` 相对 HEAD 空 diff），全部为机制/测试/文档层：
+
+- **R8 机制档（三处 fail-fast）**：① `scripts/precheck.py` exit 3=⚠️有条件通过（_warnings 非空不再混进 exit 0，「通过」不再被高估；`precheck_critical_failure` 改返 `(ok, n_warnings)` 元组）；② `scripts/verify_gates.py` `load_data_snapshot` 传了 `--data-snapshot` 但文件不存在/非 JSON → exit 1 拒静默降级 report-only（未传仍合法走 report-only）；③ `scripts/update_checklist.py` 未知 cid 无 evidence 映射 → exit 1 零写入（旧=静默跳过校验照常打勾 = 无证据打勾通道）。新增 `regression-tests/test_r8_mechanism.py` 3 测试两极（正常流不受影响/错误流必拦）。
+- **R10 文档路径机器校验**：新增 `scripts/verify_doc_src_paths.py`——扫 quality/references 文档树全部 `[src: snapshot.<path>]` 标记（默认）+ 条件性标注（仅当/条件性/禁标）降级 WARN，dot-split resolve 镜像 G21 语义（`[]` 记法不解析、list 引用止步父键、`<placeholder>` 跳过、websearch 跳过），快照池=parity 3 金票 + 新增 `fixtures/600183_modeB_golden.json.gz`（生益科技模式B真实快照冻结，B 门探针语料），任一快照可解析即过、全不通→error；CLI `--doc-root` 供测试注入，exit 1 on error。当前基线：22 文档/166 标记/坏路径 0/WARN 3（web_research_findings 条件性正确降级）。新增 `test_doc_src_paths.py` 9 测试。**配套文档修复**（quality 仓，R10 标注规范）：m5-valuation.md / m10-forecast.md 的 `web_research_findings` 教学路径补「（仅当写回成功、场景已存在）」条件性标注；snapshot_schema.md 顶部加「路径记法双轨制」声明（`[]` 仅限契约键描述，正文一律 dot-split）。
+- **R12 fixture Level D（真实正文探针）**：`gate_fixture_test.py` 新增三桶——REAL_HONEST 9 条（龙磁 300835 事故行原样「| 股东层面风险 | …无待执行增减持计划 |」等诚实写法必须 PASS，R5 片段级收窄等修复冻结为回归红线）/ REAL_TWIN 4 条（反编造反例必 FAIL：G48「待执行+%」同片段、G47 degraded 态具名增持、G61 结论词无锚、G29 空数据写「货币资金约 35 亿」）/ REAL_WATCH 3 条（疑似误伤与漏洞形态冻结当前判决：G49「卖方研报」跨行共现触发反编造、G57 诚实免责括号复用「业绩预告」触发词、G69 src_token+维度词两独立全文条件跨行拼「消费」——R7 观察档显性化，判决漂移即 exit 1 禁静默变化）。构造快照补冻结票覆盖不到的三态分支：degraded_sd（G47 反编造臂仅对 ≠ok/≠failed 中间态生效，failed 在 :2147 早退）/ no_bsp / eval_ok（千股千评 ok 最小构造）/ empty。汇总行扩为「+ 13 真实正文探针/watch=3 …drift=0」。
+- **R9 gate 写作公理升 8 条**（quality 仓 m11-gates.md）：公理 2 改「词表四问」（+④作用域：行/片段/段/全文+理由，G48 教训=全文双条件跨段共现误判）；新增公理 7「violation 一律全量收集」（镜像 check_g63，列 G16/G45/G54/G56/G57/G58/G60/G61/G64/G66）、公理 8「reasons 底线：禁丢弃已持有信息」（6 违例史）；构件 3 重写为「原生 reasons（契约制）」——废除 9 门白名单（2026-08-17 前提被龙磁 F2 六处证伪）。
+
+验证：全量回归 exit 0（gate_fixture_test 漏报=0 误伤=0 crash=0 drift=0，含 Level D；test_doc_src_paths 9 + test_r8_mechanism 3 新挂载全过）；/tmp/replay postfix4→postfix5 五维零变化（verdict/score/failed_gates/逐门向量/reasons 门集合，23 用例）；gate_definitions.py 相对 HEAD 空 diff（无 gate 逻辑改动=A/B 对照天然成立）。预存脏状态（parity corpus 3 gz / test_parity_gate / test_src_hidden_style / test_market_context_order / test_s10_checklist_cached / refresh_golden.py / strip_publish_sample.md / REFACTOR_LOG 预存条目）hunk 级隔离未混入。
+
 ## 2026-08-30 第3批族级清扫：F3 十门违规早退收集化 + F2 六处「收集后丢弃」reasons 化 + G63 词表补「阻力」（failure-family 修复执行令）
 
 触发：/tmp/failure_family_report.md 审计定稿的 F2/F3 两族全量灭绝 + F4 同构面审查。性质=纯 reasons 面强化（判决面零变化，A/B + 重放双证），全部在 `scripts/lib/gate_definitions.py`：
