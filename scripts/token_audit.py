@@ -209,6 +209,16 @@ def main():
             detected_code = m.group(0)
             break
     code_mismatch = bool(args.stock and detected_code and args.stock != detected_code)
+    # R8 错目标硬闸（2026-08-30，F9 止血档）：mismatch → exit 非零、零写入——旧实现仅 ⚠️
+    # 警告后照写 md 照追加 history，张冠李戴审计落盘（脏条目 21:06 stock=300835/
+    # session=91a3cd97 即此形态）。先全校验后统一写入：闸门置于两处落盘（history 追加 /
+    # md 写出）之前。detected_code 提取不到（前 5 条用户消息无 6 位码）不算 mismatch，
+    # 正常审计零影响；TOKEN_AUDIT_NO_HISTORY 语义保留（本闸与其正交：mismatch 时连
+    # 分析都不做）。
+    if code_mismatch:
+        sys.exit(f"❌ 错目标审计拒绝执行：内容自提股票码 {detected_code} ≠ --stock {args.stock}"
+                 "——零写入退出。请核对会话路径与 --stock 是否同一标的"
+                 "（或去掉 --stock 采用自提码）")
 
     # ---- 第一遍：建轮次序列（assistant 消息 = 一轮 API 调用），记录工具调用参数 ----
     turns = []          # [{usage, tool_uses:[(id,name,input)], text_chars, thinking_chars}]
@@ -512,10 +522,7 @@ def main():
     if used_latest:
         L.append("- ⚠️ 本次经 `--latest` mtime 挑选会话——可能选中活跃会话自身或错目标，"
                  "建议显式传路径")
-    if code_mismatch:
-        L.append(f"- ⚠️ 内容自提股票码 **{detected_code}** ≠ --stock {args.stock}"
-                 "——疑似错目标审计（张冠李戴）")
-    elif detected_code:
+    if detected_code:
         L.append(f"- 内容自提股票码：{detected_code}"
                  + ("（与 --stock 一致 ✓）" if args.stock else "（--stock 未传，自动采用）"))
     L.append(f"- 真实口径（per-request usage 累计）："
@@ -630,8 +637,6 @@ def main():
     print(f"   被分析文件: {path}")
     if used_latest:
         print("   ⚠️ --latest mtime 挑选——可能选中活跃会话自身或错目标，建议显式传路径")
-    if code_mismatch:
-        print(f"   ⚠️ 内容自提股票码 {detected_code} ≠ --stock {args.stock}——疑似错目标审计")
     print(f"   轮次={T} | input={tot_in:,}(+cache {tot_cache:,}/{tot_cc:,}) "
           f"output={tot_out:,} | 检查项: "
           + " ".join(f"{'✅' if ok else '❌'}{n}" for n, ok, _ in checks))

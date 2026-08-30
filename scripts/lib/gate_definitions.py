@@ -887,9 +887,16 @@ def check_g21(report: str, data: dict) -> bool:
                     current = None
                     break
             if current is None:
-                path_failures.append(f"路径不存在: {path}")
+                path_failures.append(path)
         if path_failures:
-            return False
+            # R3（2026-08-30）：reasons 直列坏路径，替代裸 False（F2「收集后丢弃」族修）。
+            # 作者照 reason 改路径即可，无需自建 validator 全量枚举（龙磁 300835 实证该工作真实存在）。
+            reasons = [f"[src:] 路径在快照中不存在：{p}——"
+                       "落笔前用 snapshot_view any 先验；[] 下标/臆测层（如 .data 假层）必 FAIL"
+                       for p in path_failures[:5]]
+            if len(path_failures) > 5:
+                reasons.append(f"另有 {len(path_failures) - 5} 处坏路径（本清单为全量，一轮修完再重跑）")
+            return GateResult(passed=False, reasons=reasons)
     elif len(websearch_tags) < 2:
         # 只有 websearch 标记且不足 2 个
         return False
@@ -2162,8 +2169,17 @@ def check_g48(report: str, data: dict) -> bool:
         return True
     active = [p for p in progs if isinstance(p, dict) and p.get("status") in ("planned", "ongoing")]
     if not active:
-        # 反编造：无活跃计划却声称「待执行/进行中」+ 具体比例（窄口径：待执行+%，避免「回购进行中」等误伤）
-        if re.search(r"待执行", report) and re.search(r"\d+(?:\.\d+)?\s*%", report):
+        # 反编造：无活跃计划却在「待执行」同句捏造具体比例。R5 片段级收窄（2026-08-30，
+        # 龙磁 300835 假阳性根修）：旧实现两个全文 regex AND 可跨段共现——诚实否定句
+        # 「无待执行增减持计划」+ 他处任意 %（PE 分位/表行其它单元格）即误伤。
+        # 执行中修正：原设计「行级 AND」被现实证伪——真实事故句住在宽表行内（一行多格
+        # 多句，| 股东风险 | +74.32%…；…无待执行增减持计划 |），行≠句界；改为片段级
+        # （按 句号/分号/换行/表格竖线 切，逗号不切=子句仍算同句），ST5 立项原始形态
+        # 「待执行X%」同句仍 FAIL（test_g48:27 锚定诚实句合法 = 实现对齐测试意图）。
+        # 残余（接受）：跨句/跨格捏造不罚——与合法披露不可区分，由 presence 层（G47/G30）
+        # 兜底；不引入 24 字邻近窗口（8-27 裁定先例：固定窗口跨标点脆弱）。
+        if any("待执行" in frag and re.search(r"\d+(?:\.\d+)?\s*%", frag)
+               for frag in re.split(r"[|。；;\n]", report)):
             return False
         return True   # 无待执行/进行中计划：豁免
     # presence：报告须含待执行/进行中/计划类词

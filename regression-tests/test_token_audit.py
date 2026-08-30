@@ -3,7 +3,7 @@
 
 为什么存在：表计是验收线（纯提取≤5 量真提取桶 / 覆盖率>80% / 写回 0 / gate 源码 0）的尺，
 尺的语义（去重 · result-only · 挂载前缀机械分层 · 写回目标同一 · v3 外科豁免/
---field 分布/总账行/Bash 侧透明度/错目标告警/处数三分桶 + fetch 注入写标记）此后任何
+--field 分布/总账行/Bash 侧透明度/错目标硬闸/处数三分桶 + fetch 注入写标记）此后任何
 改动都由本脚本判定，不再需要 LLM 手跑模拟重验（2026-08-21 688048 审计重放口径；
 2026-08-23 v3 扩容；2026-08-24 3-bucket 处数——chars 口径不变；2026-08-25 v4 compact 锚定）。
 
@@ -127,7 +127,8 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertIn("外科豁免 0 处", md)                        # A3 豁免桶（空态）
 
     def test_a1_latest_and_code_mismatch(self):
-        """错目标告警：内容自提码 ≠ --stock → stdout+md 双 ⚠️（T2 语义的合成版）。"""
+        """R8 错目标硬闸（2026-08-30）：自提码 ≠ --stock → exit 非零 + md/历史零写入；
+        一致 → 正常审计不受影响。旧断言（⚠️ 警告后照写）随之作废——冻结错误行为。"""
         with tempfile.TemporaryDirectory() as td:
             fx = os.path.join(td, "fixture.jsonl")
             out = os.path.join(td, "out.md")
@@ -140,13 +141,17 @@ class TokenAuditV2Test(unittest.TestCase):
             md = open(out, encoding="utf-8").read()
             self.assertIn("内容自提股票码：688048（与 --stock 一致 ✓）", md)
 
+            # 错目标：exit 非零 + 零写入（md 不落盘、history 零追加——即便开历史写入）
+            home = os.path.join(td, "home")
+            os.makedirs(home, exist_ok=True)
             out2 = os.path.join(td, "out2.md")
-            r2 = _run_audit(fx, out2, stock="688195")   # 688195 ≠ 内容码 688048
-            self.assertEqual(r2.returncode, 0, r2.stderr)
-            self.assertIn("内容自提股票码 688048", r2.stdout)
-            self.assertIn("疑似错目标", r2.stdout)
-            md2 = open(out2, encoding="utf-8").read()
-            self.assertIn("疑似错目标审计", md2)
+            r2 = _run_audit(fx, out2, stock="688195", no_history=False, home=home)  # ≠ 内容码 688048
+            self.assertNotEqual(r2.returncode, 0)
+            self.assertIn("错目标审计拒绝执行", r2.stderr)
+            self.assertIn("688048", r2.stderr)
+            self.assertFalse(os.path.exists(out2), "错目标 md 必须零写入")
+            hist = os.path.join(home, ".cache", "token_audit_history.jsonl")
+            self.assertFalse(os.path.exists(hist), "错目标历史必须零追加")
 
     def test_a3_full_list_and_surgical_exempt(self):
         """手写全列（[:5] 放开）+ 外科豁免正反例 + quota 超额 ⚠️。"""

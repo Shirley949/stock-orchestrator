@@ -11,7 +11,7 @@ G15 契约（s11_peer.data 三态，discovered_peer_codes None↔list 信号）�
 capstone _render_peer：核心6 主行 + 行业位置/市场表现（target_rank/market_performance，东财同业一等公民）。
 消费锚点：m6 估值行 items[].metrics + ≥2 peer；m1 target_rank(行业位置) vs dominant_business。
 """
-import os, sys, unittest
+import os, re, sys, unittest
 
 SCRIPTS = os.path.join(os.path.dirname(__file__), '..', 'scripts')
 sys.path.insert(0, os.path.join(SCRIPTS, 'lib'))
@@ -121,9 +121,18 @@ class ConsumptionAnchorTests(unittest.TestCase):
         cls.m1 = open(os.path.join(mods, 'm1-narrative.md'), encoding='utf-8').read()
 
     def test_m6_peer_items_path_and_min2(self):
-        """m6 估值行：items[].metrics 路径 + ≥2 peer 实际数值约束。"""
-        self.assertIn("s11_peer.items[].metrics", self.m6)
+        """m6 估值行：dot-split 真路径 + ≥2 peer 实际数值约束。
+
+        2026-08-30 R1 协同改：原断言冻结 `s11_peer.items[].metrics`（[] 记法，G21 必 FAIL
+        的坏路径——三重锁死之一），随 m6-decision.md:42 修正为 `s11_peer.data.items`
+        同提交改红为绿；新增负断言：src 模板禁含 `[`（防 [] 记法回潮）。
+        """
+        self.assertIn("snapshot.s11_peer.data.items", self.m6)
         self.assertIn("≥2 家 peer", self.m6)
+        # 负断言：m6 的 [src: snapshot...] 标签里不得再出现 [] 下标记法
+        for m in re.finditer(r"\[src:\s*snapshot\.([^\]]+)\]", self.m6):
+            self.assertNotIn("[", m.group(1),
+                             f"src 标签禁 [] 记法（G21 dot-split 必 FAIL）: {m.group(1)}")
 
     def test_m1_differentiation_anchor(self):
         """m1 差异化定位：target_rank(行业位置) + dominant_business 实证锚点。"""

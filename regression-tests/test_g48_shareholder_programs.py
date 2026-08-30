@@ -49,6 +49,20 @@ class CheckG48ThreeState(unittest.TestCase):
         self.assertTrue(check_g48("当前 PE 分位 15%。", _snap([])))
         self.assertTrue(check_g48("回购正在进行中。", _snap([])))   # 回购进行中非股东增减持计划
 
+    def test_fragment_scope_r5(self):
+        """R5 片段级收窄（2026-08-30，龙磁 300835 假阳性根修）：
+        按 |。；;\n 切片段（逗号不切=子句仍算同句），「待执行」+ 数字% 同片段共现才 FAIL。
+        """
+        # ① 事故句重放：宽表行内 % 与「无待执行」被 | 隔开 → PASS（修复前全文 AND 误杀）
+        self.assertTrue(check_g48(
+            "| **股东层面风险** | 股东户数单季 +74.32%，散户化；无待执行增减持计划 |", _snap([])))
+        # ② 诚实否定句 + 异句 %（PE 分位在别句）→ PASS
+        self.assertTrue(check_g48("无待执行增减持计划。当前 PE 分位 15%。", _snap([])))
+        # ③ 同片段捏造·逗号子句形态（% 在前）：片段内共现无法辨否定 → 仍 FAIL（反编造不失守）
+        self.assertFalse(check_g48("实控人持股 12.5%，无待执行减持计划落地。", _snap([])))
+        # ④ 同片段捏造·顺序形态（待执行在前）→ FAIL
+        self.assertFalse(check_g48("待执行减持不超过 2% 的计划。", _snap([])))
+
     def test_missing_or_failed_exempt(self):
         self.assertTrue(check_g48("任意报告", {"s5_events": {"data": {"risk_signals": {}}}}))   # 无 processed
         self.assertTrue(check_g48("任意报告", _snap(None)))                                        # programs 非 list（failed 早退无 programs 键）
