@@ -2092,15 +2092,23 @@ def check_g45(report: str, data: dict) -> bool:
     # 改为按行（markdown bullet 一行）切：每个「目标价语境 + N元」行自身须带 [src:] 或不确定性标注。
     # 旧版 `has_src anywhere` 被替换；src 与目标价同行（m5 模板 [src:] 置 bullet 末，同行命中）。
     _UNC = ("数据不足", "无法量化", "区间", "粗略", "预估", "仅供参考", "存在不确定性", "待核实", "未核实")
+    # R4（2026-08-30，F3 早退族）：violation 全量收集后尾部统一 return（镜像 G63），替代
+    # 循环内早退只报首处——龙磁两轮实证：双违例只修一条，重跑再 FAIL 第二条=打地鼠。
+    violations = []
     for ln in report.split('\n'):
         if any(kw in ln for kw in ("目标价", "目标位", "合理估值", "合理价")) and \
                 re.search(r'\d+(\.\d+)?\s*元', ln):
             if "[src:" not in ln and not any(kw in ln for kw in _UNC):
                 # B2 原生 reasons：目标价 N元 行无 src/不确定性标注 → FAIL（防 websearch 冒充 API-grade）
-                return GateResult(passed=False, reasons=[
-                    f"目标价语境行缺 [src:] 且无不确定性标注：『{ln.strip()[:60]}』——"
-                    "每条「目标价/合理估值 N元」行须行内带 [src: 源] 或不确定性词"
-                    "（数据不足/仅供参考等），禁 websearch 数值冒充 API-grade"])
+                violations.append(ln.strip()[:60])
+    if violations:
+        reasons = [f"目标价语境行缺 [src:] 且无不确定性标注：『{v}』——"
+                   "每条「目标价/合理估值 N元」行须行内带 [src: 源] 或不确定性词"
+                   "（数据不足/仅供参考等），禁 websearch 数值冒充 API-grade"
+                   for v in violations[:5]]
+        if len(violations) > 5:
+            reasons.append(f"另有 {len(violations) - 5} 处同类缺溯源（本清单为全量，一轮修完再重跑）")
+        return GateResult(passed=False, reasons=reasons)
     return True
 
 
@@ -2900,9 +2908,19 @@ def check_g63(report: str, data: dict) -> bool:
                     seen.add((n, near))
                     violations.append((n, near, rel, ln.strip()[:40]))
     if violations:
-        reasons = [f"m3 技术位转录错：『{v[3]}』中 {v[0]} ≈但≠ 真值 {v[1]}（偏 {v[2]:.1%}）——"
-                   "照抄 snapshot 真值（fib/S&R/筹码成本/ATR止损/TDST/MA/BOLL/券商锚），禁手抄改动"
-                   for v in violations[:5]]
+        def _v_reason(v):
+            # R6（2026-08-30，F1 诊断达成）：violation 距某渲染值 ≤1.5% → 疑似取整抄写，
+            # reason 直指该渲染值精确到分的真身（龙磁 152.0 → 151.87）；>1.5% 维持
+            # 「≈但≠真值」。渲染集复用上方豁免集 rendered（同源同一份列表——一个语义
+            # 一个实现，不引第二清单）。
+            n, near, rel, ln = v
+            for r in rendered:
+                if r and abs(n - r) / abs(r) <= 0.015:
+                    return (f"m3 技术位疑似取整渲染值：『{ln}』中 {n} ≈ 渲染值 {r}"
+                            "——照抄精确到分（MA/BOLL/收盘/VWAP/券商锚/主力成本），禁四舍五入改写")
+            return (f"m3 技术位转录错：『{ln}』中 {n} ≈但≠ 真值 {near}（偏 {rel:.1%}）——"
+                    "照抄 snapshot 真值（fib/S&R/筹码成本/ATR止损/TDST/MA/BOLL/券商锚），禁手抄改动")
+        reasons = [_v_reason(v) for v in violations[:5]]
         if len(violations) > 5:
             reasons.append(f"另有 {len(violations) - 5} 处同类转录错（本清单为全量，一轮修完再重跑）")
         return GateResult(passed=False, reasons=reasons)
@@ -2934,6 +2952,10 @@ def check_g64(report: str, data: dict) -> bool:
         # 绝对值双刻度匹配（万/亿；报告「净流出 N」写正数+流出词，负号不在数字里）
         return any(abs(abs(n) - abs(v)) <= 0.01 * abs(v) or
                    abs(abs(n) - abs(v) / 1e4) <= 0.01 * (abs(v) / 1e4) for v in vals if v)
+    # R4（2026-08-30，F3 早退族）：violation 全量收集后尾部统一 return（镜像 G63），替代
+    # 循环内早退只报首处；数值去重=同数字多处错标只报首处（镜像 G63 的 (n,near) 去重）。
+    violations = []   # (n, 行摘录)
+    seen = set()
     for ln in report.splitlines():
         if "大单" not in ln or "主力" in ln:
             continue
@@ -2942,10 +2964,16 @@ def check_g64(report: str, data: dict) -> bool:
         nums = [n for n in nums if n >= 0.001]
         for n in nums:
             if _hit(n, main_caliber) and not _hit(n, big_row_ok):
-                return GateResult(passed=False, reasons=[
-                    f"资金流口径错标：『{ln.strip()[:50]}』中 {n} 是主力/全单口径真值"
-                    "（trend_5/10/20d 或 net_flow），不是大单口径——大单行真值见 items[] 大单 "
-                    "in/out；主力趋势数值须标「主力」"])
+                if n not in seen:
+                    seen.add(n)
+                    violations.append((n, ln.strip()[:50]))
+    if violations:
+        reasons = [f"资金流口径错标：『{v[1]}』中 {v[0]} 是主力/全单口径真值"
+                   "（trend_5/10/20d 或 net_flow），不是大单口径——大单行真值见 items[] 大单 "
+                   "in/out；主力趋势数值须标「主力」" for v in violations[:5]]
+        if len(violations) > 5:
+            reasons.append(f"另有 {len(violations) - 5} 处同类口径错标（本清单为全量，一轮修完再重跑）")
+        return GateResult(passed=False, reasons=reasons)
     return True
 
 
