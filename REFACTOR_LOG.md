@@ -1,3 +1,7 @@
+## 2026-08-30 收尾补挂载：两个游离测试入回归链（验收问句触发）
+
+全量盘点（regression-tests 全部 test_*.py vs run_regression.sh 挂载清单逐一对照）发现 `test_g16_subject_attribution.py`（G16 前方最近主体归因豁免两极）与 `test_latest_extract.py`（latest_period 信封/双键兜底/days_old helper 族）历史上未挂载进回归链——游离于总闸外，此前「回归 exit 0」不覆盖它们。补跑验证 8+29 tests OK 后挂载；`test_gate_throttled.py` 文件不存在（脚本内 if -f 保护自动跳过，预存状态）。同轮盘点：quality/registry 仓无测试文件；routing 仓 6 个测试（lixinger/sina/westock/dongcai/report_views/td_analyzer，23+35+37+9 checks）独立跑全过（不在 run_regression.sh 管辖，属 routing 仓自带回归）。全量回归重跑 exit 0。此后「本地测试全跑」由脚本保证。
+
 ## 2026-08-30 第4批机制层：R8 静默降级 fail-fast + R10 文档路径机器校验 + R12 fixture 真实正文探针（failure-family 修复执行令）
 
 触发：同执行令第4批（机制层是「彻底解决」构成要件）。gate 逻辑零改动（`scripts/lib/gate_definitions.py` 相对 HEAD 空 diff），全部为机制/测试/文档层：
