@@ -1266,6 +1266,9 @@ _G30_ACTION_VERBS = ["加仓", "增持", "买入", "建仓", "减仓", "减持",
 # E2（2026-08-31，金安 002636 实锤）：否定词窗——前置 12 字符内被否定的动作不是建议动作。
 # 「观望」不列入：它本身是 _G30_HOLD_VERBS 动作，当否定词会误杀「观望后加仓」类真动作。
 _G30_NEG_RE = re.compile(r"(不支持|不宜|不建议|不急于|暂不|勿|避免|无加仓)")
+# E2v2（批2#2）紧邻否定词：仅距动作词 ≤2 字符时才判否定（连续形「没有加仓/难以加仓」）。
+# 不并入 _G30_NEG_RE 走 12 字全窗——P2a 宽窗已证伪：「没有」跨句误杀后随真动作。
+_G30_NEG_PROX_RE = re.compile(r"(没有|难以|不再|放弃|拒绝)")
 _G30_HOLD_VERBS = ["持有", "观望", "不操作", "波段", "趋势持有"]
 _G30_BEARISH_VERBS = ["减仓", "减持", "卖出", "清仓", "止损", "空仓"]
 _G30_BULLISH_VERBS = ["加仓", "增持", "买入", "建仓"]
@@ -1346,7 +1349,11 @@ def _g30_theme_covered(text: str, kws: list) -> bool:
 def _g30_first_action(scope: str):
     """按文本位置取首个**未被否定**的动作动词（非按列表序）——修"持有/逢低加仓"误取加仓。
     E2（2026-08-31）：收集全部动词出现位（含同词多次），前置 12 字符窗含否定词者跳过
-    （「筹码面不支持现价加仓」的加仓是被否定的动作，不得当主推荐）。"""
+    （「筹码面不支持现价加仓」的加仓是被否定的动作，不得当主推荐）。
+    E2v2（批2#2，2026-09-01 裁决C-2）：①窗遇标点截断——取动作词前最近
+    ，。；、！？ 之后的片段，否定不跨标点（「…不支持现价加仓，持有」的持有曾被
+    前半句误杀返 None）；②紧邻否定词 没有|难以|不再|放弃|拒绝 距动作词 ≤2 字符
+    同判否定（「没有加仓基础，建议持有」的加仓曾被当主推荐）。"""
     found = []
     for v in _G30_ACTION_VERBS:
         start = 0
@@ -1357,7 +1364,13 @@ def _g30_first_action(scope: str):
             found.append((i, v))
             start = i + 1
     for i, v in sorted(found):
-        if _G30_NEG_RE.search(scope[max(0, i - 12):i]):
+        seg = scope[max(0, i - 12):i]
+        cut = max(seg.rfind(p) for p in "，。；、！？")   # 标点截断：否定不跨子句
+        seg = seg[cut + 1:]
+        if _G30_NEG_RE.search(seg):
+            continue
+        m = _G30_NEG_PROX_RE.search(seg)                 # 紧邻否定词（≤2 字符）
+        if m and len(seg) - m.end() <= 2:
             continue
         return v
     return None

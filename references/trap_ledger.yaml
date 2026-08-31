@@ -245,10 +245,10 @@ entries:
     match: "主推荐"
     count: 0
     last_seen: "2026-08-31"
-    status: inflight
+    status: landed
     root_cause: engine
     blocked: false
-    fix: "E2 否定窗 v2（批2#2）：窗遇标点截断+紧邻否定词（没有|难以|不再|放弃|拒绝，距动词≤2字符）——『没有加仓基础，建议持有』类不再误判主推荐=加仓；窗语义合同同步 m6/m11（E 类 expected 源）"
+    fix: "E2 否定窗 v2（批2#2 landed）：窗遇标点截断+紧邻否定词（没有|难以|不再|放弃|拒绝，距动词≤2字符）——七句评测 1/7→7/7（5 误判翻转+E2 锚 None→持有+趋势锚不回退）；归档44对0翻转；七句固化 trap_corpus；窗语义合同同步 m6/m11（E 类 expected 源）；被否决设计 P2a 宽窗/P2b 后置窗见 _research/b2_prototype.py"
   - signature: G21#did_you_mean:registry_hint
     gate: G21
     subcheck: did_you_mean

@@ -1,3 +1,15 @@
+## 2026-09-01 批2 落码 #2：G30#5 主推荐否定语义 v2（标点截断窗 + 紧邻否定词）
+
+E2v2（`_g30_first_action`）：①否定窗 12 字符保留但**遇标点截断**（，。；、！？ 之后片段）——「筹码面不支持现价加仓，持有」的持有曾被跨标点误杀返 None；②**紧邻否定词** `_G30_NEG_PROX_RE`（没有|难以|不再|放弃|拒绝）距动作词 ≤2 字符同判否定——「没有加仓基础，建议持有」的加仓曾被当主推荐。被否决设计留档 `_research/b2_prototype.py`：P2a 宽窗（没有 跨句误杀后随真动作）/P2b 后置窗（误杀前置正确动作）。
+
+- **七句评测（裁决C-2 口径）**：修前 1/7 → 修后 **7/7**——5 句误判翻转（没有/难以/放弃/拒绝/不再 各一）+ E2 锚「不支持现价加仓，持有」None→持有 + 趋势锚「趋势持有，逢低吸纳后再加仓」不回退。七句逐句期望判决固化 `trap_corpus.yaml`（check=g30_first_action）+ `TestTrapCorpus.test_g30_first_action` 消费。
+- **归档零漂移**：44 对三层差分 0 翻转（HEAD 旧引擎 vs v2 双子进程）。
+- **窗语义合同双仓同步（E 类 expected 源）**：m6-decision.md 投资建议节加散文侧合同（否定词清单+不跨标点+≤2 字符+动作词表全列）；m11-gates.md 语义变更登记表 G63/G30#5 行更新 + G30#1 同义词行新增。
+- ledger `G30#5:negation_context_v2` inflight→**landed**。
+
+验证：test_diag_contract 41 用例全绿；run_regression.sh exit 0（engine_pending 2→1）。
+
+
 ## 2026-09-01 批2 落码 #5：G30#1 fatal surface 同义词归一（定增≡增发）
 
 德福 301511 实锤从写作纪律升级 engine 修复：东财 `event_type=增发` × 报告合法写「定增」→ 子串判定漏 surface 误报。`_g30_announcement_registry_findings` 内建 `_SURFACE_SYNONYMS = {增发↔定增}`（保守起步仅此一对，按语料实锤增补；同义归一只增命中，new-PASS ⊇ old-PASS）。两极：修前 HEAD 复跑 finding 误报 → 修后同义措辞 []；**执法力反例（配售=两者皆非）仍报缺失**，无过宽。归档 44 对三层差分 0 翻转。trap_corpus 登记 `g30_surf_dingzeng_defu`；ledger `G30#1:synonym_dingzeng` inflight→**landed**。担保词表部分仍属写作纪律（G30#1:substring_keyword 保持 pending）。

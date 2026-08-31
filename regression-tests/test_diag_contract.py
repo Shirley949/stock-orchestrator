@@ -751,6 +751,21 @@ class TestTrapCorpus(unittest.TestCase):
             snap_min, "## 4.1.1 大事提醒时间线\n配售事项已披露。\n"),
             "同义归一过宽：真漏 surface 逃逸")
 
+    def test_g30_first_action(self):
+        """批2#2 七句评测（裁决C-2 口径：5 误判翻转 + 2 回归锚）。E2v2 = 否定窗
+        标点截断 + 紧邻否定词（没有|难以|不再|放弃|拒绝 ≤2 字符）。修前实测 1/7。"""
+        from gate_definitions import _g30_first_action
+        cases = [c for c in self.cases if c["check"] == "g30_first_action"]
+        self.assertGreaterEqual(len(cases), 7, "G30#5 七句评测语料不齐")
+        hits = 0
+        for c in cases:
+            got = _g30_first_action(c["line"])
+            if got == c["expect"]:
+                hits += 1
+            else:
+                self.fail(f"{c['id']}：want={c['expect']} got={got}")
+        self.assertEqual(hits, len(cases))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

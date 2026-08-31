@@ -45,3 +45,49 @@ cases:
     line: "定增事项已披露。"
     expect: "增发"          # 快照 fatal event_type；报告同义措辞不漏 surface
     source: "德福 301511 实锤：东财 event_type=增发 × 报告写定增——修前误报『未在时间线 surface』"
+  # ---- G30#5 主推荐否定语义 v2 七句评测（批2#2，裁决C-2 口径：5 误判翻转 + 2 回归锚）----
+  # 期望判决 = E 类 expected 源（m6-decision/m11-gates 窗语义合同的机器侧锚点）。
+  # 窗语义：否定词（不支持/不宜/不建议/不急于/暂不/勿/避免/无加仓）子句内 12 字符窗判否定，
+  # 不跨标点（，。；、！？）；紧邻否定词（没有/难以/不再/放弃/拒绝）距动作词 ≤2 字符同判。
+  - id: g30_neg_s1_e2_anchor
+    gate: G30
+    check: g30_first_action
+    line: "筹码面不支持现价加仓，持有"
+    expect: "持有"
+    source: "E2 回归锚（金安句式）：修前持有被前半句不支持跨标点误杀返 None→v2 标点截断后持有"
+  - id: g30_neg_s2_anchor
+    gate: G30
+    check: g30_first_action
+    line: "趋势持有，逢低吸纳后再加仓"
+    expect: "趋势持有"
+    source: "回归锚：首动作词即答案，v2 不得回退（裁决C-2：want=持有 与 趋势持有 同为合法动作词，语义等价）"
+  - id: g30_neg_s3_meiyou
+    gate: G30
+    check: g30_first_action
+    line: "筹码面没有加仓基础，建议持有"
+    expect: "持有"
+    source: "误判翻转①：没有 不在旧否定词表，加仓 被当主推荐→紧邻否定词 ≤2 字符判否定"
+  - id: g30_neg_s4_nanyi
+    gate: G30
+    check: g30_first_action
+    line: "短期难以加仓，维持持有"
+    expect: "持有"
+    source: "误判翻转②：难以 同上"
+  - id: g30_neg_s5_fangqi
+    gate: G30
+    check: g30_first_action
+    line: "估值已高，放弃加仓，持有为主"
+    expect: "持有"
+    source: "误判翻转③：放弃 同上"
+  - id: g30_neg_s6_jujue
+    gate: G30
+    check: g30_first_action
+    line: "筹码压力仍存，拒绝追高加仓，建议持有"
+    expect: "持有"
+    source: "误判翻转④：拒绝 同上"
+  - id: g30_neg_s7_buzai
+    gate: G30
+    check: g30_first_action
+    line: "市场情绪未稳，不再加仓，持有观望"
+    expect: "持有"
+    source: "误判翻转⑤：不再 同上"
