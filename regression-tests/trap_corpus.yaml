@@ -91,3 +91,17 @@ cases:
     line: "市场情绪未稳，不再加仓，持有观望"
     expect: "持有"
     source: "误判翻转⑤：不再 同上"
+  # ---- G21 registry did-you-mean（批2#4，裁决C：scene 缺失 [数据层] 家族）----
+  # line 此处=坏 [src:] 路径；expect=提示语必含子串。
+  - id: g21_scene_missing_datalayer
+    gate: G21
+    check: g21_registry_hint
+    line: "valuation_snapshot.data.quote"
+    expect: "[数据层] scene「valuation_snapshot」在注册表而本快照未生成"
+    source: "模式B/未拉取 scene 引用形态：修前退化裸路径报错无建议→修后数据层归因（查快照生成，非拼写）"
+  - id: g21_typo_registry_neighbor
+    gate: G21
+    check: g21_registry_hint
+    line: "valuation_snapsho.data.quote"
+    expect: "registry 近邻 scene「valuation_snapshot」"
+    source: "第1层拼写错且兄弟键无近邻时由 data_contracts.SCENES 权威注册表补建议"

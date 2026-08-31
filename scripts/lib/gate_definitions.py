@@ -19,6 +19,7 @@ import re
 
 from latest_extract import days_old  # noqa: E402  G32/G33 freshness 维度（plan Step 5.5）
 from capstone_panorama import panorama as _cap_panorama  # noqa: E402
+from data_contracts import SCENES as _DC_SCENES  # noqa: E402  G21 registry did-you-mean（批2#4）
 from capstone_panorama import QUAL_KW as _CAP_QUAL_KW_A  # noqa: E402
 from capstone_panorama import QUAL_KW_B as _CAP_QUAL_KW_B  # noqa: E402
 # A/B 主题名不重叠 → 合并表；B 快照 qual_required 含 B 主题，单查 A 表会 KeyError（2026-08-26 B v2）
@@ -295,7 +296,11 @@ PATH_ALIASES = {
 def _explain_bad_path(snapshot: dict, path: str) -> str:
     """G21 坏路径 → 单行修复指引（E5）。别名直给 > 数组下标 > 结构感知
     （最深可达节点 + 兄弟键≤8 + difflib 近邻键）。实测历史陷阱走别名最快；
-    键真缺失（如 market_relative）走结构感知——兄弟键即答案。"""
+    键真缺失（如 market_relative）走结构感知——兄弟键即答案。
+    批2#4（2026-09-01 裁决C）：第 1 层断键走 registry（data_contracts.SCENES）
+    ——scene 在注册表而快照未生成 → [数据层] 归因（查快照生成，非拼写问题）；
+    不在注册表 → registry difflib 近邻补建议，勿退化为裸路径报错。"""
+    _registry = sorted(_DC_SCENES)
     # peer 正确层（已写 s11_peer.data.x）不套泛化别名：该层兄弟键更准
     if "s11_peer.data." not in path:
         for bad, good in PATH_ALIASES.items():
@@ -317,6 +322,14 @@ def _explain_bad_path(snapshot: dict, path: str) -> str:
             near = difflib.get_close_matches(part, sibs, n=1, cutoff=0.6)
             if near:
                 hint += f"；是不是「{near[0]}」？"
+            if i == 1:
+                if part in _registry:
+                    return (f"[数据层] scene「{part}」在注册表而本快照未生成"
+                            "（模式未拉取或拉取失败）——查快照生成/重跑对应 scene 拉取，"
+                            "非路径拼写问题")
+                reg_near = difflib.get_close_matches(part, _registry, n=1, cutoff=0.6)
+                if reg_near and reg_near[0] not in sibs:
+                    hint += f"；registry 近邻 scene「{reg_near[0]}」"
             return hint
         node = node[part]
     return "各层键均在但终值为 None（键在、数据空）——改锚有值兄弟键或上级信封"

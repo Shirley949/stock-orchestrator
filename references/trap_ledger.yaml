@@ -256,7 +256,7 @@ entries:
     match: "近邻"
     count: 0
     last_seen: "2026-08-31"
-    status: inflight
+    status: landed
     root_cause: engine
     blocked: false
-    fix: "_explain_bad_path 建议串尾挂 data_contracts.SCENES registry 近邻（批2#4，reason-only verdict 恒不变）：scene 整体缺失（模式B未拉取）时不再『无建议可给』；该分支 reason 落 [数据层] 家族——查快照生成而非改路径拼写；回归 guard=单元测试断言建议在场（ledger 本条为欠账登记）"
+    fix: "_explain_bad_path 第 1 层断键挂 data_contracts.SCENES registry（批2#4 landed，reason-only verdict 恒不变）：scene 在注册表而快照未生成 → [数据层] 归因（查快照生成/重跑拉取，非路径拼写）；拼写错且兄弟键无近邻 → registry difflib 近邻，禁退化裸路径报错。guard=TestTrapCorpus.test_g21_registry_hint 两形态断言；归档44对0翻转。**计数语义**：match『近邻』命中=报告侧又引用了坏路径（合法 FAIL，写作纪律信号）；引擎回归面=建议缺失，由 guard 测试把守——delta 勿按引擎回归处置"

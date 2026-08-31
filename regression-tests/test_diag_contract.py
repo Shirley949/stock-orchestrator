@@ -766,6 +766,17 @@ class TestTrapCorpus(unittest.TestCase):
                 self.fail(f"{c['id']}：want={c['expect']} got={got}")
         self.assertEqual(hits, len(cases))
 
+    def test_g21_registry_hint(self):
+        """批2#4：G21 坏路径第 1 层走 registry（data_contracts.SCENES）——scene 在
+        注册表而快照未生成 → [数据层] 归因（非路径拼写问题）；拼写错 → 近邻建议，
+        禁退化为裸路径报错。修前两者均无建议可给。"""
+        snap = {"mode": "A", "s4_technical": {"data": {"td": {"daily": 1}}}}
+        cases = [c for c in self.cases if c["check"] == "g21_registry_hint"]
+        self.assertGreaterEqual(len(cases), 2, "g21 registry 语料不齐")
+        for c in cases:
+            hint = gd._explain_bad_path(snap, c["line"])
+            self.assertIn(c["expect"], hint, f"{c['id']}：提示缺 registry/数据层 归因——{hint}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

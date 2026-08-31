@@ -1,3 +1,15 @@
+## 2026-09-01 批2 落码 #4：G21 registry did-you-mean + scene 缺失 [数据层] 归因
+
+`_explain_bad_path` 第 1 层断键挂 `data_contracts.SCENES`（权威注册表，27 scene，此前未用）：①scene 在注册表而快照未生成（模式B未拉取/拉取失败）→ reason 落 **[数据层] 家族**（「查快照生成/重跑对应 scene 拉取，非路径拼写问题」——SKILL.md 约束5 流程行：不改报告）；②拼写错且兄弟键无近邻 → registry difflib 近邻补建议，**禁退化成裸路径报错**（裁决C-4）。别名（PATH_ALIASES）优先级不变、深层断键（兄弟键感知）不变、含下标路径不变——四极验证过。
+
+- **verdict 恒不变**（reason-only 构造性保证）：归档 44 对三层差分 0 翻转。
+- trap_corpus 登记 `g21_scene_missing_datalayer` / `g21_typo_registry_neighbor` + `TestTrapCorpus.test_g21_registry_hint` 两形态断言（= ledger guard）。
+- ledger `G21#did_you_mean:registry_hint` inflight→**landed**，fix 文本写明计数语义（match『近邻』命中=报告侧合法 FAIL 复发信号，引擎回归面由 guard 测试把守）。
+- import 面新增 `from data_contracts import SCENES`（data_contracts 零依赖，无环）。
+
+验证：test_diag_contract 42 用例全绿；run_regression.sh exit 0（engine_pending 1→0）。
+
+
 ## 2026-09-01 批2 落码 #2：G30#5 主推荐否定语义 v2（标点截断窗 + 紧邻否定词）
 
 E2v2（`_g30_first_action`）：①否定窗 12 字符保留但**遇标点截断**（，。；、！？ 之后片段）——「筹码面不支持现价加仓，持有」的持有曾被跨标点误杀返 None；②**紧邻否定词** `_G30_NEG_PROX_RE`（没有|难以|不再|放弃|拒绝）距动作词 ≤2 字符同判否定——「没有加仓基础，建议持有」的加仓曾被当主推荐。被否决设计留档 `_research/b2_prototype.py`：P2a 宽窗（没有 跨句误杀后随真动作）/P2b 后置窗（误杀前置正确动作）。
