@@ -1,3 +1,10 @@
+## 2026-09-01 批2 落码 #5：G30#1 fatal surface 同义词归一（定增≡增发）
+
+德福 301511 实锤从写作纪律升级 engine 修复：东财 `event_type=增发` × 报告合法写「定增」→ 子串判定漏 surface 误报。`_g30_announcement_registry_findings` 内建 `_SURFACE_SYNONYMS = {增发↔定增}`（保守起步仅此一对，按语料实锤增补；同义归一只增命中，new-PASS ⊇ old-PASS）。两极：修前 HEAD 复跑 finding 误报 → 修后同义措辞 []；**执法力反例（配售=两者皆非）仍报缺失**，无过宽。归档 44 对三层差分 0 翻转。trap_corpus 登记 `g30_surf_dingzeng_defu`；ledger `G30#1:synonym_dingzeng` inflight→**landed**。担保词表部分仍属写作纪律（G30#1:substring_keyword 保持 pending）。
+
+验证：test_diag_contract 40 用例全绿；run_regression.sh exit 0（engine_pending 3→2）。
+
+
 ## 2026-09-01 批2 落码 #1：G63 分位族全形态豁免（百分位/分位数变体）+ trap_corpus 永久语料
 
 触发：裁决C-1 取证——cron 原始措辞「N 分位」E1 已覆盖，但语料现存「94/3/1 百分位」7 处活雷：`百` 挡在 `\s*分位` 前，数字仍泄漏价位对拍。修法一行：E1 正则 `\s*分位` → `\s*(?:百分位|分位数|分位)`（长形在前防前缀截断；分数形式原样保留）。

@@ -1617,7 +1617,12 @@ def _g30_announcement_registry_findings(data: dict, report: str) -> list:
     - 有 fatal 但时间线小节缺失 / 缺该事件 → FAIL（漏 surface 致命风险，计入 fail_threshold）；
     - 有 future/active 前瞻事件但时间线段无时态标记词 → FAIL（扁平表混排未来与历史，误导读者）。
     surface 词：event_type 首段 + LV1 关键词（ST/*ST/退市/破产/重整/审计/违规/立案/处罚/保留意见/无法表示）。
+    同义词：event_type 与报告措辞同义不同形（增发/定增）按 _G30_SURFACE_SYNONYMS 归一后才判 surface。
     """
+    # 批2#5（2026-08-31 裁决，德福 301511 实锤）：东财 event_type=「增发」而报告合法写
+    # 「定增」——子串判定漏 surface 误报。保守起步仅 定增≡增发（同义归一只增命中，
+    # new-PASS ⊇ old-PASS 方向安全），新变体按语料实锤增补。
+    _SURFACE_SYNONYMS = {"增发": ("定增",), "定增": ("增发",)}
     rs = _snapshot_get(data, "s5_events.data.risk_signals") or {}
     proc = rs.get("processed") if isinstance(rs, dict) else None
     if not isinstance(proc, dict) or proc.get("status") == "failed":
@@ -1652,6 +1657,10 @@ def _g30_announcement_registry_findings(data: dict, report: str) -> list:
             if w in lv1 and w not in kws:
                 kws.append(w)
         kws = [k for k in kws if len(k) >= 2]
+        for k in list(kws):                       # 同义词归一（批2#5）：定增≡增发
+            for syn in _SURFACE_SYNONYMS.get(k, ()):
+                if syn not in kws:
+                    kws.append(syn)
         if not kws:
             continue
         if not any(k in reg for k in kws):

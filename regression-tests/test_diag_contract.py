@@ -732,6 +732,25 @@ class TestTrapCorpus(unittest.TestCase):
         ok = ret if isinstance(ret, bool) else ret.get("passed", True)
         self.assertTrue(ok, f"百分位数字仍被对拍真值误伤：{ret}")
 
+    def test_g30_synonym_surface(self):
+        """批2#5：fatal event_type 与报告措辞同义不同形（增发×定增，德福实锤）不漏
+        surface；执法力反例（配售=两者皆非）仍须报缺失。修前 HEAD 复跑误报 finding。"""
+        snap_min = {"s5_events": {"data": {"risk_signals": {"processed": {
+            "status": "ok",
+            "timeline": {"status": "ok", "future": [], "active": [],
+                         "fatal_events": [{"event_type": "增发", "level1_content": "增发新股"}]},
+        }}}}}
+        cases = [c for c in self.cases if c["check"] == "g30_synonym_surface"]
+        self.assertTrue(cases, "g30 同义词语料缺席")
+        for c in cases:
+            rpt = f"## 4.1.1 大事提醒时间线\n{c['line']}\n"
+            self.assertEqual(gd._g30_announcement_registry_findings(snap_min, rpt), [],
+                             f"{c['id']}：同义措辞仍被误报漏 surface")
+        # 执法力保持：既非 event_type 也非同义词 → 仍须 finding
+        self.assertTrue(gd._g30_announcement_registry_findings(
+            snap_min, "## 4.1.1 大事提醒时间线\n配售事项已披露。\n"),
+            "同义归一过宽：真漏 surface 逃逸")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

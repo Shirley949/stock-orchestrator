@@ -38,3 +38,10 @@ cases:
     check: tokenizer_no_percentile_number
     line: "换手率处于 99/100 分位，量能节奏中性"
     source: "分数形式（E1 原设计覆盖，回归锚）"
+  # ---- G30#1 fatal surface 同义词（批2#5，德福 301511 实锤）----
+  - id: g30_surf_dingzeng_defu
+    gate: G30
+    check: g30_synonym_surface
+    line: "定增事项已披露。"
+    expect: "增发"          # 快照 fatal event_type；报告同义措辞不漏 surface
+    source: "德福 301511 实锤：东财 event_type=增发 × 报告写定增——修前误报『未在时间线 surface』"

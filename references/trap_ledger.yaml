@@ -234,10 +234,10 @@ entries:
     match: "定增"
     count: 0
     last_seen: "2026-08-31"
-    status: inflight
+    status: landed
     root_cause: engine
     blocked: false
-    fix: "fatal/治理行 surface 同义词归一 定增≡增发（批2#5，德福实锤从写作纪律升级 engine 修复）：报告写『定增』不再误报『增发』漏报；担保词表部分仍属写作纪律（见 G30#1:substring_keyword pending）"
+    fix: "fatal/治理行 surface 同义词归一 定增≡增发（批2#5 landed，德福实锤从写作纪律升级 engine 修复）：报告写『定增』不再误报『增发』漏报；执法力反例（配售=两者皆非）仍报缺失；归档44对0翻转；形态进 trap_corpus（g30_surf_dingzeng_defu）。担保词表部分仍属写作纪律（见 G30#1:substring_keyword pending）"
   - signature: G30#5:negation_context_v2
     gate: G30
     subcheck: "5"
