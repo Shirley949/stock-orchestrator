@@ -150,6 +150,10 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     passed = []
     failed = []
     errors = []
+    # 运行时第二防线（v2.1）：checker 返回裸 bool（含 `return <布尔表达式>` 形态——
+    # 字面 regex 抓不到）→ reason 丢失风险，warn 上浮 sidecar。静态 lint（test_diag_contract
+    # 审计 v2）管字面、本 warn 管语义。升级条件：一轮 cron（全票全门）零命中后升硬断言。
+    bool_return_gates = []
 
     for gate in ALL_GATES:
         desc = GATE_DESCS.get(gate, "")
@@ -195,6 +199,10 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
                 # 薄壳兜底（B1）：bool 门 FAIL 无原生 reasons → 上浮注册表 fail_hint
                 #（比裸 desc 可执行；原生 reasons 的门如 G30 不受影响）
                 if not ok:
+                    # 运行时第二防线：仅 FAIL 的 bool 返回才算 reason 丢失（PASS 返回 bool 无害）
+                    bool_return_gates.append(gate)
+                    print(f"⚠️ [bool-return] {gate} 返回裸 bool FAIL（reason 丢失，降级 "
+                          "fail_hint）——应返回 GateResult(passed, reasons, diag)", file=sys.stderr)
                     gate_reasons = [GATE_REGISTRY[gate]["fail_hint"]]
                 else:
                     gate_reasons = []
@@ -266,6 +274,10 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     lint = _lint_diag_fix(details)
     if lint:
         base_result["diag_lint"] = lint
+
+    # 运行时第二防线：bool 返回门清单（零命中一轮 cron 后升硬断言，见 :150 注释）
+    if bool_return_gates:
+        base_result["bool_return_warn"] = sorted(set(bool_return_gates))
 
     return base_result
 

@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "lib"))
-from trap_ledger import load_ledger  # noqa: E402
+from trap_ledger import load_ledger, engine_pending  # noqa: E402
 
 DEFAULT_ROOT = Path("~/analysis_report").expanduser()
 
@@ -63,6 +63,12 @@ def main() -> int:
     ap.add_argument("--strict", action="store_true",
                     help="增量拦截：任一 signature 当前计数 > ledger count 基线 → exit 1")
     args = ap.parse_args()
+
+    # 晋级欠账（裁决⑤ 2026-08-31）：root_cause=engine 未修存量——与扫哪个 root 无关，
+    # 恒打一行（run_regression 尾部 echo 同源）。
+    pending = engine_pending(args.ledger)
+    print(f"⚙️ engine_pending（root_cause=engine 且未 landed）: {len(pending)} 条"
+          + (f"——{'、'.join(e['signature'] for e in pending)}" if pending else ""))
 
     ledger = load_ledger(args.ledger)
     root = Path(args.root).expanduser()

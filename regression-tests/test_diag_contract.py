@@ -328,14 +328,15 @@ class TestG21Suggestions(unittest.TestCase):
 # ---------------------------------------------------------------------------
 class TestR5Reasons(unittest.TestCase):
     # 2026-08-31 grep 实测（28 门/62 处）；执行时以 grep 重跑为准——此处断言「零残留」
-    EXPECTED_BARE_GATES = {
-        "G1", "G6", "G8", "G12", "G14", "G15", "G16", "G19", "G20", "G21", "G23",
-        "G25", "G26", "G28", "G29", "G31", "G38", "G39", "G40", "G41", "G42",
-        "G43", "G44", "G47", "G48", "G49", "G53", "G61"}
+    # 审计 v2（2026-08-31 v2.1）：原 EXPECTED_BARE_GATES 28 门白名单作废——v2.1 已将
+    # 7 处尾注裸 False 全部补线，断言升级为全库零裸 False（纯裸 + 尾注形态都算）。
+    # 历史 28 门清单存档于 REFACTOR_LOG（G1/G6/G8/G12/G14/G15/G16/G19/G20/G21/G23/
+    # G25/G26/G28/G29/G31/G38/G39/G40/G41/G42/G43/G44/G47/G48/G49/G53/G61）。
 
     @staticmethod
     def _bare_false_checkers() -> dict:
-        """源码扫描：{gate: [行号]} 仍裸 `return False` 的 checker（镜像 grep 语义）。"""
+        """源码扫描：{gate: [行号]} 仍裸 `return False` 的 checker（v2.1 含尾注形态——
+        `return False   # 注释` 曾整体逃避旧 regex `return False\s*$`，即 C14 盲区本体）。"""
         src = Path(gd.__file__).read_text(encoding="utf-8").splitlines()
         cur, out = None, {}
         for i, ln in enumerate(src, 1):
@@ -345,15 +346,14 @@ class TestR5Reasons(unittest.TestCase):
                 out[cur] = []
             elif re.match(r"^(def|class)\s", ln):
                 cur = None
-            if cur and re.search(r"return False\s*$", ln):
+            if cur and re.search(r"return False\s*(?:#.*)?$", ln):
                 out[cur].append(i)
         return {k: v for k, v in out.items() if v}
 
     def test_c14_no_bare_false_left(self):
-        """[RED-缺席] C14 源码级：实测清单 28 门全部补线——零裸 `return False` 残留。"""
+        """[RED-缺席→v2.1 全库执法] C14 源码级：零裸 `return False` 残留（含尾注形态）。"""
         left = self._bare_false_checkers()
-        known = set(left) & self.EXPECTED_BARE_GATES
-        self.assertFalse(known, f"清单内仍有裸 False 未补线：{known}（全量：{left}）")
+        self.assertFalse(left, f"仍有裸 False 未补线（含尾注形态）：{left}")
 
     def test_c14_g47_reason_carries_trigger(self):
         """[RED-缺席] C14 行为级抽样：G47 presence FAIL 须返回原生 reason 含触发真值
@@ -451,6 +451,241 @@ class TestDiagContract(unittest.TestCase):
             if g1:
                 gd.GATE_CHECKERS["G1"] = g1
         self.assertIn("diag_lint", res, "绕过话术未触发 diag_lint 警告")
+
+
+# ---------------------------------------------------------------------------
+# v2.1（2026-08-31）—— 11 站点 reason 真值化：行为级 / 逐臂崩溃面 / [数据层] 契约 /
+# 渲染双形态 + bool 返回运行时防线。零翻转构造保证：verify_gates 只消费 verdict，
+# reason 升级 verdict 天然中性；以下测试锁地板防回退。
+# ---------------------------------------------------------------------------
+_V21_CASES = [
+    # (站点名, checker, snapshot, bad_report, 必含真值tokens, 行定位marker|None, PASS变体)
+    ("G57-high", gd.check_g57,
+     {"consensus_forecast": {"data": {"company_guidance":
+         {"latest_period": {"value": {"growth_tier": "high"}}}}}},
+     "# 报告\n## 模块四 业绩\n公司发布业绩预增公告，上限显著。\n",
+     ["high", "高成长"], None,
+     "# 报告\n## 模块四 业绩\n公司预增属高成长档 [src: snapshot.consensus_forecast."
+     "data.company_guidance.latest_period.value.growth_tier]\n"),
+    ("G57-mod", gd.check_g57,
+     {"consensus_forecast": {"data": {"company_guidance":
+         {"latest_period": {"value": {"growth_tier": "moderate"}}}}}},
+     "# 报告\n## 模块四 业绩\n公司发布业绩预增公告。\n",
+     ["moderate", "中成长"], None,
+     "# 报告\n## 模块四 业绩\n业绩预增属中增长档 [src: snapshot.consensus_forecast."
+     "data.company_guidance.latest_period.value.growth_tier]\n"),
+    ("G21-m5src", gd.check_g21,
+     {"valuation_snapshot": {"data": {"quote": {"peTtm": 15.3, "pbRatio": 2.1}}}},
+     "# 报告\n## 模块五 估值分析\nPE 15 倍估值中等 [src: snapshot.valuation_snapshot.data.quote.peTtm]\n"
+     "## 模块六 结论\n观望\n",
+     ["仅 1", "src"], None,
+     "# 报告\n## 模块五 估值分析\nPE 15 倍 [src: snapshot.valuation_snapshot.data.quote.peTtm]，"
+     "PB 2.1 [src: snapshot.valuation_snapshot.data.quote.pbRatio]\n## 模块六 结论\n观望\n"),
+    ("G32", gd.check_g32, {"lhb": {"data": {"processed": {"status": "failed"}}}},
+     "任意报告文本\n", ["[数据层]", "status=failed"], None, None),
+    ("G33", gd.check_g33, {"northbound": {"data": {"processed": {"status": "failed"}}}},
+     "任意报告文本\n", ["[数据层]", "status=failed"], None, None),
+    ("G53", gd.check_g53,
+     {"s4_technical": {"status": "ok", "data": {"turnover": {"pct_250": 80}}}},
+     "# 报告\n## 模块三 技术分析\n换手率处于自身第60分位，均线多头排列。\n",
+     ["pct_250=80", "60"], "第60分位",
+     "# 报告\n## 模块三 技术分析\n换手率处于自身第80分位，均线多头排列。\n"),
+    ("G61", gd.check_g61, {"s_stock_evaluation": {"data": {"status": "failed"}}},
+     "任意报告文本\n", ["[数据层]", "status=failed"], None, None),
+    ("G51a", gd.check_g51, {"computed_metrics": {}},
+     "# 报告\n## 模块二 财务\nSGR=27.40%，可持续增长空间充足。\n",
+     ["27.40"], "SGR=27.40",
+     "# 报告\n## 模块二 财务\nSGR 未计算（无信封），不展开。\n"),
+    ("G51b", gd.check_g51,
+     {"computed_metrics": {"sgr": {"status": "ok", "applicability": "金融股不适用", "value": None}}},
+     "# 报告\n## 模块二 财务\nSGR 不适用；但历史可持续增长率约 25%。\n",
+     ["25", "金融股不适用"], "可持续增长率约 25%",
+     "# 报告\n## 模块二 财务\nSGR 不适用（金融股）。\n"),
+    ("G52", gd.check_g52, {"s4_technical": {"status": "ok", "data": {}}},
+     "# 报告\n## 模块三 技术分析\n量价配合，ATR 3.2 元，破位风险可控。\n",
+     ["3.2"], "ATR 3.2",
+     "# 报告\n## 模块三 技术分析\n量价配合，ATR 未计算。\n"),
+    ("G58", gd.check_g58, {"valuation_snapshot": {"data": {}}},
+     "# 报告\n## 模块五 估值分析\n当前 PE 处于 75% 分位，同业对比偏贵。\n",
+     ["75"], "75% 分位",
+     "# 报告\n## 模块五 估值分析\n分位数据缺失，不展开分位判断。\n"),
+]
+
+
+def _verdict_and_reasons(fn, report, data):
+    ret = fn(report, data)
+    if isinstance(ret, dict):
+        return bool(ret.get("passed")), " | ".join(ret.get("reasons") or []), ret.get("diag")
+    return bool(ret), "", None
+
+
+class TestV21ArmReasons(unittest.TestCase):
+    """11 站点行为级：FAIL 保持 + 真值 token 直达 + 违规行号 + diag 六键 + PASS 变体不翻转。"""
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+
+    def test_fail_keeps_verdict_carries_truth(self):
+        for name, fn, snap, bad, tokens, marker, _good in _V21_CASES:
+            with self.subTest(site=name):
+                ok, joined, diag = _verdict_and_reasons(fn, bad, snap)
+                self.assertFalse(ok, f"{name} 未 FAIL（verdict 回退）")
+                for t in tokens:
+                    self.assertIn(t, joined, f"{name} reason 缺真值 {t!r}：{joined[:120]}")
+                if marker:
+                    ln = next(i for i, l in enumerate(bad.split("\n"), 1) if marker in l)
+                    self.assertIn(f"L{ln}", joined, f"{name} 未定位违规行 L{ln}")
+                self.assertIsInstance(diag, dict, f"{name} 无 diag")
+                for k in self._DIAG_KEYS:
+                    self.assertIn(k, diag, f"{name} diag 缺 {k}")
+                self.assertFalse(diag.get("degraded"), f"{name} 原生 diag 须 degraded=False")
+
+    def test_pass_variant_stays_pass(self):
+        for name, fn, snap, _bad, _tokens, _marker, good in _V21_CASES:
+            if good is None:  # G32/G33/G61 的 PASS 变体 = 合法快照（status ok/missing）
+                continue
+            with self.subTest(site=name):
+                ok, _, _ = _verdict_and_reasons(fn, good, snap)
+                self.assertTrue(ok, f"{name} PASS 变体翻转")
+
+    def test_data_layer_pass_variants(self):
+        """G32/G33/G61 合法态（ok+真空 / missing）PASS——[数据层] 前缀只出现在失败臂。"""
+        ok, joined, _ = _verdict_and_reasons(
+            gd.check_g32, "x", {"lhb": {"data": {"processed":
+                {"status": "ok", "signal_type": "never_listed"}}}})
+        self.assertTrue(ok)
+        self.assertNotIn("[数据层]", joined)
+        self.assertTrue(gd.check_g61("x", {"s_stock_evaluation": {"data": {"status": "missing"}}}))
+
+
+class TestV21CrashPaths(unittest.TestCase):
+    """定理边界封闭（裁决⑥）：verdict 等价只在双方都跑完时成立——v2.1 新增的真值查找/
+    行号定位是新的崩溃面，逐臂 × {scene 缺, 字段 None, 类型异常} 断言无新崩溃。
+    Battery B 形态：以真实冻结快照 deepcopy 挖键构造缺失态。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = _load(SNAP_511) if SNAP_511.exists() else {}
+
+    def _variants(self, path):
+        """path 如 'consensus_forecast.data.company_guidance' → 三种破坏态快照列表"""
+        import copy
+        out = []
+        # ① scene 缺：整棵键删除
+        v1 = copy.deepcopy(self.base)
+        top = path.split(".")[0]
+        v1.pop(top, None)
+        out.append(("scene缺", v1))
+        # ② 字段 None：沿路径逐层置 None（取最深存在的层）
+        v2 = copy.deepcopy(self.base)
+        cur = v2
+        keys = path.split(".")
+        for k in keys[:-1]:
+            if not isinstance(cur, dict):
+                break
+            cur = cur.get(k) if isinstance(cur.get(k), dict) else None
+            if cur is None:
+                break
+        if isinstance(cur, dict):
+            cur[keys[-1]] = None
+        out.append(("字段None", v2))
+        # ③ 类型异常：裸 error 信封（真实形态——CLAUDE.md 记载 API 坏 JSON 会落 {"error": ...}）。
+        #    注：scene=list 形态不在测试面——违反 runner schema（scene 恒 dict/None），且其对
+        #    `s4.get` 的 AttributeError 是 v2.1 之前就存在的原生前置行崩溃，非本批新增崩溃面。
+        v3 = copy.deepcopy(self.base)
+        v3[top] = {"error": "Expecting value: line 1 column 1 (char 0)"}
+        out.append(("类型异常", v3))
+        return out
+
+    def test_all_arms_survive_missing_paths(self):
+        ARM_PATHS = [
+            ("G57", gd.check_g57, "consensus_forecast.data.company_guidance"),
+            ("G21", gd.check_g21, "valuation_snapshot.data"),
+            ("G32", gd.check_g32, "lhb.data.processed"),
+            ("G33", gd.check_g33, "northbound.data.processed"),
+            ("G51", gd.check_g51, "computed_metrics.sgr"),
+            ("G52", gd.check_g52, "s4_technical.data.atr"),
+            ("G53", gd.check_g53, "s4_technical.data.turnover"),
+            ("G58", gd.check_g58, "valuation_snapshot.data.valuation_percentile"),
+            ("G61", gd.check_g61, "s_stock_evaluation.data"),
+        ]
+        rep = ("# 报告\n## 模块三 技术分析\n换手率处于第60分位，均线多头；ATR 3.2 元。\n"
+               "## 模块五 估值分析\nPE 处于 75% 分位 [src: snapshot.valuation_snapshot.data.quote.peTtm]\n"
+               "SGR=27.40% 可持续增长；业绩预增公告高成长。\n")
+        for gname, fn, path in ARM_PATHS:
+            for mode, snap in self._variants(path):
+                with self.subTest(gate=gname, mode=mode):
+                    ret = fn(rep, snap)   # 唯一断言：不抛异常（返回形状合法）
+                    self.assertIsInstance(ret, (bool, dict))
+
+
+class TestV21DataLayerContract(unittest.TestCase):
+    """[数据层] 机器可检契约（裁决②B）：A=fix 禁改稿动词；B=degraded:True ⇔ 无 found。"""
+
+    _EDIT_VERBS = re.compile(r"照抄|改写|删除|删或改|补写")
+
+    def test_data_layer_fix_has_no_edit_verbs(self):
+        for name, fn, snap, bad, _t, _m, _g in _V21_CASES:
+            ok, joined, diag = _verdict_and_reasons(fn, bad, snap)
+            if not ok and "[数据层]" in joined:
+                with self.subTest(site=name):
+                    self.assertIsInstance(diag, dict)
+                    self.assertIsNone(
+                        self._EDIT_VERBS.search(diag.get("fix") or ""),
+                        f"{name} [数据层] fix 含改稿动词：{diag.get('fix')}")
+                    self.assertFalse(diag.get("degraded"), "[数据层] 原生 diag 须 degraded=False")
+
+    def test_degraded_iff_no_found_on_real_failures(self):
+        """规则 B 全库一致性：真实验证跑一遍，FAIL 项 degraded=True ⟺ found 空。"""
+        if not SNAP_511.exists():
+            self.skipTest("语料缺席")
+        report = ("## 三、技术分析\nADX 环境；换手量能；MACD 趋势。\n仓位 30%。VWAP：字段为空。\n"
+                  "## 六、综合研判\n[src: snapshot.s9_news]\n[src: snapshot.signals.events.0]\n")
+        res = verify_gates(report, _load(SNAP_511), "profile_full")
+        checked = 0
+        for d in res["details"]:
+            if d["status"] != "fail" or not isinstance(d.get("diag"), dict):
+                continue
+            diag = d["diag"]
+            has_found = diag.get("found") not in (None, [], "", {})
+            self.assertEqual(bool(diag.get("degraded")), not has_found,
+                             f"{d['gate']}：degraded={diag.get('degraded')} 与 found={diag.get('found')!r} 不自洽")
+            checked += 1
+        self.assertGreater(checked, 0, "fixture 须至少 1 个 FAIL 项参与一致性检查")
+
+
+class TestV21DualFormRenderAndBoolWarn(unittest.TestCase):
+    """渲染层双形态兼容（裁决④b）：diag 六键门与 fail_hint 兜底门过渡期共存不炸；
+    bool 返回运行时 warn（裁决①）机制在位。"""
+
+    @classmethod
+    def setUpClass(cls):
+        if not SNAP_511.exists():
+            raise unittest.SkipTest("语料缺席：301511_20260831.json")
+        cls.data = _load(SNAP_511)
+        cls.report = ("## 三、技术分析\nADX 环境；换手量能；MACD 趋势。\n仓位 30%。VWAP：字段为空。\n"
+                      "## 六、综合研判\n[src: snapshot.s9_news]\n[src: snapshot.signals.events.0]\n")
+
+    def test_dual_form_coexist(self):
+        res = verify_gates(self.report, self.data, "profile_full")
+        fails = [d for d in res["details"] if d["status"] == "fail"]
+        native = [d for d in fails if isinstance(d.get("diag"), dict)
+                  and not d["diag"].get("degraded")]
+        fallback = [d for d in fails if isinstance(d.get("diag"), dict)
+                    and d["diag"].get("degraded")]
+        self.assertTrue(native, "须存在原生 diag 形态 FAIL（G21/G55 等带真值门）")
+        self.assertTrue(fallback, "须存在 fail_hint 兜底形态 FAIL（bool 门，过渡期合同）")
+        for d in native + fallback:   # 两形态都完整渲染：reasons + diag 键在场
+            self.assertIn("reasons", d)
+            self.assertIsInstance(d["diag"], dict)
+        self.assertIn("action_required", res)   # 渲染出口不炸
+
+    def test_bool_return_warn_fires(self):
+        """bool 返回门存在时 warn 上浮 sidecar（升级硬断言的条件=一轮 cron 零命中）。"""
+        res = verify_gates(self.report, self.data, "profile_full")
+        self.assertIn("bool_return_warn", res,
+                      "M 级 bool-expression 门在场时须有 warn；若为空说明已全量 GateResult 化，"
+                      "可将 verify_gates warn 升硬断言")
+        self.assertIsInstance(res["bool_return_warn"], list)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
 #   match:   该 gate FAIL reasons 拼接串的正则（缺省=gate 级兜底）
 #   count:   基线计数（= 冻结日线上语料实测量；--strict 仅拦 cur>count 的新增，P12）
 #   status:  landed=引擎已修复（复发=回归）｜pending=写作纪律约束（复发=正常计数增长，人工复盘）
+#   root_cause: engine=引擎根因（engine_pending 指标=engine 且未 landed 计数，run_regression 尾部可见）
 #   blocked(P3): true 时 generate_checklist exit 2 硬阻断（运营态开关，修复后置回 false）
 entries:
   - signature: G63#percentile:percentile_as_price
@@ -111,3 +112,105 @@ entries:
     status: pending
     blocked: false
     fix: "（德福实锤）⑫治理行须含「增发」「担保」词本身——「定增」不含「增发」子串，担保数额照抄 timeline"
+  # ---- 诊断契约 v2.1 批1（2026-08-31，plan wiggly-moseying-spring）：11 站点 reason 真值化 9 签名 ----
+  # 旧形态=裸 False 尾注 reason 丢失（7 处）/静态编造 reason 无真值行号（4 处）；新 reason=真值+行号+照抄修法+diag 六键。
+  # 删记忆实验：新 11/11 vs 旧 4/11 一轮改对（对照组 3 处产出假陈述——见 REFACTOR_LOG S5）。
+  - signature: G21#m5_src_count:bare_false_reason_loss
+    gate: G21
+    subcheck: m5_src_count
+    reason_class: bare_false_reason_loss
+    match: "橡皮章估值"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "m5 verified [src:]<2 臂已 GateResult 化：reason 带现有锚点清单+补锚示例——照抄补锚；复发=reason 文本回退泛句"
+  - signature: G32#data_layer:bare_false_reason_loss
+    gate: G32
+    subcheck: data_layer
+    reason_class: bare_false_reason_loss
+    match: "\\[数据层\\]"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "拉取失败臂带 [数据层] 前缀+status 真值：不改报告，重跑 s_lhb 拉取或上报数据源异常"
+  - signature: G33#data_layer:bare_false_reason_loss
+    gate: G33
+    subcheck: data_layer
+    reason_class: bare_false_reason_loss
+    match: "\\[数据层\\]"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "同 G32：[数据层] 前缀=数据层问题，重跑 northbound 拉取或上报，报告侧不动"
+  - signature: G53#turnover_pct:bare_false_reason_loss
+    gate: G53
+    subcheck: turnover_pct
+    reason_class: bare_false_reason_loss
+    match: "换手分位数捏造"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "reason 带「报告第X分位 vs snapshot pct_250=Y（偏离N>5）+违规行号」——照抄 snapshot 改写（tol ±5 分位）"
+  - signature: G57#growth_tier:bare_false_reason_loss
+    gate: G57
+    subcheck: growth_tier
+    reason_class: bare_false_reason_loss
+    match: "growth_tier"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "两臂（high/moderate）reason 带档位语义+照抄补写句+src 路径——m4 §4.1.1 直接补成长强度句"
+  - signature: G61#data_layer:bare_false_reason_loss
+    gate: G61
+    subcheck: data_layer
+    reason_class: bare_false_reason_loss
+    match: "\\[数据层\\]"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "同 G32：[数据层] 前缀=重跑 s_stock_evaluation 拉取或上报，报告侧不动"
+  - signature: G51#sgr:static_reason_no_truth
+    gate: G51
+    subcheck: sgr
+    reason_class: static_reason_no_truth
+    match: "SGR 无中生有|SGR 不适用却报"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "两臂 reason 带 snapshot 判定真值+违规行 L{n}:『原句』——删数值改「未计算/不适用」，或补拉信封后照抄"
+  - signature: G52#atr:static_reason_no_truth
+    gate: G52
+    subcheck: atr
+    reason_class: static_reason_no_truth
+    match: "ATR 无中生有"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "reason 带报告 ATR 值+违规行号——删数值改「ATR 未计算」或补拉 atr14 后照抄（单位元）"
+  - signature: G58#valuation_pct:static_reason_no_truth
+    gate: G58
+    subcheck: valuation_pct
+    reason_class: static_reason_no_truth
+    match: "估值分位无中生有"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "reason 带违规行号——删具体分位数改「分位数据缺失」，或补拉后按 pct_5y×100 口径照抄"

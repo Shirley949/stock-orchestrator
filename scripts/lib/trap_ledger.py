@@ -31,3 +31,9 @@ def load_ledger(path=None) -> list:
 def blocked_gates(path=None) -> list:
     """blocked(P3)=true 的条目（generate_checklist 硬阻断依据）。"""
     return [e for e in load_ledger(path) if e.get("blocked")]
+
+
+def engine_pending(path=None) -> list:
+    """root_cause=engine 且 status≠landed 的条目（晋级欠账指标：引擎欠修存量，每轮回归可见）。"""
+    return [e for e in load_ledger(path)
+            if e.get("root_cause") == "engine" and e.get("status") != "landed"]

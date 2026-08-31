@@ -1,3 +1,24 @@
+## 2026-08-31 诊断契约 v2.1：11 站点 reason 真值化（批1）+ 双防线 + 删记忆实验 + 两指标 + 契约路线图（plan wiggly-moseying-spring）
+
+触发：圣邦实测 G57 裸 False 臂只回 registry 泛句，LLM 被迫重查快照多花一轮。定理锚定：verify_gates.py 只消费 verdict ⇒ `return False` ≡ `GateResult(passed=False, reasons=[...])`——reason 升级 verdict 天然中性（418 次真实调用差分零翻转）。批1 = 11 站点（7 裸 False 尾注 + 4 静态编造 reason）原位真值化；批2（5 引擎根因）独立立项勿合并。
+
+- **S1 引擎 11 臂升级**（`gate_definitions.py`）：统一模板=病名(含快照真值) + 违规行 `L{n}:『原句』`（`locate_lines` sec 切片→全文行号回映 + `_fmt_violation_lines`，全量清单截前3）+ 可照抄修法（含示例句 + `[src:]` 路径）+ diag 六键 `{subcheck,expected,found,fix,src,degraded:False}`。G32/G33/G61 拉取失败臂带 **`[数据层]` 前缀**（fix 禁改稿动词，只指重跑拉取/上报）；G52 捕获组带出 ATR 报告值；G53 偏离分位算术；G57 两臂带 growth_tier 档位语义（high=INCREASE_JZ>50%）；`_sgr_claim_lines` 收敛 SGR 数值行定位单一实现。C14 审计盲区实证封堵：`return False\s*(?:#.*)?$` 收紧后全库裸 False=0（早前 G1/G14/G16/G49/G71 "发现"为扫描器缺 `^(def|class)` 重置的伪发现）。
+- **S2 双防线**：`verify_gates.py` 运行时 warn——checker 返回裸 bool 且 `not ok`（FAIL 侧才计，PASS 返回 bool 无害）→ warn + 降级 fail_hint + `base_result["bool_return_warn"]`；注释留升级条件（一轮 cron 零命中后升硬断言）。归档 44 对重放实测仅 G7/G8/G9 三处真实 bool-FAIL（=lossy 面真实存量）。
+- **S3 测试四族**（`test_diag_contract.py` 36 用例+49 subtests）：审计 v2 全库零裸 False；11 臂行为级（FAIL verdict 保持 + 真值 token + 行号 + PASS 变体不翻转）；逐臂崩溃面 ×11（scene缺/字段None/`{"error":...}` 类型异常信封，deepcopy 挖键构造）；`[数据层]` 契约 lint（fix 禁 照抄/改写/删除/删或改/补写 + degraded⇔found 一致性）；双形态渲染（原生 diag ⚙️ 行与 fail_hint 兜底过渡期共存）。SKILL.md 约束5 加一行：reason 带 `[数据层]` → 不改报告，重跑拉取或上报。
+- **S4 全量验证闸**：run_regression.sh exit 0（62 门漏报=0）；test_archive_replay 44 对 EXPECTED_FLIPS 恒空（批1 verdict 中性证明——批2 禁复用恒空模板）；研究脚本重跑全绿（真值携带 4/11→11/11、行号 0/5→5/5、PASS 性能比 0.96–1.04）。
+- **S5 删记忆实验（诊断税量化）**：fresh 无上下文 subagent（不给快照/不给 memory/不浏览）仅收 `{FAIL reason 原文 + 报告片段}` 产修正行，11 站点逐点评分（值对/行对/语义对/数据层不改稿）。**新 reason 11/11 vs 旧泛句 4/11**（4 个全中=旧静态句本就带修法的 G51×2/G52/G58 站点）。对照组 7 失手里 **3 处产出假陈述**（G57-mod 把「业绩预增公告」删成「数据未获取」、G53 把有数据的 pct_250=80 写成「数据缺失」、G21 诊断方向即错）+1 处会给 failed 场景编造结论补 src 锚背书（G61）——诊断税不止轮数，还有纠错成本（假陈述入稿再返工）。
+- **S6 两指标埋点（裁决⑤）**：①诊断税 `token_audit.py` 新增 `gate_fix_rounds`/`gate_converged`（首次全过前 FAIL verify 次数；0=一次全过；未收敛仍计并标记）——md 报告行+stdout+history 三处落；真会话 smoke 实测「gate修复轮 1·未收敛」正确。②晋级欠账 `trap_ledger.engine_pending()`（root_cause=engine 且 status≠landed）——trap_ledger_scan 恒打首行 + run_regression.sh 尾部 echo 同源（两极验证：engine+pending 计入 / landed 不计 / 无 root_cause 不计）。
+- **S7 61→62 门契约覆盖度路线图（AST 基线 2026-08-31，gate-own return 口径，嵌套 helper 剔除）**：
+  - **lossy bool 22 门**（FAIL 可达裸 bool/表达式 return，reason 丢失面）：G1 G6 G7 G8 G9 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 G28 G31 G34 G35 G36 G37（G30 剔除——`_g30_run` 返 dict 非 lossy）。
+  - **GateResult 无 diag 115 臂/45 门**（高频先：G65×10 G61×6 G51×6 G15×5 G16×5 G40×4 G23×4 G53×4 G66×4 G68×4）。
+  - **return True PASS 短路 108 处**（无害）；dict 形合法 2 处（G32/G33 历史 PASS reason）。
+  - **WP1 lossy→GateResult**（复用 S1 模板，优先序=真实 FAIL 面：G28 语料 10 实 FAIL → G7/G8/G9 归档重放实测 bool-FAIL → report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37（reason=缺哪词+补写句）→ G1/G14 legacy → G6/G15/G16/G21/G34/G35/G36 带真值）；**WP2 diag 补齐**（fail_hint 六键合成兜底已由 E9 框架覆盖，此项=原生 diag 质量升级）；**WP3 return True→GateResult(passed=True) 机械批**。
+  - **完成判据（机器把守）**：①审计升 AST 级断言 lossy=0 ②S2 warn 升硬断言 ③GateResult 无 diag 臂=0 ④bool 返回=0 且 diag 六键=全门。WP1 各批 reason 升级仍 verdict 中性（archive replay 对拍面=verdict/reasons 门集合，不含 reason 文本），EXPECTED_FLIPS 对账纪律与批2 同。
+- **S8 收尾**：trap_ledger 增 9 签名（11 站点归并——G51 双臂/G57 双臂各一；root_cause=engine，count=0 基线，status=landed，ledger 19 条签名唯一）；memory 族更新（g21/g63 族+misc 按新 reason 语义）；`engine_pending` 指标即批2 五条立项后的可见欠账（root_cause=engine+pending）。
+
+验证：run_regression.sh exit 0（62 门漏报=0 + engine_pending 指标行）；test_diag_contract 36+49 subtests；test_archive_replay 44 对零翻转；test_token_audit 7 OK；engine_pending/gate_fix_rounds 两极+真会话 smoke。
+
+
 ## 2026-08-31 诊断契约 v2：全 gate 自包含失败诊断 + G62 表头签名/G63 分位剥离/G30#5 否定窗/G21 路径指引 + TRAP_LEDGER（plan b-snapshot-5-eager-tome）
 
 触发：金安 002636 / 德福 301511 两轮暴露「gate FAIL 后排障靠读 178K 源码 + hint 覆盖不足 + 教训散落 memory」。四层：引擎修复（E1-E8）/ 诊断管线（E9）/ 补线（E7）/ 台账（E10-E11）。全程 **43 对归档(报告,快照) verdict 回放零翻转**锚定（test_archive_replay.py + fixtures/archive_replay_baseline.json，函数直调禁 CLI 防 sidecar 污染）。

@@ -247,6 +247,8 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    **FAIL 修法直接看 verify 输出**：action_required 自带 `💡 Gxx 修法` hint（GATE_HINTS，高频 gate
    败因+修法速查）。hint 不足再 Read `stock-analysis-quality/references/modules/m11-gates.md` 对应节；
    **禁止 Read `gate_definitions.py`**（178K 源码，历史上单次全读 ≈ 全部模块文件之和）。
+   **reason 带 `[数据层]` 前缀 → 不改报告**：该 FAIL 是数据拉取层问题（改稿无效），动作=重跑对应
+   scene 拉取或上报数据源异常，报告侧等数据修复后重验（G32/G33/G61 拉取失败臂均此语义）。
 4. 在报告 m11 区放指针行（**禁止手填分数**）：verify 全过时 stdout 末尾直接打印可复制的 📌 指针行——
    从 verify 输出原样复制（勿为格式提前读 m11-gates.md），**粘贴后重跑一次 verify 刷新 sidecar**（mtime 新鲜度）：
    ```

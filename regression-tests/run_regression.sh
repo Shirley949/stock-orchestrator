@@ -124,4 +124,15 @@ else
 fi
 
 echo
+echo "[指标] 晋级欠账 engine_pending（root_cause=engine 且未 landed，trap_ledger 同源）"
+python3 - "$SCRIPTS/lib/trap_ledger.py" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+from trap_ledger import engine_pending
+pending = engine_pending()
+print(f"  engine_pending: {len(pending)} 条"
+      + ("——" + "、".join(e["signature"] for e in pending) if pending else "（0 即引擎欠账清零）"))
+PY
+
+echo
 echo "==================== ✅ 回归全绿 ===================="

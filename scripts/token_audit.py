@@ -474,11 +474,22 @@ def main():
     p4_start = phase_start.get("P4gate")
     p4_dump_chars = sum(h["chars"] for h in handwrite_hits
                         if p4_start is not None and h["turn"] >= p4_start)
+    # 诊断税（裁决⑤ 2026-08-31）：gate_fix_rounds = 首次全过前 FAIL verify 次数
+    # （0=一次全过；-1=会话无 verify 或至终未全过——未收敛时仍计 FAIL 轮数，gate_converged=False）
+    gate_fix_rounds, gate_converged = 0, False
+    if vg_result_texts:
+        fails_seq = [int(m.group(1)) if (m := re.search(r"失败: (\d+)", t)) else -1
+                     for t in vg_result_texts]
+        first_pass = next((i for i, f in enumerate(fails_seq) if f == 0), None)
+        gate_converged = first_pass is not None
+        seq = fails_seq[:first_pass] if gate_converged else fails_seq
+        gate_fix_rounds = sum(1 for f in seq if f > 0)
     stock = args.stock or detected_code or "?"
     hist_path = os.path.expanduser("~/.cache/token_audit_history.jsonl")
     hist_entry = dict(date=datetime.now().strftime("%Y-%m-%d %H:%M"), stock=stock,
                       cli=cli_chars, handwrite=hw_chars, total=total_pull,
                       coverage=round(view_cov_pct, 1), gate_fails=gate_fails,
+                      gate_fix_rounds=gate_fix_rounds, gate_converged=gate_converged,
                       p4_dump_chars=p4_dump_chars, session=os.path.basename(path),
                       hw_extract=len(hw_extract), hw_gate=len(hw_gate),
                       hw_fetch=len(hw_fetch))
@@ -533,6 +544,7 @@ def main():
              f"（定位浪费用，非计费单位）")
     L.append(f"- **总取数 = CLI {cli_chars:,} + 手写 {hw_chars:,} = {total_pull:,} chars**"
              f"（覆盖率 {view_cov_pct:.1f}%｜末次 gate FAIL {gate_fails if gate_fails >= 0 else '—'}"
+             f"｜gate修复轮 {gate_fix_rounds}{'·已全过' if gate_converged else '·未收敛' if vg_result_texts else '·无verify'}"
              f"｜P4 dump {p4_dump_chars:,}c｜外科豁免 {len(hw_exempt)} 处）")
     if recent:
         L.append("- 环比（最近 3 次）：" + "；".join(
@@ -656,7 +668,9 @@ def main():
             + (f"@+{s['gap']}" if s["gap"] >= 0 else "") + f"(段内手写{s['hw_n']})"
             for i, s in enumerate(compact_segs, 1)))
     print(f"   总取数 {total_pull:,} = CLI {cli_chars:,} + 手写 {hw_chars:,}"
-          f"｜gate FAIL {gate_fails if gate_fails >= 0 else '—'}｜P4 dump {p4_dump_chars:,}c")
+          f"｜gate FAIL {gate_fails if gate_fails >= 0 else '—'}"
+          f"｜gate修复轮 {gate_fix_rounds}{'·已全过' if gate_converged else '·未收敛' if vg_result_texts else '·无verify'}"
+          f"｜P4 dump {p4_dump_chars:,}c")
 
 
 if __name__ == "__main__":

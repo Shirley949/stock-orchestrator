@@ -977,7 +977,17 @@ def check_g21(report: str, data: dict) -> bool:
         _m5_verified = re.findall(r'\[src:\s*snapshot\.[^\]]+\]', _m5sec) + \
                        re.findall(r'\[src:\s*(?:s\d+_\w+|valuation_\w+|consensus_forecast|computed_metrics|s36_\w+|s55_\w+|web_research_findings)\.[^\]]+\]', _m5sec)
         if len(_m5_verified) < 2:
-            return False   # m5 段 verified src 不足 2 个（橡皮章估值，无数据锚点）
+            # 裸 False 尾注 → GateResult（v2.1：真值+修法直达；verdict 层等价，见 verify_gates:186-190）
+            _existing = re.findall(r'\[src:[^\]]+\]', _m5sec)[:3]
+            _fix = ("模块五段内补 ≥2 个 verified 锚点，形如 "
+                    "[src: snapshot.valuation_snapshot.data.quote.peTtm]"
+                    "（websearch 锚不计入；m5 每个估值断言都须数据锚）")
+            return GateResult(passed=False, reasons=[
+                f"m5 估值段 verified [src:] 仅 {len(_m5_verified)} 个（<2，橡皮章估值无数据锚点）——{_fix}"
+                + (f"；段内现有锚点：{'；'.join(_existing)}" if _existing else "；段内现无任何 [src:]")],
+                diag={"subcheck": "m5_src_count", "expected": "≥2",
+                      "found": f"{len(_m5_verified)}", "fix": _fix,
+                      "src": "report 模块五 vs [src:] 白名单", "degraded": False})
 
     return True
 
@@ -1850,7 +1860,15 @@ def check_g32(report: str, data: dict) -> bool:
     """
     p = _snapshot_get(data, "lhb.data.processed")
     if not isinstance(p, dict) or p.get("status") != "ok":
-        return False  # 拉取失败（processed 缺失 / status≠ok）
+        # [数据层] FAIL：修法=重跑拉取或上报，改报告无效（SKILL.md 约束 5）
+        _st = p.get("status") if isinstance(p, dict) else "（processed 整体缺失=非 dict）"
+        return GateResult(passed=False, reasons=[
+            f"[数据层] 龙虎榜 processed 拉取失败（status={_st}）——"
+            "重跑 s_lhb 拉取修数据层或上报数据源异常；本门仅校数据层完整性，报告侧不动"],
+            diag={"subcheck": "processed_status", "expected": "status=ok（真空也须 ok）",
+                  "found": f"status={_st}",
+                  "fix": "重跑 s_lhb 拉取或上报数据源异常",
+                  "src": "snapshot.lhb.data.processed.status", "degraded": False})
     lp = p.get("latest_period")
     if not isinstance(lp, dict) or lp.get("sort_key") is None:
         return True  # 真空（never_listed，90天未上榜）PASS
@@ -1873,7 +1891,15 @@ def check_g33(report: str, data: dict) -> bool:
     """
     p = _snapshot_get(data, "northbound.data.processed")
     if not isinstance(p, dict) or p.get("status") != "ok":
-        return False  # 拉取失败
+        # [数据层] FAIL：修法=重跑拉取或上报，改报告无效（SKILL.md 约束 5）
+        _st = p.get("status") if isinstance(p, dict) else "（processed 整体缺失=非 dict）"
+        return GateResult(passed=False, reasons=[
+            f"[数据层] 北向资金 processed 拉取失败（status={_st}）——"
+            "重跑 northbound 拉取修数据层或上报数据源异常；本门仅校数据层完整性，报告侧不动"],
+            diag={"subcheck": "processed_status", "expected": "status=ok（真空也须 ok）",
+                  "found": f"status={_st}",
+                  "fix": "重跑 northbound 拉取或上报数据源异常",
+                  "src": "snapshot.northbound.data.processed.status", "degraded": False})
     lp = p.get("latest_period")
     if not isinstance(lp, dict) or lp.get("sort_key") is None:
         return True  # 真空（no_northbound_data）PASS
@@ -2321,14 +2347,17 @@ def check_g49(report: str, data: dict) -> bool:
 
 
 
-def _sgr_numeric_claim(report):
-    """报告是否给出了具体 SGR 数值（反捏造用）。
+def _sgr_claim_lines(report):
+    """报告报了 SGR 数值的行 [(line_no, text)]（反捏造定位用，单一实现）。
     含「SGR / 可持续增长」的行若同时带「数字%」即视为报值（覆盖「SGR=27.40%」「SGR 可持续增长率 30%」
     等多种写法）；纯公式行（SGR = ROE×b/(1−ROE×b)，无百分数）不算。"""
-    for ln in report.split('\n'):
-        if ('SGR' in ln or '可持续增长' in ln) and re.search(r'\d[\d.]*\s*%', ln):
-            return True
-    return False
+    return [(i, ln.strip()) for i, ln in enumerate(report.split('\n'), 1)
+            if ('SGR' in ln or '可持续增长' in ln) and re.search(r'\d[\d.]*\s*%', ln)]
+
+
+def _sgr_numeric_claim(report):
+    """报告是否给出了具体 SGR 数值（反捏造用，语义= _sgr_claim_lines 非空）。"""
+    return bool(_sgr_claim_lines(report))
 
 
 def check_g51(report: str, data: dict) -> bool:
@@ -2342,9 +2371,16 @@ def check_g51(report: str, data: dict) -> bool:
     # ① 未拉到：禁编造（无数据却报 SGR 数值 → FAIL）
     if not isinstance(sgr, dict):
         if _sgr_numeric_claim(report):
+            _hits = _sgr_claim_lines(report)
+            _fix = "删数值改「SGR 未计算/不适用」（无信封禁报值），或先补拉 computed_metrics.sgr"
             return GateResult(passed=False, reasons=[
-                "computed_metrics.sgr 信封缺失，报告却报 SGR 数值（无中生有）——"
-                "无 sgr 数据时禁编 SGR 值，只能写「不适用/未计算」"])
+                f"SGR 无中生有：computed_metrics.sgr 信封缺失，报告却报 SGR 数值——"
+                f"违规行（共{len(_hits)}处）：{_fmt_violation_lines(_hits)}；{_fix}"],
+                diag={"subcheck": "sgr_fabrication",
+                      "expected": "无 sgr 信封 → 只能写「不适用/未计算」",
+                      "found": [{"line": i, "text": t[:60]} for i, t in _hits],
+                      "fix": _fix, "src": "snapshot.computed_metrics.sgr（缺失）",
+                      "degraded": False})
         return True
     status = sgr.get("status")
     applic = str(sgr.get("applicability") or "")
@@ -2373,8 +2409,16 @@ def check_g51(report: str, data: dict) -> bool:
             return GateResult(passed=False, reasons=[
                 f"snapshot 判定 SGR 不适用（{applic}），报告未写「不适用」——须如实标注"])
         if _sgr_numeric_claim(report):
+            _hits = _sgr_claim_lines(report)
+            _fix = f"删 SGR 数值（snapshot 判定不适用：{applic}），保留「不适用」表述即可"
             return GateResult(passed=False, reasons=[
-                "SGR 不适用却报了数值——禁对不适用标的编 SGR 值"])
+                f"SGR 不适用却报了数值（snapshot 判定：{applic}）——"
+                f"违规行（共{len(_hits)}处）：{_fmt_violation_lines(_hits)}；{_fix}"],
+                diag={"subcheck": "sgr_inapplicable_fabrication",
+                      "expected": "不适用 → 禁数值",
+                      "found": [{"line": i, "text": t[:60]} for i, t in _hits],
+                      "fix": _fix, "src": "snapshot.computed_metrics.sgr.applicability",
+                      "degraded": False})
     # payout 缺失 assumed → 须 ⚠️/「上限」诚实脚注（防误导）
     if sgr.get("payout_source") == "assumed_no_dividend":
         if "⚠" not in report and "上限" not in report:
@@ -2400,6 +2444,24 @@ def _m3_section(report: str) -> str:
     return "" if diag == "no_anchor" else sec
 
 
+def locate_lines(report: str, sec: str, pred) -> list:
+    """sec 切片内满足 pred 的行 → 回映全文行号 [(line_no, text)]（reason 违规行定位用）。
+    sec 是 report 的切片，无行号偏移信息——按行文本回映（去重保序）。"""
+    want = [ln.strip() for ln in sec.split("\n") if ln.strip() and pred(ln)]
+    out, seen = [], set()
+    for i, ln in enumerate(report.split("\n"), 1):
+        t = ln.strip()
+        if t in want and i not in seen:
+            out.append((i, t))
+            seen.add(i)
+    return out
+
+
+def _fmt_violation_lines(hits, width=46) -> str:
+    """违规行清单渲染：『L12:原句前46字』（≤3 行，前缀全量计数由调用方带）"""
+    return "；".join(f"L{i}:『{t[:width]}…』" for i, t in hits[:3]) or "（未定位到行）"
+
+
 def check_g52(report: str, data: dict) -> bool:
     """G52: m3 ATR 波动/破位全链路（fetch+save+read+golden）。SOFT(weight2)。
     snapshot 路径 s4_technical.data.atr（runner _compute_atr 派生，flat-dict：atr14/atr_pct/
@@ -2412,10 +2474,18 @@ def check_g52(report: str, data: dict) -> bool:
     atr = _snapshot_get(data, "s4_technical.data.atr")
     sec = _m3_section(report)
     if not isinstance(atr, dict):
-        if sec and re.search(r'ATR\s*(?:=|为|约|：)?\s*[\d.]+\s*元?', sec):
+        _m = re.search(r'ATR\s*(?:=|为|约|：)?\s*([\d.]+)\s*元?', sec) if sec else None
+        if _m:
+            _hits = locate_lines(report, sec, lambda ln: "ATR" in ln and _m.group(1) in ln)
+            _fix = "删 ATR 数值改「ATR 未计算」，或补拉 s4_technical.data.atr 后照抄 atr14（单位元）"
             return GateResult(passed=False, reasons=[
-                "s4_technical.data.atr 信封缺失，m3 却报了 ATR 值（无中生有）——"
-                "无 atr 数据时禁编 ATR 数值"])
+                f"ATR 无中生有：s4_technical.data.atr 信封缺失，m3 却报 ATR={_m.group(1)} 元——"
+                f"{_fmt_violation_lines(_hits)}；{_fix}"],
+                diag={"subcheck": "atr_fabrication",
+                      "expected": "无 atr 信封 → 禁报 ATR 数值",
+                      "found": f"报告 ATR={_m.group(1)} @ {_fmt_violation_lines(_hits)}",
+                      "fix": _fix, "src": "snapshot.s4_technical.data.atr（缺失）",
+                      "degraded": False})
         return True
     atr14 = atr.get("atr14")
     if atr14 is None:
@@ -2484,7 +2554,18 @@ def check_g53(report: str, data: dict) -> bool:
     # 反捏造：报告分位数须 == snapshot（提取首个"NN分位"/"第NN百分位"）
     mm = re.search(r'(?:第?\s*)(\d{1,3})\s*(?:分位|百分位)', sec)
     if mm and abs(int(mm.group(1)) - pct) > 5:
-        return False   # 分位数捏造
+        _claim = int(mm.group(1))
+        _hits = locate_lines(report, sec,
+                             lambda ln: re.search(rf'第?\s*{_claim}\s*(?:分位|百分位)', ln))
+        _fix = (f"照抄 snapshot：改写「换手率处于自身250日第{pct:g}分位 "
+                "[src: snapshot.s4_technical.data.turnover.pct_250]」（tol ±5 分位）")
+        return GateResult(passed=False, reasons=[
+            f"m3 换手分位数捏造：报告写「第{_claim}分位」 vs snapshot pct_250={pct:g}"
+            f"（偏离 {abs(_claim - int(pct))} 分位 >5）——{_fmt_violation_lines(_hits)}；{_fix}"],
+            diag={"subcheck": "turnover_pct_match", "expected": f"== pct_250={pct:g}（tol 5）",
+                  "found": f"报告 第{_claim}分位 @ {_fmt_violation_lines(_hits)}",
+                  "fix": _fix, "src": "snapshot.s4_technical.data.turnover.pct_250",
+                  "degraded": False})
     # 自身分位法 enforcement：结论词须与分位一致（防绝对值误判）。
     # 量价维词(放量/缩量)已移出本维执法——归上方 volume_price 同维反捏造（维度错配修复）。
     if re.search(r'(高换手|换手偏高|成交活跃)', sec) and pct < 70:
@@ -2673,14 +2754,31 @@ def check_g57(report: str, data: dict) -> bool:
     解析保守：成长强度词 = 高成长|高增长|高速增(high) / 中成长|中增长(moderate)；反编造须与
     业绩语境（预增/业绩预告/业绩上修/上修）同行，避免行业「高成长」误伤。
     """
-    gt = _snapshot_get(data, "consensus_forecast.data.company_guidance.latest_period.value.growth_tier")
+    _G57_TIER = "consensus_forecast.data.company_guidance.latest_period.value.growth_tier"
+    gt = _snapshot_get(data, _G57_TIER)
     _HIGH = re.compile(r"高成长|高增长|高速增")
     _MOD = re.compile(r"中成长|中增长")
     if gt in ("high", "moderate"):
         if gt == "high" and not _HIGH.search(report):
-            return False   # 漏报：数据 high 报告无高成长词
+            _fix = ("m4 §4.1.1 业绩线索处补写，如「业绩预增属高成长档（growth_tier=high，"
+                    "INCREASE_JZ>50%）[src: snapshot." + _G57_TIER + "]」")
+            return GateResult(passed=False, reasons=[
+                f"漏报成长强度：snapshot growth_tier=high（预增 INCREASE_JZ>50% 档）但报告全文 "
+                f"0 处「高成长/高增长/高速增」——{_fix}"],
+                diag={"subcheck": "growth_tier_surface_high",
+                      "expected": "含 高成长|高增长|高速增 之一（high 档）",
+                      "found": "报告 0 处", "fix": _fix,
+                      "src": f"snapshot.{_G57_TIER}=high", "degraded": False})
         if gt == "moderate" and not _MOD.search(report):
-            return False   # 漏报：数据 moderate 报告无中成长词
+            _fix = ("m4 §4.1.1 业绩线索处补写，如「业绩预增属中成长档（growth_tier=moderate，"
+                    "INCREASE_JZ 20-50%）[src: snapshot." + _G57_TIER + "]」")
+            return GateResult(passed=False, reasons=[
+                f"漏报成长强度：snapshot growth_tier=moderate（预增 INCREASE_JZ 20-50% 档）但报告全文 "
+                f"0 处「中成长/中增长」——{_fix}"],
+                diag={"subcheck": "growth_tier_surface_moderate",
+                      "expected": "含 中成长|中增长 之一（moderate 档）",
+                      "found": "报告 0 处", "fix": _fix,
+                      "src": f"snapshot.{_G57_TIER}=moderate", "degraded": False})
     else:
         # None/缺 → 禁在业绩语境编造成长强度（反编造，scope 业绩行避免行业「高成长」误伤）
         # F3 族清扫（2026-08-30）：violation 行全量收集（原裸 False 无 reason=F2 双重身份）
@@ -2731,9 +2829,19 @@ def check_g58(report: str, data: dict) -> bool:
     # ② 反编造：无分位数据（vp 整体空）却写具体分位百分比 → 编造
     if not vp:
         if "分位" in sec and re.search(r'[\d.]+\s*%', sec):
+            _hits = locate_lines(report, sec,
+                                 lambda ln: "分位" in ln and re.search(r'[\d.]+\s*%', ln))
+            _fix = ("删具体分位数改「分位数据缺失」，或补拉 valuation_percentile 后按 "
+                    "pct_5y×100 口径照抄（如 PE pct_5y=0.75 → 写 75% 分位）")
             return GateResult(passed=False, reasons=[
-                "valuation_percentile 数据缺失，m5 却写了具体「NN% 分位」（无中生有）——"
-                "无分位数据禁编分位数"])
+                f"估值分位无中生有：valuation_percentile 数据缺失，m5 却写具体「NN% 分位」——"
+                f"违规行（共{len(_hits)}处）：{_fmt_violation_lines(_hits)}；{_fix}"],
+                diag={"subcheck": "percentile_fabrication",
+                      "expected": "无 valuation_percentile → 禁写分位数",
+                      "found": [{"line": i, "text": t[:60]} for i, t in _hits],
+                      "fix": _fix,
+                      "src": "snapshot.valuation_snapshot.data.valuation_percentile（缺失）",
+                      "degraded": False})
     return True
 
 
@@ -2853,7 +2961,14 @@ def check_g61(report: str, data: dict) -> bool:
     status = ev.get("status")
     # ① 拉取三态
     if status == "failed":
-        return False                          # 拉取失败禁编造结论
+        # [数据层] FAIL：修法=重跑拉取或上报，改报告无效（SKILL.md 约束 5）
+        return GateResult(passed=False, reasons=[
+            "[数据层] 千股千评拉取失败（s_stock_evaluation status=failed）——"
+            "重跑 s_stock_evaluation 拉取修数据层或上报数据源异常；本门仅校数据层完整性，报告侧不动"],
+            diag={"subcheck": "evaluation_status",
+                  "expected": "status∈{ok,missing}", "found": "status=failed",
+                  "fix": "重跑 s_stock_evaluation 拉取或上报数据源异常",
+                  "src": "snapshot.s_stock_evaluation.data.status", "degraded": False})
     if status in ("missing", "never_evaluated", None):
         return True                           # 真空豁免（金融股/次新/非标的/旧 snapshot 无此 scene）
     if status != "ok":
