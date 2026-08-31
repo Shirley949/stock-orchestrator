@@ -89,6 +89,9 @@ def main() -> int:
               f" status={e.get('status')}{' blocked' if e.get('blocked') else ''}")
         if delta > 0:
             regressions.append(sig)
+    if regressions:
+        print(f"⚠️ 晋级条文（SKILL.md 约束3）：{len(regressions)} 条复发——第 2 次复发必须落引擎"
+              f"（ledger 置 root_cause=engine + status=inflight→修后 landed），禁第 3 次报告级修补")
     if unclassified:
         print(f"  ⚪ unclassified FAIL {len(unclassified)} 处（台账未登记，只报告）：")
         for u in unclassified[:10]:

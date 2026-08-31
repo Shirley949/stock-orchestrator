@@ -249,6 +249,9 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    **禁止 Read `gate_definitions.py`**（178K 源码，历史上单次全读 ≈ 全部模块文件之和）。
    **reason 带 `[数据层]` 前缀 → 不改报告**：该 FAIL 是数据拉取层问题（改稿无效），动作=重跑对应
    scene 拉取或上报数据源异常，报告侧等数据修复后重验（G32/G33/G61 拉取失败臂均此语义）。
+   **复发晋级（第 2 次必须落引擎）**：同一陷阱第 2 次复发 → 必须落引擎修复（trap_ledger 该签名置
+   `root_cause=engine` + `status=inflight`→修后 `landed`），禁第 3 次报告级修补；`trap_ledger_scan`
+   对 delta>0 条目自动打 🔴 新增 + ⚠️ 晋级提示行，cron 复盘按提示升级。
 4. 在报告 m11 区放指针行（**禁止手填分数**）：verify 全过时 stdout 末尾直接打印可复制的 📌 指针行——
    从 verify 输出原样复制（勿为格式提前读 m11-gates.md），**粘贴后重跑一次 verify 刷新 sidecar**（mtime 新鲜度）：
    ```

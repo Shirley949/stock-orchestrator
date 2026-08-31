@@ -8,7 +8,7 @@
 #   gate/subcheck/reason_class/fix          ← 定位与修法
 #   match:   该 gate FAIL reasons 拼接串的正则（缺省=gate 级兜底）
 #   count:   基线计数（= 冻结日线上语料实测量；--strict 仅拦 cur>count 的新增，P12）
-#   status:  landed=引擎已修复（复发=回归）｜pending=写作纪律约束（复发=正常计数增长，人工复盘）
+#   status:  landed=引擎已修复（复发=回归）｜inflight=已立项未落地（root_cause=engine 时计入 engine_pending 晋级欠账）｜pending=写作纪律约束（复发=正常计数增长，人工复盘）
 #   root_cause: engine=引擎根因（engine_pending 指标=engine 且未 landed 计数，run_regression 尾部可见）
 #   blocked(P3): true 时 generate_checklist exit 2 硬阻断（运营态开关，修复后置回 false）
 entries:
@@ -214,3 +214,49 @@ entries:
     root_cause: engine
     blocked: false
     fix: "reason 带违规行号——删具体分位数改「分位数据缺失」，或补拉后按 pct_5y×100 口径照抄"
+  # ---- 批2 五条引擎根因立项（2026-08-31，plan wiggly-moseying-spring 裁决C；inflight→各条落地时翻 landed）----
+  # #3 G62 列合同文档化不入 entries：engine E4 表头签名已 landed（见上 G62#tally），#3 为 m6 文档侧补线，无独立 FAIL 面。
+  - signature: G63#percentile_variant:bai_percentile_leak
+    gate: G63
+    subcheck: percentile_variant
+    reason_class: bai_percentile_leak
+    match: "百分位"
+    count: 0
+    last_seen: "2026-08-31"
+    status: inflight
+    root_cause: engine
+    blocked: false
+    fix: "E1 剥离正则补百分位/分位数变体（批2#1）：『N 百分位』的『百』挡在 \\s*分位 前——语料实锤『94 百分位』『3 百分位』今仍泄漏价位对拍；修后分位族（分位/百分位/分位数）全形态不进对拍池"
+  - signature: G30#1:synonym_dingzeng
+    gate: G30
+    subcheck: "1"
+    reason_class: synonym_dingzeng
+    match: "定增"
+    count: 0
+    last_seen: "2026-08-31"
+    status: inflight
+    root_cause: engine
+    blocked: false
+    fix: "fatal/治理行 surface 同义词归一 定增≡增发（批2#5，德福实锤从写作纪律升级 engine 修复）：报告写『定增』不再误报『增发』漏报；担保词表部分仍属写作纪律（见 G30#1:substring_keyword pending）"
+  - signature: G30#5:negation_context_v2
+    gate: G30
+    subcheck: "5"
+    reason_class: negation_context_v2
+    match: "主推荐"
+    count: 0
+    last_seen: "2026-08-31"
+    status: inflight
+    root_cause: engine
+    blocked: false
+    fix: "E2 否定窗 v2（批2#2）：窗遇标点截断+紧邻否定词（没有|难以|不再|放弃|拒绝，距动词≤2字符）——『没有加仓基础，建议持有』类不再误判主推荐=加仓；窗语义合同同步 m6/m11（E 类 expected 源）"
+  - signature: G21#did_you_mean:registry_hint
+    gate: G21
+    subcheck: did_you_mean
+    reason_class: registry_hint
+    match: "近邻"
+    count: 0
+    last_seen: "2026-08-31"
+    status: inflight
+    root_cause: engine
+    blocked: false
+    fix: "_explain_bad_path 建议串尾挂 data_contracts.SCENES registry 近邻（批2#4，reason-only verdict 恒不变）：scene 整体缺失（模式B未拉取）时不再『无建议可给』；该分支 reason 落 [数据层] 家族——查快照生成而非改路径拼写；回归 guard=单元测试断言建议在场（ledger 本条为欠账登记）"
