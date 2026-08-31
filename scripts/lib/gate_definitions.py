@@ -510,15 +510,26 @@ def check_g8(report: str, data: dict):
     if isinstance(cf_section, dict):
         cf_status = cf_section.get("status", "")
         cf_data = cf_section.get("data", cf_section.get("data_full", []))
-        # P0-3 fix: 数据为空且状态异常 → 明确失败（数据空 + 报告须如实披露，非 [数据层]：
-        # 含报告侧披露动作）
+        # P0-3 fix: 数据为空且状态异常 → 明确失败。rows=0 细分（pending #2 成文规则）：
+        # status=failed = error 信封在场 → [数据层]（fix 禁改稿动词）；
+        # status=ok/empty = 源端真空 → 双选（重跑 or 报告如实披露，不得静默过）
         if isinstance(cf_data, list) and len(cf_data) == 0 and cf_status in ("ok", "failed", "empty"):
+            if cf_status == "failed":
+                return GateResult(passed=False, reasons=[
+                    f"[数据层] cash_flow rows=0 且 status=failed——现金流拉取失败：重跑 "
+                    "s1_financial 拉取；本臂为数据侧失败，报告侧无需改稿"
+                ], diag={"subcheck": "cashflow_trio_empty",
+                         "expected": "cash_flow.data ≥1 行（status 与行数一致）",
+                         "found": "rows=0 且 status=failed",
+                         "fix": "重跑 s1_financial 拉取（勿改报告）",
+                         "src": "s1_financial.data.cash_flow",
+                         "degraded": False})
             return GateResult(passed=False, reasons=[
-                f"cash_flow rows=0 且 status={cf_status}——现金流数据空：重跑 s1_financial 拉取，"
+                f"cash_flow rows=0 且 status={cf_status}——源端真空：重跑 s1_financial 拉取，"
                 "报告侧须如实标注「现金流数据不可得」，不得静默过"
             ], diag={"subcheck": "cashflow_trio_empty",
                      "expected": "cash_flow.data ≥1 行（status 与行数一致）",
-                     "found": f"rows=0 且 status={cf_status}",
+                     "found": f"rows=0 且 status={cf_status}（信封干净=源端真空）",
                      "fix": "重跑 s1_financial 拉取；或报告如实标注「现金流数据不可得」",
                      "src": "s1_financial.data.cash_flow",
                      "degraded": False})
@@ -1327,10 +1338,40 @@ def check_g28(report: str, data: dict) -> bool:
     旧 snapshot 的 _closure_check 残留字段不读（加法式遗留，无害）。"""
     dupont = _snapshot_get(data, "s1_financial.data.dupont")
     if not isinstance(dupont, dict) or dupont.get("status") != "ok":
-        return GateResult(passed=False, reasons=["s1_financial.data.dupont 缺失或 status≠ok——杜邦面板无源，须重拉或如实披露"])
-    dd = dupont.get("data") or {}
+        # WP1b 轨1 reason 真值化：本臂只查数据源状态（不查报告，任何改稿不能过）→
+        # [数据层] 家族（pending #2 成文规则：error 信封在场/scene 未生成 → 数据侧，
+        # fix 禁改稿动词）。归档 49 对实测 13 个 FAIL 全为本臂且 dupont=NoneType（scene 未生成）。
+        status = dupont.get("status") if isinstance(dupont, dict) else None
+        found = (f"status={status}" if status is not None
+                 else "dupont scene 整体未生成（s1_financial.data 无该键）")
+        return GateResult(passed=False, reasons=[
+            f"[数据层] G28 杜邦面板无源：{found}——重跑 s1_financial 拉取（Sina 主源/东财"
+            " fallback 任一成功即 ok）；本臂只查面板可用性，报告侧无需改稿"
+        ], diag={"subcheck": "dupont_panel_availability",
+                 "expected": "s1_financial.data.dupont 存在且 status=ok",
+                 "found": found,
+                 "fix": "重跑 s1_financial 拉取；持续失败上报数据源异常（勿改报告）",
+                 "src": "s1_financial.data.dupont",
+                 "degraded": False})
+    # data 非 dict（None/str/list）一律按空面板处理——旧引擎 truthy 非 dict 直接
+    # dd.get 崩溃（crash-fix，出定理域，以 TestWP1bG28 注入测试背书）
+    dd = dupont.get("data") if isinstance(dupont.get("data"), dict) else {}
     core = ("净资产收益率", "归属母公司股东的销售净利率", "资产周转率(次)", "权益乘数")
-    return all(dd.get(k) is not None for k in core)
+    missing = [k for k in core if dd.get(k) is None]
+    if missing:
+        # WP1b 轨1：裸 bool → 真值化。带在场字段真值 + 缺失清单（纯数据臂，同样
+        # [数据层]；闭合校验已于 2026-08-30 废弃，本臂只做字段在场性，无反算）
+        present = "、".join(f"{k}={dd[k]}" for k in core if dd.get(k) is not None)
+        return GateResult(passed=False, reasons=[
+            f"[数据层] G28 杜邦面板 status=ok 但缺核心字段『{'、'.join(missing)}』——"
+            f"在场字段：{present or '（四字段全缺）'}；重跑 s1_financial 拉取，报告侧无需改稿"
+        ], diag={"subcheck": "dupont_core_fields",
+                 "expected": "四核心字段全非 None（净资产收益率/归母净利率/资产周转率/权益乘数）",
+                 "found": f"缺 {'、'.join(missing)}" + (f"；在场 {present}" if present else ""),
+                 "fix": "重跑 s1_financial 拉取（勿改报告）",
+                 "src": "s1_financial.data.dupont.data（四核心字段）",
+                 "degraded": False})
+    return True
 
 
 def check_g29(report: str, data: dict) -> bool:

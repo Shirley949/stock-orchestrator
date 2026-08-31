@@ -844,11 +844,19 @@ class TestWP1aWordGates(unittest.TestCase):
         self.assertIn("CFO/经营性现金流", diag["found"])
 
     def test_g8_rows0_arm_and_pass(self):
-        snap = {"s1_financial": {"data": {"cash_flow": {"status": "failed", "data": []}}}}
-        ok, joined, diag = self._ret(gd.check_g8, "x", snap)
+        # rows=0 细分（pending #2 成文规则）：failed=error 信封 → [数据层] 禁改稿动词；
+        # ok=源端真空 → 双选（重跑 or 如实披露）
+        snap_f = {"s1_financial": {"data": {"cash_flow": {"status": "failed", "data": []}}}}
+        ok, joined, diag = self._ret(gd.check_g8, "x", snap_f)
         self.assertFalse(ok)
+        self.assertIn("[数据层]", joined)
         self.assertIn("rows=0 且 status=failed", joined)
-        self.assertIn("如实标注", diag["fix"])
+        self.assertNotIn("如实标注", diag["fix"])          # 禁改稿动词
+        snap_v = {"s1_financial": {"data": {"cash_flow": {"status": "ok", "data": []}}}}
+        ok, joined, diag = self._ret(gd.check_g8, "x", snap_v)
+        self.assertFalse(ok)
+        self.assertIn("源端真空", joined)
+        self.assertIn("如实标注", diag["fix"])             # 双选修法
         self.assertIs(gd.check_g8("FCF 转正，经营性现金流为正", self.CF), True)
 
     def test_g8_crash_injections(self):
@@ -882,6 +890,70 @@ class TestWP1aWordGates(unittest.TestCase):
         for snap in ({}, {"s1_financial": {"data": {"income_statement": {"data": [{}, "x", 5]}}}},
                      {"s1_financial": {"data": {"income_statement": {"data": [None, None]}}}}):
             r = gd.check_g9("无词", snap)
+            self.assertIsInstance(r, (bool, dict))
+
+
+class TestWP1bG28(unittest.TestCase):
+    """WP1b 轨1（2026-09-01）：G28 杜邦面板两臂 reason 真值化（reason-only）。
+
+    语义现状澄清：闭合校验 2026-08-30 已废弃（ROE 口径随报告期切换，跨字段反算不成立），
+    本批真值化的是**现状**两臂——①面板可用性（status/scene 在场性）②核心四字段在场性；
+    「闭合差值/混装形态提示」属已废弃设计，混装口径风险由轨2 mixed_caliber 政策承接。
+    两臂均为纯数据臂（不查报告，改稿不能过）→ [数据层] 家族，fix 禁改稿动词。
+    归档 49 对实测：13 个 FAIL 全为臂①且 dupont=NoneType（scene 未生成），臂②现场 0 次。
+    """
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+    _CORE = {"净资产收益率": 12.5, "归属母公司股东的销售净利率": 8.3,
+             "资产周转率(次)": 0.42, "权益乘数": 2.1}
+
+    def _ret(self, rpt, snap):
+        r = gd.check_g28(rpt, snap)
+        return (bool(r.get("passed")), r.get("reasons", [""])[0], r.get("diag")) \
+            if isinstance(r, dict) else (bool(r), "", None)
+
+    def _assert_datalayer(self, ok, joined, diag, tokens):
+        self.assertFalse(ok)
+        self.assertIn("[数据层]", joined)
+        for t in tokens:
+            self.assertIn(t, joined)
+        for k in self._DIAG_KEYS:
+            self.assertIn(k, diag)
+        self.assertFalse(diag["degraded"])
+        for verb in ("照抄", "改写", "补写", "删除"):     # 禁改稿动词（[数据层] lint 规则 A）
+            self.assertNotIn(verb, diag["fix"])
+
+    def test_arm1_scene_missing(self):
+        ok, joined, diag = self._ret("", {})              # 归档 13 例的真实形态
+        self._assert_datalayer(ok, joined, diag,
+                               ["dupont scene 整体未生成", "重跑 s1_financial 拉取"])
+
+    def test_arm1_status_failed(self):
+        snap = {"s1_financial": {"data": {"dupont": {"status": "failed", "data": {}}}}}
+        ok, joined, diag = self._ret("", snap)
+        self._assert_datalayer(ok, joined, diag, ["status=failed"])
+
+    def test_arm2_partial_missing_carries_truth(self):
+        core = dict(self._CORE, 权益乘数=None)
+        snap = {"s1_financial": {"data": {"dupont": {"status": "ok", "data": core}}}}
+        ok, joined, diag = self._ret("", snap)
+        self._assert_datalayer(ok, joined, diag,
+                               ["缺核心字段『权益乘数』", "净资产收益率=12.5", "资产周转率(次)=0.42"])
+        self.assertIn("缺 权益乘数", diag["found"])
+
+    def test_arm2_all_missing_and_pass(self):
+        snap = {"s1_financial": {"data": {"dupont": {"status": "ok", "data": {}}}}}
+        ok, joined, diag = self._ret("", snap)
+        self._assert_datalayer(ok, joined, diag, ["四字段全缺"])
+        self.assertIs(gd.check_g28("", {"s1_financial": {"data":
+            {"dupont": {"status": "ok", "data": dict(self._CORE)}}}}), True)  # PASS=字面 bool
+
+    def test_crash_injections(self):
+        for snap in ({"s1_financial": None},
+                     {"s1_financial": {"data": {"dupont": None}}},
+                     {"s1_financial": {"data": {"dupont": {"status": "ok", "data": None}}}},
+                     {"s1_financial": {"data": {"dupont": {"status": "ok", "data": "x"}}}}):
+            r = gd.check_g28("", snap)                    # data None/非 dict → 兜底不炸
             self.assertIsInstance(r, (bool, dict))
 
 

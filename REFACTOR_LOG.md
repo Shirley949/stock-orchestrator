@@ -18,6 +18,18 @@
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
 
+## 2026-09-01 WP1b 轨1：G28 杜邦面板 reason 真值化 + rows=0 细分规则落码（reason-only）
+
+pending #8 轨1 执行（10+ 真实 FAIL 领跑；轨2 mixed_caliber 政策仍待拍板，本批不碰 verdict）。
+
+- **语义现状澄清**：裁决引「闭合差值+混装形态提示」属 **2026-08-30 已废弃**的闭合校验设计（ROE 口径随报告期切换，跨字段反算不成立——该废弃有实证与裁决在案）。现状 G28 只有两臂：①面板可用性（status/scene 在场性，原已有 reason 无 diag）②核心四字段在场性（裸 bool，lossy 面）。本批按现状真值化，混装口径风险由轨2 政策承接。
+- **臂①**（归档 49 对实测 13 个 FAIL 全此臂且 dupont=NoneType=scene 未生成）：补 diag 六键；按 pending #2 成文规则归类 **[数据层]**——纯数据臂（不查报告，任何改稿不能过），fix 禁改稿动词；found 带真值（`status=X` / `dupont scene 整体未生成`）。
+- **臂②**：裸 bool → 缺失清单+在场字段真值（`净资产收益率=12.5、资产周转率(次)=0.42`）；同样 [数据层]（纯数据臂）；现场 0 次点火，由单测背书。
+- **rows=0 细分规则首例落码（回修 G8）**：`status=failed`=error 信封在场 → **[数据层]** 前缀+禁改稿动词；`status=ok/empty`=源端真空 → 双选（重跑 or 报告如实披露）。TestWP1a rows=0 测试随拆两极。
+- **含 1 处 crash-fix 出定理域**（同 WP1a G7 性质，注入测试背书非定理背书）：`dupont.data` 为 truthy 非 dict 时旧引擎 `dd.get` 直接崩溃 → 非一律按空面板 FAIL。
+
+**验证链**：diff_engine（升格工具首用）g28 归档 49 对 0 翻转 0 crash（False 13/True 36 两极）；test_diag_contract 56/56（+5 TestWP1bG28：臂①两形态/臂②半缺带真值/全缺/PASS 字面 bool/4 态注入）；test_g28_dupont 16/16（verdict 断言无文案耦合）；run_regression exit 0。
+
 ## 2026-09-01 WP1a：G7/G8/G9 词表门 reason 真值化（reason-only 批）
 
 裁决 B（2026-09-01）：WP1 拆批，WP1a=G7/G8/G9 先行（过闸后启动 WP1b 余 19 门）；**分离原则**——WP1 恒 reason-only（定理保 verdict 中性、归档重放零翻转），F4 verdict-affecting 批（G49/G69/G16:696/G67:3105+presence 门）单列且预申报翻转，**两者永不同批**。转化标准：五类路由 expected 来源 + [数据层] 家族归类 + 全 schema lint 同批过 + 逐臂 None 注入崩溃测试。
