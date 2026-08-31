@@ -14,6 +14,7 @@ PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_
   - check_g17/g18：Step 0 去"海外"词触发 + 补同业关键词，避免误阻塞。
 """
 
+import difflib
 import re
 
 from latest_extract import days_old  # noqa: E402  G32/G33 freshness 维度（plan Step 5.5）
@@ -165,7 +166,7 @@ GATE_HINTS = {
            "指向 home；禁 ST5/ST6 独立段量化（%/金额/窗口/逐笔→m9 §9.2 / m7 §7.5.2）。"
            "反捏造：类型词 == classification.primary_type；占主营 Y% == dominant_business.revenue_ratio。"
            "数据核对（五块结构对拍须全结构，勿用 primary_type 单字段）："
-           "snapshot_view <S> any classification --depth 2；SGR --raw computed_metrics --field sgr（capped）。",
+           "snapshot_view <S> any classification --depth 2。",
     "G58": "valuation_percentile 每项 applicable=true 时 m5 必须 surface 分位（带 [src:] 或对齐值；定位已候选+验签，m0「估值框架」标题不再劫持）；"
            "整块缺失时写具体「NN% 分位」= 反编造 FAIL。标题含「估值」即入 m5 切片（折叠标题也兜住）。"
            "数据核对：snapshot_view <S> --raw valuation_snapshot.data --field valuation_percentile"
@@ -277,6 +278,50 @@ def _snapshot_get(data: dict, path: str):
     return current
 
 
+# E5（2026-08-31）：G21 坏路径高频陷阱别名表——key=坏路径特征子串，value=修复指引。
+# 实证锚（301511 快照逐层步进）：relative_strength/td 直接挂 s4_technical.data 下；
+# 三表键无 _statement 后缀；s9_news 场景已并入 s5_events；peer 指标都在 s11_peer.data.*。
+PATH_ALIASES = {
+    "s9_news": "场景已并入 s5_events——真路径 s5_events.data.news",
+    "cash_flow_statement": "三表键无 _statement 后缀——真路径 s1_financial.data.cash_flow",
+    "technical.relative_strength": "无 technical. 假层——真路径 s4_technical.data.relative_strength",
+    "td.daily": "daily/weekly 是 td 内层键非路径层——真路径 s4_technical.data.td",
+    "td.weekly": "daily/weekly 是 td 内层键非路径层——真路径 s4_technical.data.td",
+    "s11_peer.": "peer 指标都挂 s11_peer.data.*（模式A路径；B 档该场景未拉取）——"
+                 "先 snapshot_view any s11_peer.data --depth 1 看实有键",
+}
+
+
+def _explain_bad_path(snapshot: dict, path: str) -> str:
+    """G21 坏路径 → 单行修复指引（E5）。别名直给 > 数组下标 > 结构感知
+    （最深可达节点 + 兄弟键≤8 + difflib 近邻键）。实测历史陷阱走别名最快；
+    键真缺失（如 market_relative）走结构感知——兄弟键即答案。"""
+    # peer 正确层（已写 s11_peer.data.x）不套泛化别名：该层兄弟键更准
+    if "s11_peer.data." not in path:
+        for bad, good in PATH_ALIASES.items():
+            if bad in path:
+                return good
+    if any(part.isdigit() for part in path.split(".")):
+        return "含数组下标 .N——G21 按 dict 键步进不寻址列表元素，去下标锚到父级节点"
+    node = snapshot
+    for i, part in enumerate(path.split("."), 1):
+        if isinstance(node, list):
+            return f"第 {i} 层「{part}」处是 list[{len(node)}]——去下标锚到该列表本身"
+        if not isinstance(node, dict):
+            return f"第 {i} 层「{part}」处已是叶子值，无子层——锚到这里为止"
+        if part not in node:
+            sibs = list(node.keys())[:8]
+            hint = f"断在第 {i} 层「{part}」"
+            if sibs:
+                hint += f"；该层实有键：{'/'.join(sibs)}"
+            near = difflib.get_close_matches(part, sibs, n=1, cutoff=0.6)
+            if near:
+                hint += f"；是不是「{near[0]}」？"
+            return hint
+        node = node[part]
+    return "各层键均在但终值为 None（键在、数据空）——改锚有值兄弟键或上级信封"
+
+
 def check_g1(report: str, data: dict) -> bool:
     """G1: 技术面完整性（四段：拉取/存放/读取/消费，仿 G26/G29；2026-07 重构）。
 
@@ -300,25 +345,25 @@ def check_g1(report: str, data: dict) -> bool:
         return not _has_specific_tech_numbers(report)
     # fetch_failed → FAIL（禁编造：failed 却报告出现具体技术数值同样 FAIL）
     if status == "failed" or signal_type == "fetch_failed":
-        return False
+        return GateResult(passed=False, reasons=[f"s4_technical status={status or signal_type}（拉取失败）——报告须如实标注技术数据不可得，禁编造指标数值"])
 
     # ② 存放：technical 或 td 非空（数据真落盘）
     s4_data = s4.get("data", {}) or {}
     if not (s4_data.get("technical") or s4_data.get("td")):
-        return False
+        return GateResult(passed=False, reasons=["s4_technical.data 无 technical/td 落盘（status 未标 failed 却空 data）——管道断裂：拉了没存，须重拉或如实标注"])
 
     # ④ 消费：技术词任一
     tech_words = ["MACD", "KDJ", "RSI", "均线", "金叉", "死叉", "多头", "空头",
                   "TD", "布林", "BOLL", "MA5", "MA20", "量价"]
     if not any(w in report for w in tech_words):
-        return False
+        return GateResult(passed=False, reasons=["快照有技术数据但报告缺技术词（MACD/KDJ/RSI/均线/TD/布林/MA5/MA20/量价 任一）——m3 须消费"])
 
     # ④ 量价消费：tq=ok 须含换手/量比/成交额（603663 漏消费根因修复）
     tq = _snapshot_get(data, "s2_quote_kline.data.realtime_quote") or {}
     tq_status = tq.get("_turnover_status", "ok")  # 旧 snapshot 无此键默认 ok
     if tq_status == "ok":
         if not any(w in report for w in ("换手", "量比", "成交额")):
-            return False
+            return GateResult(passed=False, reasons=["s2_quote_kline 量价 ok（_turnover_status=ok）但报告缺 换手/量比/成交额 任一——量价消费缺失"])
     return True
 
 
@@ -359,7 +404,7 @@ def check_g6(report: str, data: dict) -> bool:
         if isinstance(rows, list):
             # P0-3 fix: 数据为空且状态异常 → 明确失败（无论 status 是 ok 还是 failed）
             if len(rows) == 0 and snapshot_status in ("ok", "failed", "empty"):
-                return False
+                return GateResult(passed=False, reasons=[f"income_statement rows=0 且 status={snapshot_status}——数据空须如实披露（m11 局限段），不得静默过"])
             # 有效数据 >= 6 行 → 通过
             if len(rows) >= 6:
                 return True
@@ -405,7 +450,7 @@ def check_g8(report: str, data: dict) -> bool:
         if isinstance(cf_data, list):
             # P0-3 fix: 数据为空且状态异常 → 明确失败
             if len(cf_data) == 0 and cf_status in ("ok", "failed", "empty"):
-                return False
+                return GateResult(passed=False, reasons=[f"cash_flow rows=0 且 status={cf_status}——现金流数据空须如实披露，不得静默过"])
             # 有数据 → 正常验证
             if len(cf_data) > 0:
                 for row in cf_data:
@@ -456,7 +501,7 @@ def check_g11(report: str, data: dict) -> bool:
 def check_g12(report: str, data: dict) -> bool:
     """G12: 局限性披露（≥3条具体局限）"""
     if "局限" not in report and "局限性" not in report and "不足" not in report:
-        return False
+        return GateResult(passed=False, reasons=["报告无「局限/局限性/不足」任何词——m11 局限性披露段缺失（须 ≥3 条具体局限）"])
     # 统计局限性条目
     limitation_items = _count_pattern(report, r'(?:局限|不足|限制|风险提示|数据限制|⚠️)')
     return limitation_items >= 3
@@ -488,7 +533,7 @@ def check_g14(report: str, data: dict) -> bool:
 
     # 消费：报告须含 TD
     if "TD" not in report:
-        return False
+        return GateResult(passed=False, reasons=["s4_technical.data.td 有 summary（TD 序列已落盘）但报告未提「TD」——m3 须消费 TD 读数"])
     stage = (td.get("summary", {}) or {}).get("stage", "")
     # 有信号（stage≠无信号，如"买Setup N/9"/"Countdown M/13"/"TD13完成"）→ 须有计数展示
     if stage and stage != "无信号":
@@ -538,7 +583,7 @@ def check_g15(report: str, data: dict) -> bool:
     if status not in ("ok", "degraded") or not items:
         # 完整性矛盾：status=ok 却无 items（声明有数据实际没有）
         if status == "ok" and not items:
-            return False
+            return GateResult(passed=False, reasons=["s11_peer status=ok 却 items 空——完整性矛盾（声明有数据实际没有）：管道 bug，须重拉"])
         discovered_codes = peer.get("discovered_peer_codes")
         # L0（600584 bug 根治）：占位 missing 且无 discovered_peer_codes 键（→ None）=
         # 从未跑（em 恒回填此键；None 是防御性 never-run 信号）。须诚实披露「无适用同业」
@@ -556,7 +601,7 @@ def check_g15(report: str, data: dict) -> bool:
         if discovered_codes:
             honest = any(kw in report for kw in ("限流", "不可得", "未能获取", "拉取失败", "数据缺失", "未获取"))
             if not honest:
-                return False
+                return GateResult(passed=False, reasons=["peer 拉取失败（discovered_peer_codes 已回填但 items 空）且报告缺诚实披露词（限流/不可得/未能获取/拉取失败/数据缺失/未获取 任一）——须如实披露"])
         # F2: 删旧 "s11_peer" not in report 逃生口——无 peer 数据时报告同业措辞+peer 财务数字 = 编造
         #     （即使有 discovered_codes 限流披露，也不能编造具体 peer 财务数字）
         # F2 族清扫（2026-08-30）：裸 False → reasons 直指成因（phrasing+number 同现=编造要件）
@@ -575,11 +620,11 @@ def check_g15(report: str, data: dict) -> bool:
     if "s11_peer" not in report and not any(
         kw in report for kw in ("同业", "可比", "对比", "同行", "竞品", "对标")
     ):
-        return False
+        return GateResult(passed=False, reasons=["快照有 ≥2 家齐全 peer 但报告无 s11_peer 溯源亦无同业对比措辞（同业/可比/对比/同行/竞品/对标 任一）——m8 须消费同业数据"])
 
     # 5. stock_type 适配：金融股必校验 PB（金融第一指标）
     if is_financial and "PB" not in report:
-        return False
+        return GateResult(passed=False, reasons=[f"金融股（stock_type={stock_type}）报告缺「PB」——PB 是金融股第一估值指标，必校验"])
 
     return True
 
@@ -663,9 +708,9 @@ def check_g16(report: str, data: dict) -> bool:
     if snap_cl is None:
         # 无数据 → 文本回退
         if "合同负债" not in report:
-            return False
+            return GateResult(passed=False, reasons=["snapshot 无合同负债（文本回退模式）且报告未提「合同负债」——须如实说明该字段不可得"])
         if not has_crosscheck:
-            return False
+            return GateResult(passed=False, reasons=["文本回退模式：报告提了合同负债但无核对表述（核对/交叉验证/偏差/验证 任一）"])
         deviation = re.search(r'偏差[：:]*\s*(\d+(?:\.\d+)?)\s*%', report)
         if deviation:
             return float(deviation.group(1)) <= 15
@@ -673,7 +718,7 @@ def check_g16(report: str, data: dict) -> bool:
 
     # snapshot 有数据 → 报告必须消费
     if "合同负债" not in report:
-        return False
+        return GateResult(passed=False, reasons=[f"snapshot 有合同负债真值 {snap_cl / 1e8:.2f} 亿 但报告未提「合同负债」——m2 须消费"])
 
     cl_yi = snap_cl / 1e8  # 元 → 亿
     # 报告中所有"合同负债"行
@@ -712,7 +757,7 @@ def check_g16(report: str, data: dict) -> bool:
     has_src_on_cl_line = any('[src:' in ln for ln in cl_lines)
 
     if not has_crosscheck:
-        return False
+        return GateResult(passed=False, reasons=["snapshot 有合同负债数据：报告有核对表述但数值既不对齐（无真值字符串）亦无行内 [src:] 溯源——grounded 要件缺一"])
     return value_aligned or has_src_on_cl_line
 
 
@@ -833,7 +878,7 @@ def check_g17(report: str, data: dict) -> bool:
 def check_g19(report: str, data: dict) -> bool:
     """G19: 营收预测区间（Layer8给区间或标注'无法量化'）"""
     if "预测" not in report and "预期" not in report:
-        return False
+        return GateResult(passed=False, reasons=["报告无「预测/预期」语境——Layer8 营收预测段缺失（须给区间或标注无法量化）"])
     # 检查是否有区间或"无法量化"
     has_range = bool(re.search(r'\d+\s*[-~–]\s*\d+', report))
     has_cannot_quantify = "无法量化" in report or "难以预测" in report
@@ -851,7 +896,7 @@ def check_g20(report: str, data: dict) -> bool:
     stock_type = data.get("stock_type", "")
     if any(kw in stock_type for kw in ("金融", "银行", "保险", "券商")):
         if "在手订单" in report or "订单饱和" in report:
-            return False
+            return GateResult(passed=False, reasons=[f"金融股（stock_type={stock_type}）报告出现「在手订单/订单饱和」——口径错配：金融股无订单型口径"])
     return True
 
 
@@ -876,7 +921,7 @@ def check_g21(report: str, data: dict) -> bool:
     all_tags = snapshot_tags + websearch_tags + bare_tags
 
     if not all_tags:
-        return False
+        return GateResult(passed=False, reasons=["报告 0 个 [src:] 溯源标记（snapshot./websearch./bare scene 均 0）——每个数据断言须带数据锚点"])
 
     # P1-1 fix: snapshot 为空时降级 — 只接受 websearch 标记 >= 2 个
     # Gap-3 fix: 不接受 snapshot 标记（snapshot 为空时无法验证路径）
@@ -903,16 +948,26 @@ def check_g21(report: str, data: dict) -> bool:
                 path_failures.append(path)
         if path_failures:
             # R3（2026-08-30）：reasons 直列坏路径，替代裸 False（F2「收集后丢弃」族修）。
-            # 作者照 reason 改路径即可，无需自建 validator 全量枚举（龙磁 300835 实证该工作真实存在）。
-            reasons = [f"[src:] 路径在快照中不存在：{p}——"
-                       "落笔前用 snapshot_view any 先验；[] 下标/臆测层（如 .data 假层）必 FAIL"
+            # E5（2026-08-31）：每条附 _explain_bad_path 修复指引（别名/断层/近邻键）；
+            # reasons 仍 cap 5，全量进 diag.found（sidecar 携带）——cap 与「全量」话术不再并存。
+            # 注意：下方步进是 dict-only 合同（list 不可下标寻址）——与 _snapshot_get 的
+            # list 分支有意不同，勿"统一"（统一=放行 .0 下标写法，引入假锚点）。
+            reasons = [f"[src:] 路径在快照中不存在：{p}——{_explain_bad_path(snapshot, p)}；"
+                       "落笔前用 snapshot_view any 先验"
                        for p in path_failures[:5]]
             if len(path_failures) > 5:
-                reasons.append(f"另有 {len(path_failures) - 5} 处坏路径（本清单为全量，一轮修完再重跑）")
-            return GateResult(passed=False, reasons=reasons)
+                overflow = "；".join(f"{p}——{_explain_bad_path(snapshot, p)}"
+                                    for p in path_failures[5:])
+                reasons.append(f"共 {len(path_failures)} 处坏路径，余：{overflow}"
+                               "（全量见 sidecar diag.found）")
+            return GateResult(passed=False, reasons=reasons, diag={
+                "subcheck": "src_path", "violated": f"{len(path_failures)} 处 [src:] 路径在快照中不存在",
+                "expected": "路径逐层存在于 snapshot（dict 键步进）",
+                "found": path_failures, "fix": "照各条 suggestion 改路径或删该锚点",
+                "src": "report [src:] vs snapshot", "degraded": False})
     elif len(websearch_tags) < 2:
         # 只有 websearch 标记且不足 2 个
-        return False
+        return GateResult(passed=False, reasons=[f"快照为空（report-only 模式禁 snapshot 标记）且 websearch 标记仅 {len(websearch_tags)} 个（<2）——降级溯源不足"])
 
     # F-G3: m5（估值模块）verified [src:] 计数（实现 docstring 承诺）。
     # 定位「模块五」段（level-aware 切片=统一 _module_section，#### 子节内锚计入；
@@ -950,7 +1005,7 @@ def check_g23(report: str, data: dict) -> bool:
     """G23: 年报数据完整性。(c) _critical_failure 管道硬止损 → (a) {D3,D4,D5=segment_product,D6=segment_geo} 达阈值 → (b) segment 维度不全 fetch_failed。"""
     # (c) 管道硬止损（优先判）：snapshot 自标 _critical_failure（finalize 判核心场景 s1_financial/s2_quote_kline/s5_events ≥2 全失败）→ FAIL
     if data.get("_critical_failure"):
-        return False
+        return GateResult(passed=False, reasons=["管道硬止损：snapshot._critical_failure 自标（核心场景 ≥2 全失败）——数据面崩，须重拉快照再写"])
 
     quality = data.get("_quality_markers", {})
 
@@ -985,13 +1040,13 @@ def check_g23(report: str, data: dict) -> bool:
     # (b) segment dimension_status.{product,industry,geo} 不全 fetch_failed，镜像 G22 路径
     statuses = [(dim_status.get(d) or {}).get("status") for d in ("product", "industry", "geo")]
     if statuses and all(s == "fetch_failed" for s in statuses):
-        return False
+        return GateResult(passed=False, reasons=["主营构成三维（product/industry/geo）全 fetch_failed——m2 分业务数据无源，须如实标注不可得"])
 
     # governance 实控人 presence（软：status==ok 且有实控人 → 报告须消费；failed/never_empty 豁免）
     gov = data.get("governance") or {}
     if gov.get("status") == "ok" and gov.get("real_controler"):
         if not any(k in report for k in ("实控人", "实际控制人", "控股股东", "控制人")):
-            return False
+            return GateResult(passed=False, reasons=[f"governance ok 且实控人={gov.get('real_controler')} 但报告未提（实控人/实际控制人/控股股东/控制人 任一）——须消费"])
 
     return True
 
@@ -1009,14 +1064,14 @@ def check_g25(report: str, data: dict) -> bool:
     
     python_layer = news_data.get("_python_layer", "")
     if python_layer != "completed":
-        return False
+        return GateResult(passed=False, reasons=[f"news 有 high={high_count}/medium={medium_count} 条但 _python_layer={python_layer!r}（≠completed）——引擎加工层断裂，须重跑"])
     
     if "事件扫描" not in report and "事件" not in report:
-        return False
+        return GateResult(passed=False, reasons=["快照有事件数据但报告无「事件」表述——m9 须消费事件扫描结论"])
     
     src_count = _count_pattern(report, r'\[src:')
     if high_count > 0 and src_count == 0:
-        return False
+        return GateResult(passed=False, reasons=[f"high_value 事件 {high_count} 条但报告 0 个 [src:]——事件结论须带溯源锚点"])
     
     return True
 
@@ -1037,18 +1092,18 @@ def check_g26(report: str, data: dict) -> bool:
     # 1. 检查 snapshot 中的资金流向数据
     fund_flow = _snapshot_get(data, "s3_fund_flow.data.fund_flow")
     if not fund_flow or fund_flow.get("status") != "ok":
-        return False
+        return GateResult(passed=False, reasons=["s3_fund_flow.data.fund_flow 缺失或 status≠ok——资金流数据不可得/失败，须如实披露"])
     
     # 2. 检查四档数据完整性
     items = fund_flow.get("items", [])
     if len(items) < 4:
-        return False
+        return GateResult(passed=False, reasons=[f"fund_flow.items 仅 {len(items)} 档（<4：特大单/大单/中单/小单）——四档不齐全"])
     
     # 验证四档标签
     expected_names = {"特大单", "大单", "中单", "小单"}
     actual_names = {item.get("name") for item in items}
     if not expected_names.issubset(actual_names):
-        return False
+        return GateResult(passed=False, reasons=[f"items 缺档：实有 {sorted(str(x) for x in actual_names)}，缺 {sorted(str(x) for x in expected_names - actual_names)}——四档标签必须齐全"])
     
     # 3. 检查报告是否消费了资金流向数据
     fund_keywords = ["资金流向", "主力资金", "大单", "小单", "特大单", "净流入", "净流出", "资金分布"]
@@ -1134,7 +1189,7 @@ def check_g28(report: str, data: dict) -> bool:
     旧 snapshot 的 _closure_check 残留字段不读（加法式遗留，无害）。"""
     dupont = _snapshot_get(data, "s1_financial.data.dupont")
     if not isinstance(dupont, dict) or dupont.get("status") != "ok":
-        return False
+        return GateResult(passed=False, reasons=["s1_financial.data.dupont 缺失或 status≠ok——杜邦面板无源，须重拉或如实披露"])
     dd = dupont.get("data") or {}
     core = ("净资产收益率", "归属母公司股东的销售净利率", "资产周转率(次)", "权益乘数")
     return all(dd.get(k) is not None for k in core)
@@ -1159,15 +1214,15 @@ def check_g29(report: str, data: dict) -> bool:
         if level == "🚨":
             # 实质：危险判定已下沉，报告必须 surface 危险词（任一即满足；危险词天然覆盖资金链/商誉两端）
             if not re.search(r"(🚨|危险|紧张|风险|爆雷|减值|资金链)", report):
-                return False
+                return GateResult(passed=False, reasons=[f"asset_safety level={level}（cash_to_debt<0.5 或商誉超阈）但报告无危险词（🚨/危险/紧张/风险/爆雷/减值/资金链 任一）——机器兜底必须 surface"])
         else:
             # 消费：非危险档，报告须提具体字段词（去掉漏判词 资产负债率/资产负债结构，商誉占比?→商誉）
             if not re.search(r"(货币资金|有息负债|商誉|cash_to_debt)", report):
-                return False
+                return GateResult(passed=False, reasons=["asset_safety ok（非危险档）但报告未提字段词（货币资金/有息负债/商誉/cash_to_debt 任一）——m7 须消费资产安全字段"])
 
     # 无数据不许编造具体数值（拓宽正则：为|约|达|： + 数字+亿）
     if not has_data and re.search(r"(货币资金|有息负债)\s*(?:为|约|达|[：:])\s*[\d.]+\s*亿", report):
-        return False
+        return GateResult(passed=False, reasons=["asset_safety 无数据（degraded）却写具体「货币资金/有息负债 N亿」——无源数值=编造"])
     return True
 
 
@@ -1198,6 +1253,9 @@ _G30_COUNTER_MARKERS = ["须克服", "反方", "相反", "利空", "不利", "�
                         "逆风", "承压", "挑战", "压力", "不足", "偏弱", "受限", "掣肘"]
 _G30_ACTION_VERBS = ["加仓", "增持", "买入", "建仓", "减仓", "减持", "卖出", "清仓",
                      "止损", "止盈", "持有", "观望", "不操作", "波段", "趋势持有", "空仓"]
+# E2（2026-08-31，金安 002636 实锤）：否定词窗——前置 12 字符内被否定的动作不是建议动作。
+# 「观望」不列入：它本身是 _G30_HOLD_VERBS 动作，当否定词会误杀「观望后加仓」类真动作。
+_G30_NEG_RE = re.compile(r"(不支持|不宜|不建议|不急于|暂不|勿|避免|无加仓)")
 _G30_HOLD_VERBS = ["持有", "观望", "不操作", "波段", "趋势持有"]
 _G30_BEARISH_VERBS = ["减仓", "减持", "卖出", "清仓", "止损", "空仓"]
 _G30_BULLISH_VERBS = ["加仓", "增持", "买入", "建仓"]
@@ -1276,9 +1334,23 @@ def _g30_theme_covered(text: str, kws: list) -> bool:
 
 
 def _g30_first_action(scope: str):
-    """按文本位置取首个动作动词（非按列表序）——修"持有/逢低加仓"误取加仓。"""
-    found = [(scope.index(v), v) for v in _G30_ACTION_VERBS if v in scope]
-    return min(found)[1] if found else None
+    """按文本位置取首个**未被否定**的动作动词（非按列表序）——修"持有/逢低加仓"误取加仓。
+    E2（2026-08-31）：收集全部动词出现位（含同词多次），前置 12 字符窗含否定词者跳过
+    （「筹码面不支持现价加仓」的加仓是被否定的动作，不得当主推荐）。"""
+    found = []
+    for v in _G30_ACTION_VERBS:
+        start = 0
+        while True:
+            i = scope.find(v, start)
+            if i < 0:
+                break
+            found.append((i, v))
+            start = i + 1
+    for i, v in sorted(found):
+        if _G30_NEG_RE.search(scope[max(0, i - 12):i]):
+            continue
+        return v
+    return None
 
 
 def _g30_group_tables(capstone: str):
@@ -1401,12 +1473,17 @@ def _g30_action_class(v):
 
 
 def _g30_extract_main_rec_action(capstone: str):
-    """从'投资建议/主推荐'行首句抽动作（隔离'评级 买入(N家)'等噪声）。"""
-    for line in capstone.splitlines():
-        if re.search(r"投资建议|主推荐|综合主建议|主建议|综合建议|操作建议|结论", line):
-            a = _g30_first_action(line.split("。")[0])
-            if a:
-                return a
+    """从'投资建议/主推荐'行首句抽动作（隔离'评级 买入(N家)'等噪声）。
+    E2（2026-08-31，金安实锤）：两遍扫描——强锚行（投资建议/主推荐/综合主建议/主建议/
+    综合建议/操作建议）先扫，全空才回退弱锚行（含「结论」）——杀「四镜头合计句…
+    不支持现价加仓」类正文句污染主推荐。"""
+    strong = re.compile(r"投资建议|主推荐|综合主建议|主建议|综合建议|操作建议")
+    for anchors in (strong, re.compile(r"结论")):
+        for line in capstone.splitlines():
+            if anchors.search(line):
+                a = _g30_first_action(line.split("。")[0])
+                if a:
+                    return a
     return None
 
 
@@ -1461,15 +1538,18 @@ def _g30_value_freshness_findings(data: dict, cov: str):
     return findings
 
 
-def _g30_signal_coverage_findings(data: dict, cov: str) -> list:
+def _g30_signal_coverage_findings(data: dict, cov: str, pan: dict = None) -> list:
     """#1 信号覆盖：遍历 panorama.present_signals（源自大事提醒 timeline 风险码关键词），
     对每个信号断言证据全景含其**精确词**（拒 K线/换手冒充）。
 
     三态：timeline 无风险事件 → present_signals 空 → 豁免（真空票不误伤）；
     有信号但证据全景缺精确词 → FAIL（漏 surface 严重风险）。利好不进
     present_signals 强制列 → 门禁分级（漏报利好不致命，不 FAIL）。
-    timeline 源未覆盖信号的 finding 附底层最近事件（reason 携带甄别数据，免手挖 timeline）。"""
-    pan = _cap_panorama(data)
+    timeline 源未覆盖信号的 finding 附底层最近事件（reason 携带甄别数据，免手挖 timeline）。
+    pan（E8）：调用方已算好的 panorama 直接传入——_g30_run 单次调用复用；
+    None 时现算（向后兼容独立调用）。"""
+    if pan is None:
+        pan = _cap_panorama(data)
     findings = []
     for s in (pan.get("present_signals") or []):
         if _g30_theme_covered(cov, s.get("kws") or []):
@@ -1623,7 +1703,7 @@ def _g30_run(report: str, data: dict) -> dict:
     # ---- #1 信号覆盖（capstone present_signals，源自大事提醒 timeline）----
     # present_signals 数据驱动（真空票豁免）；精确词校验（K线/换手不冒充）；timeline 派生的风险信号须在证据全景 surface。
     # 防御纵深：_signal_pipeline_consistency_findings 抓 remind 有记录但 timeline 无 events 的管道断裂。
-    sig_findings = _g30_signal_coverage_findings(data, cov)
+    sig_findings = _g30_signal_coverage_findings(data, cov, pan)
     if sig_findings:
         failed.append(1)
         reasons.append("#1 信号覆盖 FAIL — " + "; ".join(sig_findings))
@@ -1750,7 +1830,7 @@ def check_g31(report: str, data: dict) -> bool:
     """
     quote = _snapshot_get(data, "valuation_snapshot.data.quote")
     if not isinstance(quote, dict):
-        return False
+        return GateResult(passed=False, reasons=["valuation_snapshot.data.quote 非 dict——估值 L1 快照缺失（数据层硬缺失，须重拉）"])
     fields = ["peTtm", "pbRatio", "totalMarketCap"]
     present = sum(1 for f in fields if quote.get(f) is not None)
     return present >= 2   # ≥ 2/3
@@ -1879,7 +1959,7 @@ def check_g38(report: str, data: dict) -> bool:
             return True
         # scales: report"0.12元"(每股)×1.0 / "每10股派1.2元"×0.1 → 都对齐 snap 每股股利 0.12
         if not _check_value_freshness(report, snap_val, list(div_kws), scales=(1.0, 0.1)):
-            return False
+            return GateResult(passed=False, reasons=[f"分红数值不新鲜：报告值 ≠ 最新期每股股利 {snap_val}（每股×1.0/每10股×0.1 双刻度均未命中）——照抄 snapshot 最新期或行内 [src:] 溯源"])
     return True
 
 
@@ -1924,18 +2004,18 @@ def check_g39(report: str, data: dict) -> bool:
     # #1 类型词
     core = _G39_TYPE_CORE.get(primary)
     if core and core not in report:
-        return False
+        return GateResult(passed=False, reasons=[f"primary_type={primary} 类型词「{core}」未出现在报告——m1 类型结论须与分类器一致"])
 
     # #2 估值框架（forbidden_metric 间接执法）
     forbidden = cls.get("forbidden_metric")
     if forbidden:
         fw_kws = _G39_FW_KW_MIXED if cls.get("is_mixed") else _G39_FW_KW.get(primary)
         if fw_kws and not any(k in report for k in fw_kws):
-            return False
+            return GateResult(passed=False, reasons=[f"估值框架词缺失：primary_type={primary}（forbidden={forbidden}）须含（{'/'.join(fw_kws[:4])} 等任一）——禁用口径的替代框架未写"])
 
     # #3 反片面宏观引用（macro_sensitivity==high）
     if cls.get("macro_sensitivity") == "high" and not any(k in report for k in _G39_MACRO_KW):
-        return False
+        return GateResult(passed=False, reasons=[f"macro_sensitivity=high（{primary}）但报告无宏观引用（PPI/M2/PMI/CPI 任一）——周期/金融类须引宏观变量"])
 
     return True
 
@@ -1971,18 +2051,18 @@ def check_g40(report: str, data: dict) -> bool:
     # (1) signals ok → 须含 state 结论词
     if sig_ok:
         if not re.search(r"(金叉|死叉|多头|空头|MACD|KDJ|RSI|布林|多空排列|上轨|中轨|下轨|触轨|缩口)", report):
-            return False
+            return GateResult(passed=False, reasons=["signals.status=ok 但报告无技术结论词（金叉/死叉/多头/空头/MACD/KDJ/RSI/布林/多空排列/上中下轨 任一）——须消费信号信封"])
     # (2) fibonacci populated → 须渲染 fib
     if fib_ok:
         if not re.search(r"(斐波那契|fib|回撤|0\.(236|382|5|618|786))", report):
-            return False
+            return GateResult(passed=False, reasons=["fibonacci 已计算但报告无「斐波那契/fib/回撤」——算好须渲染（算好 0 渲染是实测 bug）"])
     # (3) support_resistance populated + 止损/支撑/压力空位「xx元」→ FAIL（必须具体价位）
     if sr_ok and re.search(r"(止损|支撑|压力)[^\n]{0,10}(xx|XX)[^\n]{0,3}元", report):
-        return False
+        return GateResult(passed=False, reasons=["support_resistance 有 layers 但止损/支撑/压力仍是「xx元」空位——必须写具体价位"])
     # (4) degraded + 编造 DIF/MACD 数值 → FAIL
     sig_degraded = isinstance(signals, dict) and signals.get("status") == "degraded"
     if sig_degraded and re.search(r"(DIF|MACD)\s*[+\-]?\s*\d", report):
-        return False
+        return GateResult(passed=False, reasons=["signals.status=degraded 却写 DIF/MACD 具体数值——降级期无源数值=编造"])
     return True
 
 
@@ -2011,13 +2091,13 @@ def check_g41(report: str, data: dict) -> bool:
     if has_chip and avg is not None:
         # (1) 须消费成本位关键词（chip 专属，排除 m2 营业成本的裸"成本"）
         if not re.search(r"(均成本|平均成本|成本位|成本压力|套牢|筹码|chipAvgCost|获利盘|浮盈|浮亏|筹码集中)", report):
-            return False
+            return GateResult(passed=False, reasons=[f"chipAvgCost={avg} 已落盘但报告无成本位词（均成本/平均成本/成本位/套牢/筹码/获利盘 等）——m3 须消费筹码成本"])
         # (2) cost_pressure=True → 须 surface 套牢/承压
         if cost_pressure and not re.search(r"(套牢|承压|浮亏|压力位|阻力)", report):
-            return False
+            return GateResult(passed=False, reasons=["cost_pressure=True 但报告无 套牢/承压/浮亏/压力位/阻力——成本压力须 surface"])
     # (3) 反编造：无 chip 却写具体成本数值
     if not has_chip and re.search(r"(均成本|平均成本|成本位|筹码)\s*(?:为|约|达|[：:])\s*[\d.]+\s*元", report):
-        return False
+        return GateResult(passed=False, reasons=["无 chip 数据却写具体成本数值（均成本/成本位/筹码 N元）——无源数值=编造"])
     return True
 
 
@@ -2033,10 +2113,10 @@ def check_g42(report: str, data: dict) -> bool:
 
     if status == "ok" and has_value:
         if not re.search(r"(融资余额|融资融券|融券|两融|杠杆|margin|FinanceValue|融资买入)", report):
-            return False
+            return GateResult(passed=False, reasons=["s_margin ok 且有融资余额但报告无 融资余额/两融/杠杆/融资买入 词——m4 须消费杠杆情绪"])
     # 反编造：非 ok 却写具体融资余额亿数
     if status != "ok" and re.search(r"融资余额\s*(?:为|约|达|[：:])\s*[\d.]+\s*亿", report):
-        return False
+        return GateResult(passed=False, reasons=[f"s_margin status={status}（非 ok）却写具体「融资余额 N亿」——无源数值=编造"])
     return True
 
 
@@ -2053,10 +2133,10 @@ def check_g43(report: str, data: dict) -> bool:
 
     if status == "ok" and has_date:
         if not re.search(r"(披露|财报|季报|年报|中报|三季报|预约|disclosure|报告期|中期报告|年度报告)", report):
-            return False
+            return GateResult(passed=False, reasons=["disclosure ok 且有披露日但报告无 披露/财报/季报/年报/预约 词——m4 须消费披露日历"])
     # 反编造：非 ok 却写具体「预计 YYYY-MM-DD 披露」
     if status != "ok" and re.search(r"预计\s*\d{4}[-年]\d{1,2}[-月]?\d{0,2}[日号]?\s*披露", report):
-        return False
+        return GateResult(passed=False, reasons=[f"disclosure status={status}（非 ok）却写具体「预计 YYYY-MM-DD 披露」——无源日期=编造"])
     return True
 
 
@@ -2083,10 +2163,10 @@ def check_g44(report: str, data: dict) -> bool:
         # 评级词加词边界（\b 不适中文+字母混排，用 (?<![A-Z]) / (?![A-Z]) 防子串误命中：
         # 实败因「特斯拉/ABB/西门子」的 BB 子串虚假满足 ESG 消费检查）
         if not re.search(r"(ESG|中证|聚源|可持续发展|(?<![A-Z])AAA(?![A-Z])|(?<![A-Z])AA(?![A-Z])|(?<![A-Z])BBB(?![A-Z])|(?<![A-Z])BB(?![A-Z])|(?<![A-Z])CCC(?![A-Z])|(?<![A-Z])CC(?![A-Z]))", report):
-            return False
+            return GateResult(passed=False, reasons=["ESG ok 且有评级但报告无 ESG/中证/聚源/评级字母 词——m9.2 须消费 ESG 维度"])
     # 反编造：非 ok 却写具体「ESG 评级为 X」
     if status != "ok" and re.search(r"ESG\s*评级\s*(?:为|约|是|[：:])\s*[A-F]", report):
-        return False
+        return GateResult(passed=False, reasons=[f"ESG status={status}（非 ok/无有效评级）却写具体「ESG 评级为 X」——无源评级=编造"])
     return True
 
 
@@ -2169,10 +2249,10 @@ def check_g47(report: str, data: dict) -> bool:
     presence_kws = ("内部人", "董监高", "前十大", "增持", "减持", "净买", "净卖", "港资", "言行合一",
                     "季度", "新进", "撤出", "加仓", "减仓")
     if not any(kw in report for kw in presence_kws):
-        return False
+        return GateResult(passed=False, reasons=[f"shareholder_dynamics 有方向（verdict={verdict}）但报告无股东行为词（内部人/董监高/前十大/增持/减持/加仓/减仓 等）——m9.2 须 surface"])
     # 反编造：status != ok 却写具名「前十大N名减持/增持」
     if sd.get("status") != "ok" and re.search(r"前十大.{0,6}[增减]持", report):
-        return False
+        return GateResult(passed=False, reasons=[f"shareholder_dynamics status={sd.get('status')}（≠ok）却写具名「前十大N名增持/减持」——无源具名=编造"])
     return True
 
 
@@ -2203,12 +2283,12 @@ def check_g48(report: str, data: dict) -> bool:
         # 兜底；不引入 24 字邻近窗口（8-27 裁定先例：固定窗口跨标点脆弱）。
         if any("待执行" in frag and re.search(r"\d+(?:\.\d+)?\s*%", frag)
                for frag in re.split(r"[|。；;\n]", report)):
-            return False
+            return GateResult(passed=False, reasons=["无活跃增减持计划却在「待执行」同片段写具体 %——无源计划数值=编造（诚实写法：「无待执行增减持计划」）"])
         return True   # 无待执行/进行中计划：豁免
     # presence：报告须含待执行/进行中/计划类词
     presence_kws = ("待执行", "进行中", "拟减持", "拟增持", "窗口", "计划", "增持", "减持")
     if not any(kw in report for kw in presence_kws):
-        return False
+        return GateResult(passed=False, reasons=[f"programs 有 {len(active)} 项活跃（planned/ongoing）但报告无 待执行/进行中/拟减持/拟增持/窗口/计划 词——悬顶/支撑计划须 surface"])
     return True
 
 
@@ -2228,7 +2308,7 @@ def check_g49(report: str, data: dict) -> bool:
     if not isinstance(bsp, dict) or bsp.get("status") != "ok":
         # 反编造：无 BSP（或 failed）却声称「买卖力量」+ 阵营结论词
         if "买卖力量" in report and re.search(r"买方|卖方|买方占优|卖方占优", report):
-            return False
+            return GateResult(passed=False, reasons=["buy_sell_pressure 无 verdict（unclear/failed）却写「买卖力量」+买方/卖方阵营词——无源阵营结论=编造"])
         return True
     verdict = bsp.get("verdict")
     if verdict in (None, "unclear"):
@@ -2236,7 +2316,7 @@ def check_g49(report: str, data: dict) -> bool:
     # presence：有 verdict（buy/sell/balanced）→ 报告须含阵营/分量词之一
     presence_kws = ("买卖力量", "买方", "卖方", "回购", "增持", "减持", "解禁", "质押", "平仓")
     if not any(kw in report for kw in presence_kws):
-        return False
+        return GateResult(passed=False, reasons=[f"buy_sell_pressure verdict={verdict}（材料级活动）但报告无阵营词（买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓）——m9.2 须 surface"])
     return True
 
 
@@ -2408,12 +2488,12 @@ def check_g53(report: str, data: dict) -> bool:
     # 自身分位法 enforcement：结论词须与分位一致（防绝对值误判）。
     # 量价维词(放量/缩量)已移出本维执法——归上方 volume_price 同维反捏造（维度错配修复）。
     if re.search(r'(高换手|换手偏高|成交活跃)', sec) and pct < 70:
-        return False
+        return GateResult(passed=False, reasons=[f"高换手表述（高换手/换手偏高/成交活跃）与换手分位 pct_250={pct}（<70）矛盾——结论词须与分位一致"])
     if re.search(r'(低换手|换手偏低|成交清淡)', sec) and pct > 30:
-        return False
+        return GateResult(passed=False, reasons=[f"低换手表述（低换手/换手偏低/成交清淡）与换手分位 pct_250={pct}（>30）矛盾——结论词须与分位一致"])
     # 提了换手须有档位表述（不能只给绝对值不判断）
     if "换手" in sec and not re.search(r'分位|偏高|偏低|正常|活跃|清淡', sec):
-        return False
+        return GateResult(passed=False, reasons=["提了换手但无档位表述（分位/偏高/偏低/正常/活跃/清淡）——不能只给绝对值不判断"])
     return True
 
 
@@ -2464,6 +2544,9 @@ def check_g55(report: str, data: dict) -> bool:
     sec = _m3_section(report)
     if not sec:
         return True   # 非 m3 报告不执法
+    # E3（2026-08-31，德福实锤）：五臂统一收集（同条件 OR，判决布尔不变）——旧首臂早退
+    # 导致「修 A 才暴露 B」二阶轮次；全量齐报 = 一轮修完。
+    violations = []
     # ③ golden：六维读数维度词（至少覆盖 4/5 维 + 诊断段）
     dims = [(r'ADX|震荡|趋势', "环境"), (r'换手|分位|量能|OBV', "量能"),
             (r'VWAP|乖离|BIAS|支撑|压力|斐波', "位置"), (r'筹码|获利盘|成本', "筹码"),
@@ -2471,28 +2554,36 @@ def check_g55(report: str, data: dict) -> bool:
     hit = sum(1 for pat, _ in dims if re.search(pat, sec))
     if hit < 4:
         miss = "、".join(name for pat, name in dims if not re.search(pat, sec))
-        return GateResult(passed=False, reasons=[
+        violations.append(
             f"m3 六维读数仅覆盖 {hit}/5（缺 {miss}）——须至少覆盖 4 维"
-            "（环境/量能/位置/筹码/趋势 各维读数词）"])
+            "（环境/量能/位置/筹码/趋势 各维读数词）")
     if not re.search(r'(诊断|共振|分歧|阶段)', sec):
-        return GateResult(passed=False, reasons=[
+        violations.append(
             "m3 缺综合一致性诊断段——须含诊断词（诊断/共振/分歧/阶段），"
-            "把六维读数收敛成一个结构性结论（禁打分）"])
+            "把六维读数收敛成一个结构性结论（禁打分）")
     # ④ 边界禁区：仓位/盈亏比/重仓/买卖建议/打分（m3 只读数诊断，决策→m6）
     if re.search(r'(仓位|盈亏比|重仓|建议买入|建议卖出)', sec):
-        return GateResult(passed=False, reasons=[
+        violations.append(
             "m3 越界：出现 仓位%/盈亏比/重仓/买卖建议——m3 只读数诊断，"
-            "决策类表述归 m6/m7，删除或移段"])
+            "决策类表述归 m6/m7，删除或移段")
     if re.search(r'得分|评分|综合\s*\d+\s*分', sec):
-        return GateResult(passed=False, reasons=[
-            "m3 越界：出现 得分/评分/综合N分——技术面禁量化打分（用诊断词收敛）"])
+        violations.append(
+            "m3 越界：出现 得分/评分/综合N分——技术面禁量化打分（用诊断词收敛）")
     # ②③ VWAP 反捏造（s2_quote_kline.data.realtime_quote.vwap 零成本消费）
     vwap = _snapshot_get(data, "s2_quote_kline.data.realtime_quote.vwap")
     if vwap is not None and "VWAP" in sec:
         if not _check_value_freshness(sec, vwap, ["VWAP"], scales=(1.0,), tol=0.01):
-            return GateResult(passed=False, reasons=[
+            violations.append(
                 f"报告 VWAP 值与 snapshot 不对齐（真值 {vwap}，tol 1%）——"
-                "照抄 s2_quote_kline.data.realtime_quote.vwap"])
+                "照抄 s2_quote_kline.data.realtime_quote.vwap"
+                "（snapshot_view <S> --raw s2_quote_kline.data.realtime_quote --field vwap 验真）")
+    if violations:
+        # E9：焦点门原生 diag（degraded=False，expected/found 带真值）
+        return GateResult(passed=False, reasons=violations, diag={
+            "subcheck": "m3_golden", "violated": f"{len(violations)} 处六维/VWAP/边界违规",
+            "expected": "六维读数≥4维+一致性诊断段；VWAP 值==snapshot；仓位/盈亏比→m6/m7",
+            "found": violations, "fix": "照各违规行补维/对拍 s4_technical 真值/移段",
+            "src": "s4_technical", "degraded": False})
     return True
 
 
@@ -2513,6 +2604,8 @@ def check_g56(report: str, data: dict) -> bool:
     cls = _snapshot_get(data, "classification") or {}
     primary = cls.get("primary_type")
 
+    # E3（2026-08-31）：七臂统一收集（同条件 OR，判决布尔不变）——镜像 check_g55。
+    violations = []
     # ① 反捏造：类型词缺失即越界/捏造
     _TYPE_KW = {"成长": ("成长",), "价值": ("价值",), "防御": ("防御", "公用"),
                 "周期": ("周期",), "金融": ("金融", "银行", "券商", "保险")}
@@ -2520,17 +2613,17 @@ def check_g56(report: str, data: dict) -> bool:
         stem = next((k for k in _TYPE_KW if k in str(primary)), None)
         syns = _TYPE_KW.get(stem, (str(primary),))
         if not any(s in sec for s in syns):
-            return GateResult(passed=False, reasons=[
+            violations.append(
                 f"m1 类型词缺失：classification.primary_type={primary}，"
-                f"标的概况段须含该类型词（{ '/'.join(syns) }）——禁换用别的类型"])
+                f"标的概况段须含该类型词（{ '/'.join(syns) }）——禁换用别的类型")
         # dominant_business 占比数值对齐（report"占主营Y%" == snapshot）
         dom = cls.get("dominant_business") or {}
         ratio = dom.get("revenue_ratio")
         if ratio is not None and any(k in sec for k in ("占主营", "主营")):
             if not _check_value_freshness(sec, ratio, ["占主营", "主营"], scales=(1.0, 0.01), tol=0.05):
-                return GateResult(passed=False, reasons=[
+                violations.append(
                     f"m1 占主营比例与 snapshot 不对齐（真值 revenue_ratio={ratio}，tol 5%）——"
-                    "照抄 classification.dominant_business.revenue_ratio"])
+                    "照抄 classification.dominant_business.revenue_ratio")
 
     # ③ golden 结构：五块标志词（任一同义即可）
     _MUST = [("类型", "估值框架"), ("主营", "业务", "产品"), ("历史", "上市", "阶段"),
@@ -2539,25 +2632,32 @@ def check_g56(report: str, data: dict) -> bool:
     _missing_blocks = [name for grp, name in zip(_MUST, _MUST_NAMES)
                        if not any(k in sec for k in grp)]
     if _missing_blocks:   # F3 族清扫（2026-08-30）：五块缺口全量报，不再只报首块
-        return GateResult(passed=False, reasons=[
+        violations.extend(
             f"m1 五块缺「{name}」——定性叙事须含：类型/身份主营/历史阶段/当前阶段定位/同行差异化"
-            for name in _missing_blocks])
+            for name in _missing_blocks)
 
     # ④ 边界禁区（收敛核心）：禁新接线标记 + ST5/ST6 量化独立段
     if "🆕" in sec:
-        return GateResult(passed=False, reasons=[
-            "m1 残留 🆕 新接线标记——收敛后 m1 禁标注新功能，删除该标记"])
+        violations.append(
+            "m1 残留 🆕 新接线标记——收敛后 m1 禁标注新功能，删除该标记")
     if re.search(r'(减持|增持|回购)\s*(?:计划|悬顶|在途).{0,20}[\d.]+\s*[%亿]', sec):
-        return GateResult(passed=False, reasons=[
-            "m1 越界：减持/增持/回购的 %/金额/窗口量化——ST5 归 m9 §9.2，m1 只定性一句话"])
+        violations.append(
+            "m1 越界：减持/增持/回购的 %/金额/窗口量化——ST5 归 m9 §9.2，m1 只定性一句话")
     if re.search(r'(verdict|买卖阵营|买卖力量).{0,15}[\d.]+\s*亿', sec):
-        return GateResult(passed=False, reasons=[
-            "m1 越界：买卖力量 verdict 带亿级量化——ST6 归 m7 §7.5.2，m1 不重渲染"])
+        violations.append(
+            "m1 越界：买卖力量 verdict 带亿级量化——ST6 归 m7 §7.5.2，m1 不重渲染")
     # 资金/筹码方向须指向 home（≤1 句，不可独立成段重渲染）
     if any(k in sec for k in ("资金", "筹码", "回购", "减持", "增持")) and \
             not re.search(r'(详见|见)\s*m[79]', sec, re.IGNORECASE):
-        return GateResult(passed=False, reasons=[
-            "m1 资金/筹码表述未指向 home——须 ≤1 句并带「详见 m9/m7」指路（禁独立成段重渲染）"])
+        violations.append(
+            "m1 资金/筹码表述未指向 home——须 ≤1 句并带「详见 m9/m7」指路（禁独立成段重渲染）")
+    if violations:
+        # E9：焦点门原生 diag（degraded=False）
+        return GateResult(passed=False, reasons=violations, diag={
+            "subcheck": "m1_golden", "violated": f"{len(violations)} 处五块/类型/边界违规",
+            "expected": "五块定性叙事齐+primary_type 词+资金筹码≤1句指向 home",
+            "found": violations, "fix": "照各违规行补块/带分类真值/移段",
+            "src": "classification + report §1", "degraded": False})
     return True
 
 
@@ -2761,16 +2861,16 @@ def check_g61(report: str, data: dict) -> bool:
     conclusions = ev.get("conclusions") or []
     # ② 保存格式正确
     if not conclusions:
-        return False                          # ok 却无结论 = 管道断裂（只拉不用）
+        return GateResult(passed=False, reasons=[f"千股千评 status=ok 却 conclusions 为空（{type(conclusions).__name__}）——管道断裂（只拉不用），须重跑"])
     REQ = ("dimension", "text", "severity", "source_api")
     if not all(all(k in c for k in REQ) for c in conclusions):
-        return False                          # 字段缺 = 格式不正确
+        return GateResult(passed=False, reasons=[f"conclusions 字段缺（dimension/text/severity/source_api 必填）——缺失键 {[k for c in conclusions for k in ('dimension','text','severity','source_api') if k not in c][:4]}，格式不正确"])
     if not ev.get("latest_period"):
-        return False                          # 黄金范式信封缺
+        return GateResult(passed=False, reasons=["evaluations latest_period 信封缺——黄金范式信封缺失，须重跑 s_stock_evaluation 拉取"])
     # ③ 读取统一（双兜底，防 never-match）
     if not (_snapshot_get(data, "s_stock_evaluation.data.processed.conclusions")
             or _snapshot_get(data, "s_stock_evaluation.data_full.processed.conclusions")):
-        return False
+        return GateResult(passed=False, reasons=["s_stock_evaluation processed.conclusions 双兜底（data/data_full）皆无——评估结论层断裂（拉了没存），须重跑"])
     # ④ 消费完整（不用只拉不用）：每个 ok 结论维度报告须 surface 对应词
     DIM_WORDS = {
         "控盘程度": ("完全控盘", "高度控盘", "中度控盘", "轻度控盘", "低度控盘", "控盘"),
@@ -2794,7 +2894,7 @@ def check_g61(report: str, data: dict) -> bool:
     # 反编造：报告含结论词却无数据源锚 = 编造
     _HAS_CONCL = ("控盘", "主力资金介入", "主力资金流出", "支撑位", "压力位", "两融标的")
     if any(w in report for w in _HAS_CONCL) and "s_stock_evaluation" not in report:
-        return False
+        return GateResult(passed=False, reasons=["报告含千股千评结论词（控盘/主力资金介入/支撑位/两融标的 等）却无 s_stock_evaluation 溯源——结论须带源锚"])
     return True
 
 
@@ -2809,49 +2909,94 @@ _DIR_NORM = {"偏多": "多", "看多": "多", "偏空": "空", "看空": "空",
 
 
 def _tally_table_counts(report: str) -> dict:
-    """数全报告 markdown 表格第 2 列为裸方向词的行（**已剥**），返回 {多/中性/空: 计数}。
+    """数 **tally 表**（表头第 2 列字面==「方向」的表）第 2 列裸方向词数据行，返回 {多/中性/空}。
 
-    只数裸单元格（cell.strip('* ') 精确等于方向词）——「**偏空（强趋势）**」这类带括号
-    修饰的技术表不数（非 tally 表，防误伤）。"""
+    E4（2026-08-31，德福实锤）：表头签名门——旧实现扫全报告所有表第 2 列，§3.2 技术
+    表（表头第 2 列=状态/数值/读数，单元格裸「中性」）被误计入 → 自称计数被污染必 FAIL。
+    只数裸单元格（cell.strip('* ') 精确等于方向词）——「**偏空（强趋势）」带括号修饰不数。"""
     counts = {"多": 0, "中性": 0, "空": 0}
-    for ln in report.splitlines():
-        s = ln.strip()
-        if not (s.startswith("|") and s.endswith("|")):
+    for tbl in _g30_group_tables(report):
+        if len(tbl) < 2:
             continue
-        cells = [c.strip().strip("*").strip() for c in s.strip("|").split("|")]
-        if len(cells) >= 2 and cells[1] in _DIR_NORM:
-            counts[_DIR_NORM[cells[1]]] += 1
+        header = [c.strip().strip("*").strip() for c in tbl[0].strip().strip("|").split("|")]
+        if len(header) < 2 or header[1] != "方向":
+            continue   # 非 tally 表（表头签名不符）——不计数
+        for ln in tbl[1:]:
+            cells = [c.strip().strip("*").strip() for c in ln.strip().strip("|").split("|")]
+            if len(cells) >= 2 and cells[1] in _DIR_NORM:
+                counts[_DIR_NORM[cells[1]]] += 1
     return counts
 
 
-def check_g62(report: str, data: dict) -> bool:
-    """G62: m6 tally 跨章一致（§6 证据表方向计数 == 正文自称数）。SOFT(weight1)。
+# 自称模式（N偏多/N中性/N偏空，宽容空格/全角斜杠）
+_G62_TALLY_RE = re.compile(
+    r'(\d+)\s*(?:个)?\s*[偏看]多\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*中性'
+    r'\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*[偏看]空')
 
-    真实败因（2026-08-16 review）：正文自称「7 偏多 / 5 中性 / 1 偏空」，证据表实际
-    5/6/4——自称数与表格不符 = 结论失真。执法：数全报告表格第 2 列裸方向词行，
-    与正文「N 偏多 / N 中性 / N 偏空」自称模式逐项比对，任一不符 → FAIL。
+
+def check_g62(report: str, data: dict) -> bool:
+    """G62: m6 tally 跨章一致（§6 证据表方向计数 == 正文自称数）+ 引擎参考锚软披露。SOFT(weight1)。
+
+    T1 硬臂（原语义）：自称计数与 tally 表实数不符 → FAIL。自称取**最后一个**匹配——
+    明示分歧句「引擎 7/4/2，本表裁决 5/6/3」的 claimed=本表 5/6/3（旧实现抓首个=引擎值，
+    披露写法必炸，E4 修）。
+    T2 软臂（E4 新增，F1 铁证）：自称 ≠ 引擎 tally.advisory 三元组且未披露引擎值 →
+    passed=True + reasons 披露引擎 advisory + 照抄命令（引擎≠自称是合法设计——m6:56
+    「tally 是参考锚非映射公式，LLM 自主裁决」；硬执法 = 归档满分报告全翻车）。
     三态：无自称模式或无 tally 表行 → PASS（no-op，不强制写自称句）。
     """
-    m = re.search(r'(\d+)\s*(?:个)?\s*[偏看]多\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*中性'
-                  r'\s*[/／、,，\s]\s*(\d+)\s*(?:个)?\s*[偏看]空', report)
-    if not m:
+    matches = list(_G62_TALLY_RE.finditer(report))
+    if not matches:
         return True
+    m = matches[-1]   # 末个匹配 = 自称本体（披露句里的引擎值在前，不作 claimed）
     claimed = {"多": int(m.group(1)), "中性": int(m.group(2)), "空": int(m.group(3))}
     actual = _tally_table_counts(report)
     if not any(actual.values()):
         return True  # 有自称但无 tally 表（可能是纯叙事 tally）→ no-op
+
+    # T1 硬臂先执法（自称 vs 表格 = 报告内在一致性）：软臂不得短路硬 FAIL——
+    # 自称既与自家表格不符，披露与否都先炸（C9 反例钉死此序）。
     diffs = [f"{k}: 自称{claimed[k]} vs 表格{actual[k]}" for k in ("多", "中性", "空")
              if claimed[k] != actual[k]]
     if diffs:
         return GateResult(passed=False, reasons=[
             "m6 tally 跨章不一致——正文自称方向计数与证据表实数不符（" + "；".join(diffs) +
-            "）。自称句须照表格重数（或表格补齐后同步自称）"])
+            "）。自称句须照表格重数（或表格补齐后同步自称）"], diag={
+            "subcheck": "tally_cross_section", "violated": "自称计数与 §6 证据表实数不符（T1）",
+            "expected": f"多{actual['多']}/中性{actual['中性']}/空{actual['空']}（表格实数）",
+            "found": f"多{claimed['多']}/中性{claimed['中性']}/空{claimed['空']}（正文自称）",
+            "fix": "自称句照表格重数（表头第2列=方向的表才计入）",
+            "src": "report §6", "degraded": False})
+
+    # T2 软臂：引擎参考锚 vs 自称（SOFT 披露，不 FAIL）
+    pan = _cap_panorama(data)
+    tally = (pan or {}).get("tally") or {}
+    if tally.get("advisory"):
+        engine = {"多": tally.get("bull", 0), "中性": tally.get("neutral", 0),
+                  "空": tally.get("bear", 0)}
+        differs = any(claimed[k] != engine[k] for k in ("多", "中性", "空"))
+        # 披露检测：报告（剥空白）contains 引擎 advisory（P6：容忍「7 偏多/4 中性」空格变体）
+        flat = re.sub(r"\s+", "", report)
+        disclosed = re.sub(r"\s+", "", tally["advisory"]).split("；")[0] in flat
+        if differs and not disclosed:
+            soft = (f"tally 分歧披露（T2 参考锚，不 FAIL）：引擎 panorama.tally.advisory="
+                    f"{tally['advisory']}，报告自称 {m.group(0).strip()}——m6 合同三选一："
+                    "照抄 advisory / 明示分歧（「引擎 N/N/N，本表裁决 N/N/N：裁决理由」）/ 不写自称句；"
+                    "引擎值照抄命令：python3 scripts/lib/capstone_panorama.py --snapshot <S>")
+            return GateResult(passed=True, reasons=[soft], diag={
+                "subcheck": "engine_advisory", "violated": "自称 tally 与引擎参考锚分歧且未披露",
+                "expected": tally["advisory"], "found": m.group(0).strip(),
+                "fix": "照抄 panorama.tally.advisory 或明示分歧（引擎 N/N/N，本表裁决 N/N/N）",
+                "src": "capstone_panorama.tally", "degraded": False})
     return True
 
 
 def _extract_price_candidates(text: str) -> list:
     """提取疑似价位数字：剥 % 值与已知 fib 比率/百分数值、年份、<3 的小数（比率）。"""
     t = re.sub(r'\d+(?:\.\d+)?\s*%', '', text)          # 百分数先剥
+    # E1（2026-08-31，金安 002636 实锤）：分位数非价位——「换手率 99 分位」的 99 曾被当
+    # 价位对拍真值 94.78（偏 4.5%）误判转录错。分数形式（99/100 分位）分子分母一起剥。
+    t = re.sub(r'\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?\s*分位', ' ', t)
     # ASCII 标识符整体剥（MA20/ATR14/BIAS_12/RS_20D/td9_done/s4_technical/ADX22.56…）：粘连
     # 数字是参数或路径序号，非价位。中文标签（支撑位14.18）不受影响——标识符须 ASCII 起头。
     t = re.sub(r'[A-Za-z_][A-Za-z_0-9]*\s*[(（][^)）]*[)）]|[A-Za-z_][A-Za-z_0-9]*(?:\.\d+)?', ' ', t)
@@ -2977,8 +3122,14 @@ def check_g63(report: str, data: dict) -> bool:
                     "照抄 snapshot 真值（fib/S&R/筹码成本/ATR止损/TDST/MA/BOLL/券商锚），禁手抄改动")
         reasons = [_v_reason(v) for v in violations[:5]]
         if len(violations) > 5:
-            reasons.append(f"另有 {len(violations) - 5} 处同类转录错（本清单为全量，一轮修完再重跑）")
-        return GateResult(passed=False, reasons=reasons)
+            reasons.append(f"另有 {len(violations) - 5} 处同类转录错（全量见 sidecar diag.found）")
+        # E9：焦点门原生 diag——expected=snapshot 真值，found=报告转录值（全量）
+        return GateResult(passed=False, reasons=reasons, diag={
+            "subcheck": "price_transcription", "violated": f"{len(violations)} 处技术位转录错/取整",
+            "expected": [f"{v[1]}" for v in violations],
+            "found": [f"{v[0]}（{v[2]:.1%}）" for v in violations],
+            "fix": "照抄 snapshot 真值精确到分，禁四舍五入/手抄改动",
+            "src": "s4_technical + s_stock_evaluation + s2_quote_kline", "degraded": False})
     return True
 
 
@@ -3622,15 +3773,17 @@ GATE_REGISTRY = {
             "requires": "目标价数字须 [src:] 溯源或不确定性标注；websearch 与 API-grade 口径禁混用无 src",
             "fail_hint": "目标价无溯源或口径混用（websearch vs API）"},
     "G47": {"checker": check_g47, "weight": 1, "owner": ["m9", "m7"],
-            "data_dim": "s8_a_share.processed.shareholder_dynamics",
+            # E6（2026-08-31）：旧 s8_a_share.processed.* 实测全 None（preflight 致盲——
+            # 坏路径显示「无→三态豁免」误导），checker 实读在 s5_events.data.risk_signals.processed
+            "data_dim": "s5_events.data.risk_signals.processed.shareholder_dynamics",
             "requires": "shareholder_dynamics 有方向→surface 内部人/董监高/前十大/增持/减持/净买/净卖/港资/言行合一",
             "fail_hint": "股东行为综合研判漏 surface 或编造"},
     "G48": {"checker": check_g48, "weight": 1, "owner": ["m9", "m7", "m1"],
-            "data_dim": "s8_a_share.processed.programs",
+            "data_dim": "s5_events.data.risk_signals.processed.programs",
             "requires": "programs 有 planned/ongoing→surface 待执行/进行中/拟减持/拟增持/窗口/计划",
             "fail_hint": "增减持计划漏 surface 或编造"},
     "G49": {"checker": check_g49, "weight": 1, "owner": ["m9", "m7", "m6", "m1"],
-            "data_dim": "s8_a_share.processed.buy_sell_pressure",
+            "data_dim": "s5_events.data.risk_signals.processed.buy_sell_pressure",
             "requires": "buy_sell_pressure verdict 有向→surface 买卖力量/买方/卖方/回购/增持/减持/解禁/质押/平仓",
             "fail_hint": "买卖力量 verdict 漏 surface 或编造"},
     "G51": {"checker": check_g51, "weight": 2, "owner": ["m2"],

@@ -64,13 +64,18 @@ class GateImmunityPlainVsHidden(unittest.TestCase):
         self.assertFalse(_ok(check_g60(head + "- 护城河：国内唯一", _SNAP)))  # 必FAIL反例
 
     def test_tally_direction_cell_is_forbidden_zone(self):
-        """tally 第 2 列方向词格 = G62 禁区：注释使 cells[1] 精确匹配漏数。"""
-        base = _tally_table_counts("| 证据A | 偏多 | 1.2 |")
+        """tally 第 2 列方向词格 = G62 禁区：注释使 cells[1] 精确匹配漏数。
+
+        E4（2026-08-31 表头签名）后 tally 表须有「第 2 列表头=方向」签名行——裸数据行
+        （无表头）不再计数（C8：§3.2 状态表污染根修）。fixture 加表头行，原主张不变。"""
+        HDR = "| 维度 | 方向 | 现状 |\n|---|---|---|\n"
+        self.assertEqual(_tally_table_counts("| 证据A | 偏多 | 1.2 |")["多"], 0)  # 无表头=非 tally 表
+        base = _tally_table_counts(HDR + "| 证据A | 偏多 | 1.2 |")
         self.assertEqual(base["多"], 1)
-        with_comment = _tally_table_counts("| 证据A | 偏多 <!-- [src: snapshot.s2_quote_kline.data] --> | 1.2 |")
+        with_comment = _tally_table_counts(HDR + "| 证据A | 偏多 <!-- [src: snapshot.s2_quote_kline.data] --> | 1.2 |")
         self.assertEqual(with_comment["多"], 0)   # 漏数实锤 = 禁区存在
         # 非方向词格（第 3 列）放注释安全
-        safe = _tally_table_counts("| 证据A | 偏多 | 1.2 <!-- [src: snapshot.s2_quote_kline.data] --> |")
+        safe = _tally_table_counts(HDR + "| 证据A | 偏多 | 1.2 <!-- [src: snapshot.s2_quote_kline.data] --> |")
         self.assertEqual(safe["多"], 1)
 
 

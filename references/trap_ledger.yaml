@@ -1,0 +1,113 @@
+# TRAP_LEDGER — 陷阱台账（E10；2026-08-31 首批 10 条，金安 002636 / 德福 301511 两轮 13 陷阱归并）
+#
+# 单一真相源：新 trap 教训**先入本台账**（memory 只存跨票根因，见 memory-writing-conventions）。
+# 消费方：regression-tests/trap_ledger_scan.py（计数/增量拦截）、scripts/generate_checklist.py（blocked 硬阻断）。
+#
+# schema：
+#   signature: gate#subcheck:reason_class   ← 唯一键
+#   gate/subcheck/reason_class/fix          ← 定位与修法
+#   match:   该 gate FAIL reasons 拼接串的正则（缺省=gate 级兜底）
+#   count:   基线计数（= 冻结日线上语料实测量；--strict 仅拦 cur>count 的新增，P12）
+#   status:  landed=引擎已修复（复发=回归）｜pending=写作纪律约束（复发=正常计数增长，人工复盘）
+#   blocked(P3): true 时 generate_checklist exit 2 硬阻断（运营态开关，修复后置回 false）
+entries:
+  - signature: G63#percentile:percentile_as_price
+    gate: G63
+    subcheck: percentile
+    reason_class: percentile_as_price
+    match: "分位"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    blocked: false
+    fix: "（金安实锤）换手/估值分位数字与 S&R 真值落 ±5% 容差窗被误判价位转录错——引擎已剥『N分位』词（E1），报告可直书分位数字；复发=剥离 regex 回退"
+  - signature: G30#5:negation_window
+    gate: G30
+    subcheck: "5"
+    reason_class: negation_window
+    match: "#5"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    blocked: false
+    fix: "（金安实锤）前置否定词（不支持/暂不/无加仓…）修饰的动作词被当主推荐动作——引擎已加 12 字符否定窗+两遍锚定（E2）；capstone 区动作词仍建议用 持有/观望/逢低承接"
+  - signature: G21#src_path:alias_hotspots
+    gate: G21
+    subcheck: src_path
+    reason_class: alias_hotspots
+    match: "真路径|假层"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    blocked: false
+    fix: "（金安实锤）假层路径 5 重灾区：technical.relative_strength / td.daily / cash_flow_statement / s9_news——引擎已带 PATH_ALIASES 指引（E5），照 suggestion 改真路径"
+  - signature: G21#src_path:numeric_subscript
+    gate: G21
+    subcheck: src_path
+    reason_class: numeric_subscript
+    match: "去下标|数组下标"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    blocked: false
+    fix: "（金安/龙磁实锤）数组下标 .N（signals.events.0/seats.0）必 FAIL——G21 按 dict 键步进；去下标锚父级节点"
+  - signature: G62#tally:direction_column_contract
+    gate: G62
+    subcheck: tally
+    reason_class: direction_column_contract
+    match: "跨章不一致"
+    count: 0
+    last_seen: "2026-08-31"
+    status: landed
+    blocked: false
+    fix: "（德福实锤，两条并一）①方向列必须第 2 列且单元格字面=方向、括号注释挪「现状」列；②他表（§3.2 信号矩阵）第 2 列裸方向词曾误计入——引擎已表头签名执法（E4：只数表头第 2 列=方向 的表），他表可安全用「中性区」带修饰词；复发（跨章不一致 FAIL 再现）=表头签名回退"
+  - signature: G55#disclosure:false_missing_claim
+    gate: G55
+    subcheck: disclosure
+    reason_class: false_missing_claim
+    match: "VWAP"
+    count: 0
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: false
+    fix: "（德福实锤）缺失披露必验真：VWAP 真值 89.83 在而写「字段为空」→反捏造 FAIL——披露缺失前必 snapshot_view --field vwap 验真"
+  - signature: G55#vocab:boundary_words
+    gate: G55
+    subcheck: vocab
+    reason_class: boundary_words
+    match: "仓位|盈亏比|重仓"
+    count: 0
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: false
+    fix: "（德福实锤）词表子串命中：m3 段「仓位管理/仓位节奏」也算越界——仓位/盈亏比/重仓是 m6/m7 边界词，m3 只读数"
+  - signature: G56#pointer:literal_home_link
+    gate: G56
+    subcheck: pointer
+    reason_class: literal_home_link
+    match: "详见 m9/m7"
+    count: 0
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: false
+    fix: "（德福实锤）m1 资金筹码句须含「详见 m7/m9」字面（「详见 §8」不够），≤1 句+指向 home"
+  - signature: G64#caliber:big_order_mislabel
+    gate: G64
+    subcheck: caliber
+    reason_class: big_order_mislabel
+    match: "口径错标"
+    count: 0
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: false
+    fix: "（德福实锤）行含「大单」不含「主力」→数值命中主力/全单口径即 FAIL——写「全单口径净流入约 N 亿」或标注「主力」"
+  - signature: G30#1:substring_keyword
+    gate: G30
+    subcheck: "1"
+    reason_class: substring_keyword
+    match: "增发|担保"
+    count: 0
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: false
+    fix: "（德福实锤）⑫治理行须含「增发」「担保」词本身——「定增」不含「增发」子串，担保数额照抄 timeline"

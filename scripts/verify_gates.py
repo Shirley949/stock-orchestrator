@@ -82,16 +82,40 @@ def _build_action_required(failed_gates: list, details: list) -> list:
     lines = []
     for g in failed_gates:
         base = f"{g}: {GATE_DESCS.get(g, '未知')}"
-        reasons = (detail_by_gate.get(g) or {}).get("reasons") or []
+        d = detail_by_gate.get(g) or {}
+        reasons = d.get("reasons") or []
         if reasons:
             for r in reasons:
                 lines.append(f"{base} → {r}")
         else:
             lines.append(base)
+        # E9（2026-08-31）：diag 真值行——expected/found/src 三键（degraded 合成的不
+        # 渲染，expected/found=None 无信息量，fix 已有 fail_hint 兜底行）。
+        diag = d.get("diag")
+        if isinstance(diag, dict) and not diag.get("degraded"):
+            parts = [f"{k}: {diag[k]}" for k in ("expected", "found", "src")
+                     if diag.get(k) is not None]
+            if parts:
+                lines.append(f"  ⚙️ {' | '.join(parts)}")
         hint = GATE_HINTS.get(g)
         if hint:
             lines.append(f"  💡 {g} 修法: {hint}")
     return lines
+
+
+# E9-L2：diag.fix 话术 lint——「绕过/规避」类话术把 gate 当对手而非质检，警告不 FAIL。
+_BYPASS_RE = re.compile(r"绕过|规避|换词避开|改成不含")
+
+
+def _lint_diag_fix(details: list) -> list:
+    """扫描 FAIL 项 diag.fix 的绕过话术 → 警告行列表（L2，不改变 verdict）。"""
+    warns = []
+    for d in details:
+        diag = d.get("diag")
+        fix = diag.get("fix") if isinstance(diag, dict) else None
+        if isinstance(fix, str) and _BYPASS_RE.search(fix):
+            warns.append(f"{d['gate']}: diag.fix 含绕过话术（应修数据/措辞事实，非绕检）: {fix}")
+    return warns
 
 
 def verify_gates(report: str, data: dict, profile_name: str) -> dict:
@@ -161,9 +185,11 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
             ret = checker(report, data)
             # 兼容 bool 与 dict 返回：dict 含 {passed, reasons} 时上浮具体 FAIL 原因到
             # sidecar/action_required（如 G30 「股东户数 stale」），让作者知是哪个值 stale。
+            gate_diag = None
             if isinstance(ret, dict):
                 ok = bool(ret.get("passed", False))
                 gate_reasons = ret.get("reasons") or []
+                gate_diag = ret.get("diag")
             else:
                 ok = bool(ret)
                 # 薄壳兜底（B1）：bool 门 FAIL 无原生 reasons → 上浮注册表 fail_hint
@@ -178,8 +204,16 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
             else:
                 failed.append(gate)
                 detail = {"gate": gate, "status": "fail", "desc": desc, "weight": weight}
+                # E9（2026-08-31 诊断契约 v2）：FAIL 项 100% 带 diag——checker 未发射
+                #（bool 返回 / 收集化前的裸 FAIL）→ 框架合成 degraded=True 兜底
+                #（expected/found 留 None = 诚实标注「引擎未预计算真值」，fix=fail_hint）。
+                if not isinstance(gate_diag, dict):
+                    gate_diag = {"expected": None, "found": None,
+                                 "fix": GATE_REGISTRY[gate]["fail_hint"], "degraded": True}
             if gate_reasons:
                 detail["reasons"] = gate_reasons
+            if isinstance(gate_diag, dict):
+                detail["diag"] = gate_diag
             details.append(detail)
         except Exception as e:
             errors.append(gate)
@@ -227,6 +261,11 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
 
     # A2: 脚本化三维自评分（数据覆盖 / Gate通过 / SOURCE溯源）—— 禁止手填
     base_result["self_score"] = compute_self_score(report, data, base_result)
+
+    # E9-L2：diag.fix 绕过话术 lint（警告不 FAIL）
+    lint = _lint_diag_fix(details)
+    if lint:
+        base_result["diag_lint"] = lint
 
     return base_result
 

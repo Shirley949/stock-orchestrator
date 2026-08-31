@@ -1,0 +1,15 @@
+{
+ "verdict": "FAIL",
+ "failed_gates": [
+  "G99"
+ ],
+ "details": [
+  {
+   "gate": "G99",
+   "status": "fail",
+   "reasons": [
+    "沙箱陷阱 #2：验证 scan 计数与 strict 增量拦截"
+   ]
+  }
+ ]
+}

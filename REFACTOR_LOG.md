@@ -1,3 +1,21 @@
+## 2026-08-31 诊断契约 v2：全 gate 自包含失败诊断 + G62 表头签名/G63 分位剥离/G30#5 否定窗/G21 路径指引 + TRAP_LEDGER（plan b-snapshot-5-eager-tome）
+
+触发：金安 002636 / 德福 301511 两轮暴露「gate FAIL 后排障靠读 178K 源码 + hint 覆盖不足 + 教训散落 memory」。四层：引擎修复（E1-E8）/ 诊断管线（E9）/ 补线（E7）/ 台账（E10-E11）。全程 **43 对归档(报告,快照) verdict 回放零翻转**锚定（test_archive_replay.py + fixtures/archive_replay_baseline.json，函数直调禁 CLI 防 sidecar 污染）。
+
+- **E1 G63 分位剥离**：`N 分位`/`N/100 分位` 数字不再进价位对拍（金安「99 分位」曾被当价位与 94.78 对拍误判转录错）。
+- **E2 G30#5 两遍锚定+否定窗**：强锚（投资建议/主推荐…）优先于弱锚「结论」；前置 12 字符否定词窗内动作词不算主推荐（「不支持现价加仓」不再污染分类；「观望」不入否定表——它本身是持有类动作）。
+- **E3 G55/G56 收集化**：五臂/七臂 violations 全量齐报（旧首臂早退）；GATE_HINTS G56 剔除 G51 的 SGR 句。
+- **E4 G62 表头签名 + T1/T2 分层 + 披露感知 claimed**：`_tally_table_counts` 只数「表头第 2 列字面=方向」的表（§3.2 状态表污染根修）；T1 硬臂（自称≠表格）**先于** T2 软臂（自称≠引擎 advisory 未披露→SOFT 提示+diag，F1 铁证：引擎≠自称是 m6 合法设计）；claimed 取最后匹配——「引擎 7/4/2，本表裁决 5/6/3」明示分歧写法合法（旧引擎抓首个=引擎值必炸）。执法序 bug 由 C9 反例抓出（软臂短路硬臂）。
+- **E5 G21 坏路径指引**：`PATH_ALIASES`（s9_news→s5_events.data.news / td.daily→td / cash_flow_statement→cash_flow / technical.relative_strength→data.relative_strength / peer 子键）+ `_explain_bad_path`（最深节点+兄弟键≤8+difflib 近邻）；reasons cap5+溢出行带余量建议；diag.found 全量；「本清单为全量」自相矛盾尾句废除。G21 dict-only 步进保持（有意合同，禁换 _snapshot_get）。
+- **E9 diag 管线**：verify_gates FAIL detail 100% 带 diag（checker 原生或框架 degraded 合成，expected/found=None+fix=fail_hint）；`_build_action_required` 追加 expected/found/src 行；L2 lint（diag.fix 含 绕过/规避/换词避开/改成不含 → result.diag_lint 警告）。
+- **E7 R5 28 门/62+3 处裸 False 补线**：GateResult reasons 带作用域内触发真值（判决布尔不动，replay 零翻转+62 门漏报=0 双锚定）。
+- **E8 panorama 双调用消除**：`_g30_signal_coverage_findings(data, cov, pan=None)`，_g30_run 传已算 pan。
+- **E10/E11 TRAP_LEDGER 三件套**：`references/trap_ledger.yaml`（首批 10 条，金安/德福 13 陷阱归并；schema 含 match/count 基线/status/blocked(P3)）+ `scripts/lib/trap_ledger.py` + `regression-tests/trap_ledger_scan.py`（**strict=增量拦截**（P12）：signature 计数>count 基线才 exit1，72 份存量 sidecar 10 处历史 FAIL 不误拦）+ generate_checklist blocked 硬阻断 exit2（--ignore-trap-ledger 逃生）+ run_regression.sh 接线两极沙箱（fixtures/trap_ledger_sandbox pole_fail=期望 exit1/pole_pass=期望 exit0）。
+- **测试**：test_diag_contract.py 28 用例（C2-C15/L2：先红在功能缺席处）；test_src_hidden_style G62 fixture 外科刷新（E4 有意行为变更：无表头裸数据行不再计数，测试主张不变加表头行）。
+
+验证：run_regression.sh exit 0（62 门漏报=0）；test_archive_replay --compare 43 对白名单外零翻转；test_diag_contract 28/28；trap_ledger strict 两极 + checklist 硬阻断两极实测。
+
+
 ## 2026-08-31 模式B核心结论头块固化：G71 + b_head 视图接线 + m38 契约（plan b-snapshot-5-eager-tome）
 
 触发：用户拍板 300433 模式B v2 报告的「核心结论」置顶块固化为 B 报告标准开头（点名 10 槽位），硬要求「模板每次一致 + 数据新鲜正确」。三层分工：脆弱归引擎（routing 仓 `build_b_head_view` 预渲染 `head_draft_md`）、结构归 gate（G71）、开放归散文（quality 仓 m38）。

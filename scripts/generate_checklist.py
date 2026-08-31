@@ -457,7 +457,21 @@ def main():
     parser.add_argument("--stock-codes", help="股票代码（逗号分隔），不传则自动提取")
     parser.add_argument("--mode", choices=["A", "B"], help="分析模式，不传则自动判定")
     parser.add_argument("--output", help="输出清单文件路径")
+    parser.add_argument("--ignore-trap-ledger", action="store_true",
+                        help="逃生口：跳过 TRAP_LEDGER blocked(P3) 硬阻断检查")
     args = parser.parse_args()
+
+    # E10（TRAP_LEDGER P3 硬阻断）：台账存在 blocked 条目（某 trap 复发/回退到
+    # 「未修复不能再开新票」的运营态）→ 拒生成新清单 exit 2；修复后置 blocked: false。
+    if not args.ignore_trap_ledger:
+        import trap_ledger
+        blocked = trap_ledger.blocked_gates()
+        if blocked:
+            print("🔴 TRAP_LEDGER 存在 blocked(P3) 条目，新分析清单生成被阻断"
+                  "（修复后置 blocked: false，或 --ignore-trap-ledger 逃生）：", file=sys.stderr)
+            for e in blocked:
+                print(f"   · {e.get('signature')} — {e.get('fix', '')}", file=sys.stderr)
+            sys.exit(2)
 
     generate_checklist(
         user_prompt=args.user_prompt,

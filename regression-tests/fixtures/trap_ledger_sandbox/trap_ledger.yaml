@@ -1,0 +1,11 @@
+entries:
+  - signature: G99#sandbox:blocked_trap
+    gate: G99
+    subcheck: sandbox
+    reason_class: blocked_trap
+    match: "沙箱陷阱"
+    count: 1   # 基线=1：pole_pass（1 份同款 FAIL）→ cur=1 通过极；pole_fail（2 份）→ cur=2 新增拦截极
+    last_seen: "2026-08-31"
+    status: pending
+    blocked: true
+    fix: 沙箱验证用：blocked 硬阻断两极

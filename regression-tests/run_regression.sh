@@ -86,6 +86,18 @@ echo "[① 契约层] test_r8_mechanism.py（第4批 R8 机制档：precheck exi
 python3 "$HERE/test_r8_mechanism.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_src_hidden_style.py（src 写法契约：gate 对注释包裹等价+G62 tally 禁区+strip_for_publish 发布剥离）"
 python3 "$HERE/test_src_hidden_style.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_diag_contract.py（诊断契约 v2：G62表头签名/G21路径指引/28门补线/diag 管线+L2 lint）"
+python3 "$HERE/test_diag_contract.py" 2>&1 | tail -3
+echo "[① 契约层] trap_ledger_scan.py --strict 两极（拦截极=沙箱造件超基线期望 exit1；通过极=计数≤基线期望 exit0；线上语料走非 strict 报告模式，P12）"
+SB="$HERE/fixtures/trap_ledger_sandbox"
+if python3 "$HERE/trap_ledger_scan.py" --strict --root "$SB/pole_fail" --ledger "$SB/trap_ledger.yaml" >/dev/null 2>&1; then
+  echo "❌ trap_ledger 拦截极失效：造件超基线应 exit1 实为 exit0"; exit 1
+else
+  echo "  ✓ 拦截极 exit=1（cur=2 > base=1）"
+fi
+python3 "$HERE/trap_ledger_scan.py" --strict --root "$SB/pole_pass" --ledger "$SB/trap_ledger.yaml" >/dev/null 2>&1 \
+  || { echo "❌ trap_ledger 通过极误拦：计数=基线应 exit0"; exit 1; }
+echo "  ✓ 通过极 exit=0（cur=1 ≤ base=1）"
 echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组保真+KEEP 截断+by_code 投影闭合+三态 离线纯函数）"
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_full_archive.py（模式B full/ 存档：全量性+同日复用+A∪B合并+cleanup白名单+90天旧档识别）"
