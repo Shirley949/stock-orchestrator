@@ -37,6 +37,24 @@ from gate_definitions import (
     ALL_GATES, GATE_CHECKERS, GATE_DESCS, GATE_HINTS, GATE_WEIGHTS, GATE_REGISTRY,
     PROFILES, compute_score, get_profile, compute_self_score
 )
+from trap_ledger import load_acceptance  # noqa: E402  C-4 warn→硬断言翻转位
+
+# C-4：翻转位缓存（mtime 感知——簿记文件低频写，热路径零 IO 放大）
+_ACC_STATE = {"path": None, "mtime": None, "flipped": False}
+_ACC_OVERRIDE_PATH = None   # 测试注入点（test_field_acceptance 指向临时状态文件）
+
+
+def _acceptance_flipped() -> bool:
+    p = Path(_ACC_OVERRIDE_PATH) if _ACC_OVERRIDE_PATH else Path(SCRIPT_DIR).parent / "references" / "trap_ledger_acceptance.yaml"
+    try:
+        mtime = p.stat().st_mtime
+    except OSError:
+        return False
+    if _ACC_STATE["path"] == p and _ACC_STATE["mtime"] == mtime:
+        return _ACC_STATE["flipped"]
+    flipped = bool(((load_acceptance(p) or {}).get("warn_upgrade") or {}).get("flipped"))
+    _ACC_STATE.update(path=p, mtime=mtime, flipped=flipped)
+    return flipped
 
 
 def load_report(report_path: str) -> str:
@@ -275,9 +293,17 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     if lint:
         base_result["diag_lint"] = lint
 
-    # 运行时第二防线：bool 返回门清单（零命中一轮 cron 后升硬断言，见 :150 注释）
+    # 运行时第二防线：bool 返回门清单（零命中一轮 cron 后升硬断言，见 :150 注释）。
+    # C-4（2026-09-01）：翻转位由 trap_ledger_scan --field-acceptance 自动置（一轮 cron
+    # 零命中）——翻转后按硬断言执法：**verdict 中性**（bool 门本就 FAIL，恒 FAIL），
+    # 只把 warn 升为 contract violation 进 action_required（禁静默降级 fail_hint）。
     if bool_return_gates:
         base_result["bool_return_warn"] = sorted(set(bool_return_gates))
+        if _acceptance_flipped():
+            base_result["bool_return_hard"] = True
+            base_result.setdefault("action_required", []).insert(
+                0, "❌ [硬断言已激活] bool 返回门违规：" + "、".join(sorted(set(bool_return_gates)))
+                   + "——reason 丢失面零容忍（trap_ledger_acceptance.warn_upgrade.flipped）")
 
     return base_result
 

@@ -88,6 +88,8 @@ echo "[① 契约层] test_src_hidden_style.py（src 写法契约：gate 对注�
 python3 "$HERE/test_src_hidden_style.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_diag_contract.py（诊断契约 v2：G62表头签名/G21路径指引/28门补线/diag 管线+L2 lint）"
 python3 "$HERE/test_diag_contract.py" 2>&1 | tail -3
+echo "[① 契约层] test_field_acceptance.py（C-4 现场验收簿记：暴露探针/窗口关闭/展期降级/warn 硬断言翻转）"
+python3 "$HERE/test_field_acceptance.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] trap_ledger_scan.py --strict 两极（拦截极=沙箱造件超基线期望 exit1；通过极=计数≤基线期望 exit0；线上语料走非 strict 报告模式，P12）"
 SB="$HERE/fixtures/trap_ledger_sandbox"
 if python3 "$HERE/trap_ledger_scan.py" --strict --root "$SB/pole_fail" --ledger "$SB/trap_ledger.yaml" >/dev/null 2>&1; then

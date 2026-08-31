@@ -252,6 +252,10 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    **复发晋级（第 2 次必须落引擎）**：同一陷阱第 2 次复发 → 必须落引擎修复（trap_ledger 该签名置
    `root_cause=engine` + `status=inflight`→修后 `landed`），禁第 3 次报告级修补；`trap_ledger_scan`
    对 delta>0 条目自动打 🔴 新增 + ⚠️ 晋级提示行，cron 复盘按提示升级。
+   **现场验收簿记（C-4，cron 收尾必跑）**：`python3 regression-tests/trap_ledger_scan.py --field-acceptance`
+   ——暴露探针（当窗报告 grep 触发形态）+ 窗口递减/达标关闭/展期/降级 + warn→硬断言翻转，全部自动落账
+   `references/trap_ledger_acceptance.yaml`，scan 首行与 engine_pending 并排自报；**零暴露 ≠ 安全**，
+   关闭须暴露达标（分位≥3/否定句≥2/定增≥1）。方向局限：现场只证假阳性方向，假阴性由 corpus+归档重放守。
 4. 在报告 m11 区放指针行（**禁止手填分数**）：verify 全过时 stdout 末尾直接打印可复制的 📌 指针行——
    从 verify 输出原样复制（勿为格式提前读 m11-gates.md），**粘贴后重跑一次 verify 刷新 sidecar**（mtime 新鲜度）：
    ```

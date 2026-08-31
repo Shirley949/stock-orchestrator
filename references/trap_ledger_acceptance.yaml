@@ -1,0 +1,42 @@
+# trap_ledger_acceptance — 现场验收簿记（机器写，人类勿手改；C-4 裁决 2026-09-01）
+#
+# ⚠️ 方向性局限（验收语义，勿装作两头都证）：现场验收只证**假阳性方向**（该 FAIL 的
+# FAIL 会响、修复后不再误伤）；**假阴性方向**（修得过宽导致该 FAIL 不 FAIL）是静默的，
+# 只能由 trap_corpus 永久语料 + 归档重放把守——本文件不提供假阴性证明。
+#
+# 关闭规则（trap_ledger_scan --field-acceptance 自动执行，窗口=sidecar timestamp 日期）：
+#   exposed ≥ threshold 且 recurred=0 → closed_pass（窗口内暴露充分且零复现）
+#   窗口耗尽（window_left=0）且暴露不足：未展期 → 展期一次（+2 cron）；已展期 →
+#     closed_downgraded（单元已证、现场未证）——签名转永久计数兜底（ledger count
+#     基线照旧，此后任何时候复发照样触发 strict/晋级）
+#   recurred>0 → 不关闭（🔴 复现=已 landed 引擎的回归，按晋级条文处置）
+seen_through: "2026-09-01"   # 种子日=簿记机制上线日；此前 sidecar 属修复前历史件，不入窗
+signatures:
+  G63#percentile_variant:bai_percentile_leak:
+    probe: percentile
+    window_left: 2
+    threshold: 3
+    exposed: 0
+    recurred: 0
+    extended: false
+    status: open
+  G30#5:negation_context_v2:
+    probe: negation
+    window_left: 2
+    threshold: 2
+    exposed: 0
+    recurred: 0
+    extended: false
+    status: open
+  G30#1:synonym_dingzeng:
+    probe: dingzeng
+    window_left: 2
+    threshold: 1
+    exposed: 0
+    recurred: 0
+    extended: false
+    status: open
+warn_upgrade:
+  zero_hit_windows: 0
+  flipped: false
+  rule: "一轮 cron（当窗全部 sidecar）bool_return_warn 零命中 → flipped=true，verify_gates 按硬断言执法（verdict 中性：FAIL 恒 FAIL，只升 reason/action_required）"

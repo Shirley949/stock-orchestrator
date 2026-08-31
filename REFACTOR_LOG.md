@@ -1,3 +1,17 @@
+## 2026-09-01 C-4 现场验收暴露度化（机器簿记，禁依赖记忆）
+
+裁决 2026-09-01：「等零复发」不成立——**零暴露时零复发空洞**（流调「零确诊须配检测量」同理），三形态暴露度差异极大（分位高暴露/否定句中等/定增稀疏可能零暴露）。改暴露度调整验收，机器簿记：
+
+- **暴露探针 ×3**（`trap_ledger_scan._EXPOSURE_PROBES`）：对当窗新 sidecar 的兄弟报告 grep 触发形态——分位族（E1 全形态同源 regex）/ 动作词+否定词紧邻（紧邻 ≤2 字符 + 窗内否定两类）/ 定增措辞；输出 `暴露N/阈值T·复现M·窗剩W`。
+- **簿记状态独立文件** `references/trap_ledger_acceptance.yaml`（机器写独占——不并入 ledger 主文件，yaml 往返会冲掉人工注释）：`signatures.<sig>{probe,window_left,threshold,exposed,recurred,extended,status}` + `warn_upgrade{zero_hit_windows,flipped}` + 全局 `seen_through`（窗口键=sidecar timestamp 日期；种子日=上线日，历史 73 份修复前 sidecar 不入窗）。阈值（裁决建议可调）：分位≥3/否定句≥2/定增≥1。
+- **`--field-acceptance` 簿记模式**（cron 收尾跑，SKILL.md 约束3 流程行）：窗口自动递减、达标自动 closed_pass、暴露不足自动展期一次(+2 cron)、仍不足降级 closed_downgraded「单元已证现场未证」转永久计数兜底、复现>0 不关闭打 🔴 回归提示；同窗重跑幂等（seen_through 推进，不重复计）。报告模式只读状态行，scan 首行与 engine_pending 并排自报。
+- **warn→硬断言并入同一 tracker**：当窗 bool_return_warn 零命中 → `flipped=true` 自动翻转；`verify_gates._acceptance_flipped()`（mtime 缓存 + `_ACC_OVERRIDE_PATH` 测试注入点）见翻转位 → `bool_return_hard=true` + action_required 置顶硬断言行——**verdict 中性**（bool 门本就 FAIL 恒 FAIL，只升 reason 面零容忍）。
+- **方向性局限（验收语义声明，簿记文件头+scan docstring+本条）**：现场只证**假阳性方向**（该 FAIL 的会响）；**假阴性方向**（修得过宽该 FAIL 不 FAIL）是静默的，由 trap_corpus + 归档重放把守——不装作两头都证。
+- 测试 `test_field_acceptance.py` 四极：closed_pass+幂等 / 展期→降级 / 复现阻断 / warn 翻转+硬断言执法（含反极：warn 非空窗不翻）；已接 run_regression.sh 契约层。
+
+验证：test_field_acceptance 5/5；run_regression.sh exit 0；线上报告模式实测首行三行并排自报（engine_pending 0 / field_acceptance 三签名 窗剩2 / warn_upgrade 未翻）。
+
+
 ## 2026-09-01 批2 落码 #3（closure）：G62 列合同入 m6 —— 核验为已覆盖，零增量
 
 裁决C 执行序末位 #3（G62 第 2 列裸词合同写入 m6 文档，零代码）：逐条核对 quality 仓 m6-decision.md —— **「⚠️ 列序合同」段（:31）已完整覆盖**（方向列第 2 列 + 表头字面=「方向」 + 裸词 `strip('*')` 精确等于 + 括号注释挪「现状」列 + 他表 §3.2 第 2 列禁裸方向词/写「中性区」带修饰），系 2026-08-31 诊断契约 v2 文档同步批已落（quality REFACTOR_LOG 该行可查）。引擎侧 E4 表头签名 landed 在案（trap_ledger G62#tally）。**结论：#3 零缺口关账，勿重复补写**（同一语义只允许一个实现——文档侧 m6:31 即唯一真相源）。
