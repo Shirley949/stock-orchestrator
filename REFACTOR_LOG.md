@@ -5,7 +5,7 @@
 | # | 事项 | 登记 | 完成判据 | 状态 |
 |---|---|---|---|---|
 | 1 | C-4 暴露度验收 | 2026-09-01 | — | ✅ **机器化闭环**：`trap_ledger_scan --field-acceptance` 首行自报（暴露/复现/窗剩），验收 yaml 自动关闭/展期/降级，无需人工记 |
-| 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ⏳ 已启动 2026-09-01 |
+| 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ⏳ 进行中：G28 轨1+词表 9 门已落（见 2026-09-01 两条目），余 G1/G14 + G6/G15/G16/G21/G34/G35/G36（任务 #45） |
 | 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | **G69 方向相反裁决先行**（用户拍板）→ 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 留位 |
 | 4 | warn→硬断言升级 | 2026-09-01 | — | ✅ **机器化闭环**：acceptance yaml `flipped` 位一轮 cron 零命中自动翻，verify_gates 硬断言执法 verdict 中性 |
 | 5 | **ledger 入账半自动化**：unclassified 按 gate#subcheck 聚簇出签名提案 | 2026-09-01 | scan 输出聚簇提案 → 人判陷阱 vs 真错（cron 收尾 ≤5 分钟）→ 进条文；判据=流程跑通一次且 unclassified 存量清零 | ⏳ 排队 |
@@ -17,6 +17,18 @@
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
+
+## 2026-09-01 WP1b 词表批：G11/G12/G13/G17/G19/G22/G26/G31/G37 reason 真值化（reason-only）
+
+report-only 词表门 9 门一次转化（报告缺词/缺段 FAIL 臂从裸 bool/静态句 → GateResult+diag 六键，修法可照抄）。
+
+- **形态分三类**：① 缺要素句（G11 数据截止/G12 局限三款/G13 持仓决策/G17 减仓路径/G19 预测区间）→ 锚点+照抄补写骨架；② 缺半句（G22 维度表+src 双半/G26 四档消费）→ 快照真值（`{name} in={in}/out={out}`）+缺什么补什么；③ 纯数据臂（G31 报价字段/G37 latest_period）→ **[数据层]** 前缀（不查报告，改稿不能过），fix 禁改稿动词，found 带在场真值。
+- **rows=0 细分规则第 2/3 例**：G26 臂①（fund_flow scene）failed → [数据层]、missing → 双选，同 G8/G28 成文规则，零逐门现判。
+- **含 2 处 crash-fix 出定理域（均在 G26，注入测试背书）**：`items[]` 元素为非 dict 时 `item.get` 崩溃、`fund_flow` 为 truthy 非 dict 时 `.get` 崩溃——一律 isinstance 守卫后按缺臂 FAIL。
+- **G19 语义注**：报告写 `15%~20%` 形态（% 在数字与波浪线间）本就**不匹配**区间正则——新旧引擎同 FAIL（非本批翻转）；正例形态是 `15~20`。此为既有词表面行为，如需扩形态走 F4 批预申报。
+- **test_bool_return_warn_fires 改注入式**：本批转化后 301511 真实夹具已无裸 bool-FAIL 火种（warn 合法为空，测试文案预言的场景），机制证明改为 monkeypatch 注入裸 bool checker——不再依赖哪门恰好 lossy。任务 #45 余 9 门转化完 + C-4 现场窗口关闭后，warn 按既定条件升硬断言。
+
+**验证链**：diff_engine 9 门归档 51 对 459 求值 **0 翻转 0 crash**、reason 升级 19 处，双极覆盖 g12:False×1/g17:False×3/g37:False×16（余 True）；test_diag_contract 66/66（+10 TestWP1bWordGates）；run_regression exit 0（gate_fixture 漏报=0 62 门）。
 
 ## 2026-09-01 WP1b 轨1：G28 杜邦面板 reason 真值化 + rows=0 细分规则落码（reason-only）
 

@@ -277,6 +277,12 @@ def _iso8(p) -> str:
     return f"{s[:4]}-{s[4:6]}-{s[6:]}" if re.fullmatch(r"20\d{6}", s) else s
 
 
+def _diag(subcheck, expected, found, fix, src, degraded=False):
+    """diag 六键构造壳（WP 批 reason 真值化统一键集；契约=test_diag_contract._DIAG_KEYS）"""
+    return {"subcheck": subcheck, "expected": expected, "found": found,
+            "fix": fix, "src": src, "degraded": degraded}
+
+
 def _snapshot_get(data: dict, path: str):
     """从 data（即 snapshot）中按点分路径读取值"""
     parts = path.split(".")
@@ -630,11 +636,26 @@ def check_g11(report: str, data: dict) -> bool:
     has_global_timestamp = any(re.search(p, report_header) for p in global_timestamp_patterns)
     if has_global_timestamp:
         return True
-    
+
     table_lines = re.findall(r'^\s*\|.*\|.*$', report, re.MULTILINE)
     date_keywords = ["日期", "时间", "截止", "报告期", "数据日期", "截至", "公布日"]
     tables_with_date = sum(1 for t in table_lines if any(kw in t for kw in date_keywords))
-    return tables_with_date > 0
+    if tables_with_date > 0:
+        return True
+    # FAIL → reason 真值化（WP1b；词表/结构门，报告侧改稿可过）
+    ts = data.get("timestamp") if isinstance(data, dict) else None
+    d0 = str(ts)[:10] if ts else None
+    truth = (f"快照真值：数据截止 {d0}" if d0 else "快照无 timestamp 键（无可引真值）")
+    fix = (f"报告开头照抄声明：数据截止：{d0}。" if d0
+           else "报告开头补声明：数据截止：<YYYY-MM-DD>。")
+    return GateResult(passed=False, reasons=[
+        f"G11 数据时效性声明缺失：开头 500 字无『数据截止/截至…数据』类声明，"
+        f"且 {len(table_lines)} 张表格 0 张含日期列（日期/时间/截止/报告期/截至/公布日）——"
+        f"{truth}；{fix}"
+    ], diag=_diag("data_cutoff_declaration",
+                  "开头 500 字内声明数据截止时间，或表格含日期列（任一）",
+                  f"开头声明=无；含日期列表格 {tables_with_date}/{len(table_lines)} 张",
+                  fix, "snapshot.timestamp（照抄源）"))
 
 
 def check_g12(report: str, data: dict) -> bool:
@@ -643,7 +664,17 @@ def check_g12(report: str, data: dict) -> bool:
         return GateResult(passed=False, reasons=["报告无「局限/局限性/不足」任何词——m11 局限性披露段缺失（须 ≥3 条具体局限）"])
     # 统计局限性条目
     limitation_items = _count_pattern(report, r'(?:局限|不足|限制|风险提示|数据限制|⚠️)')
-    return limitation_items >= 3
+    if limitation_items >= 3:
+        return True
+    # FAIL → reason 真值化（WP1b）
+    hits = locate_lines(report, report, lambda ln: re.search(r'(?:局限|不足|限制|风险提示|数据限制|⚠️)', ln))[:2]
+    anchor = f"已有词锚点 {_fmt_violation_lines(hits)}" if hits else "全文局限类词 0 处"
+    fix = "补写局限性披露至 ≥3 条具体局限（照抄骨架：①数据局限——XX 指标依赖单源；②口径局限——YY 为披露值非重算；③时效局限——ZZ 停更于最近期）"
+    return GateResult(passed=False, reasons=[
+        f"G12 局限性披露不足：局限类词命中 {limitation_items} 处（需 ≥3）——{anchor}；{fix}"
+    ], diag=_diag("limitations_count",
+                  "局限/不足/限制/风险提示/数据限制/⚠️ 命中 ≥3 处（≥3 条具体局限）",
+                  f"命中 {limitation_items} 处", fix, "m11 局限性披露段（报告侧）"))
 
 
 def check_g13(report: str, data: dict) -> bool:
@@ -651,7 +682,18 @@ def check_g13(report: str, data: dict) -> bool:
     # 无持仓信息时 auto_pass
     if data.get("holding_status") is None:
         return True
-    return "决策" in report
+    if "决策" in report:
+        return True
+    # FAIL → reason 真值化（WP1b；词表门）
+    hs = data.get("holding_status")
+    hs_txt = hs[:80] if isinstance(hs, str) else str(hs)[:80]
+    fix = "补写持仓语境决策句（照抄骨架：结合当前持仓〈买入成本/仓位〉，决策建议〈持有/加仓/减仓〉）"
+    return GateResult(passed=False, reasons=[
+        f"G13 持仓↔决策脱节：快照持有持仓信息（holding_status={hs_txt}）但报告全文 0 处『决策』"
+        f"——操作建议未考虑持仓语境；{fix}"
+    ], diag=_diag("holding_decision_context",
+                  "holding_status 在场 → 全文含『决策』（持仓语境的操作建议）",
+                  "全文 0 处『决策』", fix, "snapshot.holding_status（真值源）"))
 
 
 def check_g14(report: str, data: dict) -> bool:
@@ -1010,7 +1052,26 @@ def check_g17(report: str, data: dict) -> bool:
     # m7 §7.1.1 估值折让区间（负百分比区间[兼容全角－/～] 或 折让/折价/估值传导 词）
     has_haircut = bool(re.search(r'[－-]?\s*\d+\s*[%％]\s*[~～\-–—至到]\s*[－-]?\s*\d+\s*[%％]', report)) \
                   or "折让" in report or "折价" in report or "估值传导" in report
-    return has_risk_row and has_haircut
+    if has_risk_row and has_haircut:
+        return True
+    # FAIL → reason 真值化（WP1b；词表门，m7 责任）
+    missing = ([] if has_risk_row else ["§7.1 地缘/关税风险行"]) + \
+              ([] if has_haircut else ["§7.1.1 估值折让"])
+    parts = [f"G17 关税/地缘风险披露缺项：tariff_vulnerability.level={lvl}（须写 m7 风险段）"
+             f"但缺 {' 与 '.join(missing)}"]
+    first_kw = next((kw for kw in risk_kws if kw in report), None)
+    hits = (locate_lines(report, report, lambda ln: first_kw in ln)[:2] if first_kw else [])
+    if hits:
+        parts.append(f"已有词锚点 {_fmt_violation_lines(hits)}")
+    fix = ("补写（照抄骨架）：§7.1 风险行『关税/出口管制风险：海外收入敞口存在被加征关税风险』"
+           "+ §7.1.1 折让『对应估值折让 -5%～-10% 区间』")
+    parts.append(fix)
+    return GateResult(passed=False, reasons=["；".join(parts)],
+                      diag=_diag("tariff_disclosure",
+                                 "level∈{fatal,partial*} → m7 §7.1 风险行（关税/地缘/制裁/贸易摩擦/双反/出口管制/实体清单/倾销 任一）"
+                                 "AND §7.1.1 折让（-%区间 或 折让/折价/估值传导）",
+                                 f"缺 {'、'.join(missing)}" + (f"；已含 {first_kw}" if first_kw else ""),
+                                 fix, "computed_metrics.tariff_vulnerability.level（触发真值）"))
 
 
 
@@ -1021,7 +1082,21 @@ def check_g19(report: str, data: dict) -> bool:
     # 检查是否有区间或"无法量化"
     has_range = bool(re.search(r'\d+\s*[-~–]\s*\d+', report))
     has_cannot_quantify = "无法量化" in report or "难以预测" in report
-    return has_range or has_cannot_quantify
+    if has_range or has_cannot_quantify:
+        return True
+    # FAIL → reason 真值化（WP1b；词表门：有预测语境但既无区间也无『无法量化』兜底）
+    first_kw = "预测" if "预测" in report else "预期"
+    hits = locate_lines(report, report, lambda ln: first_kw in ln)[:2]
+    fix = ("补写（照抄二选一）：区间写法『预计营收增速 15%~20%』"
+           "或兜底写法『影响难以精确量化/无法量化，仅给方向性判断』")
+    return GateResult(passed=False, reasons=[
+        f"G19 营收预测无区间无兜底：已有『{first_kw}』语境"
+        f"（锚点 {_fmt_violation_lines(hits)}）但全文无数值区间（N~M 形态）且无『无法量化/难以预测』——"
+        f"预测断言悬空；{fix}"
+    ], diag=_diag("forecast_range_or_disclaimer",
+                  "有预测/预期语境 → 数值区间（\\d+~\\d+）或『无法量化/难以预测』兜底（任一）",
+                  f"语境词在场=是；区间=无；兜底=无", fix,
+                  "报告 Layer8 营收预测段（词表型）"))
 
 
 def check_g20(report: str, data: dict) -> bool:
@@ -1147,7 +1222,27 @@ def check_g22(report: str, data: dict) -> bool:
         return True  # 无 disclosed 维度 → 不要求分业务表（招行无行业即此态）
     has_segment = any(kw in report for kw in ["分业务", "分产品", "分行业", "业务分拆", "主营构成"])
     has_src = "segment_composition" in report   # [src: snapshot.s1_financial.data.segment_composition.{product,industry}]
-    return has_segment and has_src
+    if has_segment and has_src:
+        return True
+    # FAIL → reason 真值化（WP1b；词表门：防橡皮章脑补分业务表）
+    dims = [d for d, ok in (("product", product_ok), ("industry", industry_ok)) if ok]
+    missing = ([] if has_segment else ["分业务表词（分业务/分产品/分行业/业务分拆/主营构成）"]) + \
+              ([] if has_src else ["[src: …segment_composition…] 溯源"])
+    first_kw = next((kw for kw in ("分业务", "分产品", "分行业", "业务分拆", "主营构成") if kw in report), None)
+    hits = (locate_lines(report, report, lambda ln: first_kw in ln)[:2] if first_kw else [])
+    parts = [f"G22 分业务披露缺项：snapshot disclosed_ok 维度={dims}（真数据在手）"
+             f"但缺 {' 与 '.join(missing)}"]
+    if hits:
+        parts.append(f"已有词锚点 {_fmt_violation_lines(hits)}")
+    fix = (f"补写分业务表（分业务/分产品）并挂溯源标记"
+           f"[src: snapshot.s1_financial.data.segment_composition.{'product' if 'product' in dims else 'industry'}]"
+           "——证明用真数据非脑补")
+    parts.append(fix)
+    return GateResult(passed=False, reasons=["；".join(parts)],
+                      diag=_diag("segment_table_with_src",
+                                 "product/industry 任一 disclosed_ok → 分业务表词 AND segment_composition 溯源",
+                                 f"缺 {'、'.join(missing)}" + (f"；已含 {first_kw}" if first_kw else ""),
+                                 fix, "s1_financial.data.segment_composition.dimension_status（触发真值）"))
 
 
 def check_g23(report: str, data: dict) -> bool:
@@ -1240,25 +1335,53 @@ def check_g26(report: str, data: dict) -> bool:
     """
     # 1. 检查 snapshot 中的资金流向数据
     fund_flow = _snapshot_get(data, "s3_fund_flow.data.fund_flow")
-    if not fund_flow or fund_flow.get("status") != "ok":
-        return GateResult(passed=False, reasons=["s3_fund_flow.data.fund_flow 缺失或 status≠ok——资金流数据不可得/失败，须如实披露"])
+    if not isinstance(fund_flow, dict) or fund_flow.get("status") != "ok":   # truthy 非 dict 旧引擎 .get 崩（crash-fix）
+        # rows=0 细分（pending #2 成文规则）：failed=error 信封 → [数据层]；
+        # 缺失/其它 = 信封不判失败 → 双选（重跑 or 如实披露）
+        _st = fund_flow.get("status") if isinstance(fund_flow, dict) else None
+        found = f"status={_st}" if _st is not None else "fund_flow scene 整体未生成"
+        if _st == "failed":
+            return GateResult(passed=False, reasons=[
+                f"[数据层] s3_fund_flow.data.fund_flow {found}——资金流拉取失败：重跑 "
+                "s3_fund_flow 拉取（westock 腾讯源）；报告侧无需改稿"
+            ], diag=_diag("fund_flow_presence", "fund_flow 在场且 status=ok", found,
+                          "重跑 s3_fund_flow 拉取（勿改报告）", "s3_fund_flow.data.fund_flow"))
+        return GateResult(passed=False, reasons=[
+            f"s3_fund_flow.data.fund_flow 缺失或 {found}——资金流数据不可得：重跑拉取，"
+            "报告侧须如实标注「资金流数据不可得」，不得静默过"
+        ], diag=_diag("fund_flow_presence", "fund_flow 在场且 status=ok", found,
+                      "重跑 s3_fund_flow 拉取；或报告如实标注资金流数据不可得",
+                      "s3_fund_flow.data.fund_flow"))
     
     # 2. 检查四档数据完整性
     items = fund_flow.get("items", [])
     if len(items) < 4:
         return GateResult(passed=False, reasons=[f"fund_flow.items 仅 {len(items)} 档（<4：特大单/大单/中单/小单）——四档不齐全"])
     
-    # 验证四档标签
+    # 验证四档标签（items 含非 dict 行时按无名档计——旧引擎直接 .get 崩溃，
+    # crash-fix 出定理域，注入测试背书）
     expected_names = {"特大单", "大单", "中单", "小单"}
-    actual_names = {item.get("name") for item in items}
+    actual_names = {item.get("name") for item in items if isinstance(item, dict)}
     if not expected_names.issubset(actual_names):
         return GateResult(passed=False, reasons=[f"items 缺档：实有 {sorted(str(x) for x in actual_names)}，缺 {sorted(str(x) for x in expected_names - actual_names)}——四档标签必须齐全"])
     
     # 3. 检查报告是否消费了资金流向数据
     fund_keywords = ["资金流向", "主力资金", "大单", "小单", "特大单", "净流入", "净流出", "资金分布"]
     has_fund_data = any(kw in report for kw in fund_keywords)
-    
-    return has_fund_data
+    if has_fund_data:
+        return True
+    # FAIL → reason 真值化（WP1b；消费门：四档数据在手但报告未消费）
+    rows = "、".join(f"{it.get('name')} in={it.get('in')}/out={it.get('out')}"
+                     for it in items if isinstance(it, dict))
+    fix = "补写资金流向消费句（照抄上方四档 in/out 真值，如『大单 in=2.51/out=0.00』），含『资金流向/主力资金/净流入』等词"
+    return GateResult(passed=False, reasons=[
+        f"G26 资金流未消费：fund_flow 四档在手（{rows}）"
+        f"但报告 0 处资金流词（资金流向/主力资金/大单/小单/特大单/净流入/净流出/资金分布）——"
+        "m10 须消费资金分布；" + fix
+    ], diag=_diag("fund_flow_consumption",
+                  "fund_flow 四档 ok → 报告含资金流词（资金流向/主力资金/大单/小单/特大单/净流入/净流出/资金分布 任一）",
+                  "全文 0 处资金流词", fix,
+                  "s3_fund_flow.data.fund_flow.items[]（name/in/out 真值源）"))
 
 
 def check_g27(report: str, data: dict) -> bool:
@@ -2031,10 +2154,29 @@ def check_g31(report: str, data: dict) -> bool:
     """
     quote = _snapshot_get(data, "valuation_snapshot.data.quote")
     if not isinstance(quote, dict):
-        return GateResult(passed=False, reasons=["valuation_snapshot.data.quote 非 dict——估值 L1 快照缺失（数据层硬缺失，须重拉）"])
+        return GateResult(passed=False, reasons=[
+            "[数据层] valuation_snapshot.data.quote 非 dict——估值 L1 快照缺失：重跑 "
+            "valuation_snapshot 拉取；本臂为数据侧硬缺失，报告侧无需改稿"
+        ], diag=_diag("quote_l1_presence", "valuation_snapshot.data.quote 为 dict（L1 快照在场）",
+                      "quote 非 dict（scene 缺失/未生成）",
+                      "重跑 valuation_snapshot 拉取（勿改报告）",
+                      "valuation_snapshot.data.quote"))
     fields = ["peTtm", "pbRatio", "totalMarketCap"]
-    present = sum(1 for f in fields if quote.get(f) is not None)
-    return present >= 2   # ≥ 2/3
+    present_f = [f for f in fields if quote.get(f) is not None]
+    if len(present_f) >= 2:
+        return True   # ≥ 2/3
+    # FAIL → reason 真值化（WP1b；纯数据覆盖臂 → [数据层]，改稿不能过）
+    missing_f = [f for f in fields if f not in present_f]
+    truth = "、".join(f"{f}={quote.get(f)}" for f in present_f) or "（三项全缺）"
+    return GateResult(passed=False, reasons=[
+        f"[数据层] G31 估值 L1 覆盖不足：{'、'.join(missing_f)} 为 None（在场：{truth}；"
+        "覆盖率 <2/3）——重跑 valuation_snapshot 拉取；负值是有效信号（亏损股负 PE/破净 PB）"
+        "非脏数据，本臂只看拉到没有，报告侧无需改稿"
+    ], diag=_diag("quote_l1_coverage",
+                  "peTtm/pbRatio/totalMarketCap 非 None ≥ 2/3",
+                  f"缺 {'、'.join(missing_f)}；在场 {truth}",
+                  "重跑 valuation_snapshot 拉取（勿改报告）",
+                  "valuation_snapshot.data.quote（peTtm/pbRatio/totalMarketCap）"))
 
 
 def check_g32(report: str, data: dict) -> bool:
@@ -2149,12 +2291,24 @@ def check_g37(report: str, data: dict) -> bool:
     不做数值新鲜度：PPI/M2 派生口径不一致、PMI 窄带判不了 stale（见上方注册表注释）。
     真空豁免：latest_period=None（fetch_failed）不计 presence；全缺失则覆盖率 0 → FAIL。
     """
-    present = 0
+    present_f = []
     for k in _G37_MACRO_FIELDS:
         lp = _snapshot_get(data, f"s6_macro.data.{k}.latest_period")
         if isinstance(lp, dict) and lp.get("value") is not None:
-            present += 1
-    return present >= 2
+            present_f.append(f"{k}={lp.get('value')}")
+    if len(present_f) >= 2:
+        return True
+    # FAIL → reason 真值化（WP1b；纯数据覆盖臂 → [数据层]：宏观限流全挂，改稿不能过）
+    missing_f = [k for k in _G37_MACRO_FIELDS if not any(p.startswith(f"{k}=") for p in present_f)]
+    return GateResult(passed=False, reasons=[
+        f"[数据层] G37 宏观覆盖不足：{'、'.join(missing_f)} latest_period 缺值"
+        f"（在场：{'、'.join(present_f) or '全缺'}；覆盖率 <2/3）——akshare 宏观源限流/失败，"
+        "重跑 s6_macro 拉取（宏观为市场级同日数据）；报告侧无需改稿"
+    ], diag=_diag("macro_coverage",
+                  "pmi/ppi/m2 的 latest_period.value 非 None ≥ 2/3",
+                  f"缺 {'、'.join(missing_f)}" + (f"；在场 {'、'.join(present_f)}" if present_f else "；全缺"),
+                  "重跑 s6_macro 拉取（勿改报告）",
+                  "s6_macro.data.{pmi,ppi,m2}.latest_period"))
 
 
 def check_g38(report: str, data: dict) -> bool:

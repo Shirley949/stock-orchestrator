@@ -682,11 +682,18 @@ class TestV21DualFormRenderAndBoolWarn(unittest.TestCase):
         self.assertIn("action_required", res)   # 渲染出口不炸
 
     def test_bool_return_warn_fires(self):
-        """bool 返回门存在时 warn 上浮 sidecar（升级硬断言的条件=一轮 cron 零命中）。"""
-        res = verify_gates(self.report, self.data, "profile_full")
+        """bool 返回门 FAIL 时 warn 上浮 sidecar（升级硬断言的条件=一轮 cron 零命中）。
+        2026-09-01 起改为注入裸 bool checker——WP 批转化后真实夹具已无裸 bool-FAIL
+        火种（301511 夹具 G11 等已 GateResult 化），机制证明不再依赖哪门恰好 lossy。"""
+        orig = gd.GATE_CHECKERS.get("G6")
+        gd.GATE_CHECKERS["G6"] = lambda r, d: False      # 注入裸 bool FAIL
+        try:
+            res = verify_gates(self.report, self.data, "profile_full")
+        finally:
+            gd.GATE_CHECKERS["G6"] = orig
         self.assertIn("bool_return_warn", res,
-                      "M 级 bool-expression 门在场时须有 warn；若为空说明已全量 GateResult 化，"
-                      "可将 verify_gates warn 升硬断言")
+                      "裸 bool FAIL 在场时须有 warn；若缺失=warn 机制本身失效")
+        self.assertIn("G6", res["bool_return_warn"])
         self.assertIsInstance(res["bool_return_warn"], list)
 
 
@@ -954,6 +961,130 @@ class TestWP1bG28(unittest.TestCase):
                      {"s1_financial": {"data": {"dupont": {"status": "ok", "data": None}}}},
                      {"s1_financial": {"data": {"dupont": {"status": "ok", "data": "x"}}}}):
             r = gd.check_g28("", snap)                    # data None/非 dict → 兜底不炸
+            self.assertIsInstance(r, (bool, dict))
+
+
+class TestWP1bWordGates(unittest.TestCase):
+    """WP1b 词表门批（2026-09-01）：G11/G12/G13/G17/G19/G22/G26/G31/G37 lossy 臂 reason 真值化。
+
+    分类：G11/G12/G13/G17/G19/G22/G26=写作侧词表/消费门（改稿可过）；
+    G31/G37=纯数据覆盖臂 → [数据层]（禁改稿动词）；G26 arm1 按 rows=0 细分规则
+    （failed=error 信封→[数据层]；缺失/其它→双选）。
+    """
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+    _DL_VERBS = ("照抄", "改写", "补写", "删除")
+
+    def _ret(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        return (bool(r.get("passed")), r.get("reasons", [""])[0], r.get("diag")) \
+            if isinstance(r, dict) else (bool(r), "", None)
+
+    def _fail_truth(self, fn, rpt, snap, tokens, datalayer=False, no_l_anchor=False):
+        ok, joined, diag = self._ret(fn, rpt, snap)
+        self.assertFalse(ok, "verdict 回退")
+        for t in tokens:
+            self.assertIn(t, joined, f"缺真值 {t!r}：{joined[:120]}")
+        if not no_l_anchor:
+            self.assertRegex(joined, r"L\d+:")
+        self.assertIsInstance(diag, dict)
+        for k in self._DIAG_KEYS:
+            self.assertIn(k, diag)
+        self.assertFalse(diag["degraded"])
+        if datalayer:
+            self.assertIn("[数据层]", joined)
+            for v in self._DL_VERBS:
+                self.assertNotIn(v, diag["fix"])
+        else:
+            self.assertNotIn("[数据层]", joined)
+        return diag
+
+    def test_g11_cutoff_declaration(self):
+        d = self._fail_truth(gd.check_g11, "# 报告\n正文无声明无表格。", {"timestamp": "2026-08-31T09:00:00"},
+                             ["数据截止 2026-08-31", "照抄声明"], no_l_anchor=True)
+        self.assertIn("0/0 张", d["found"])
+        self.assertIs(gd.check_g11("# 数据截止：2026-08-31", {}), True)
+
+    def test_g12_limitations_count(self):
+        d = self._fail_truth(gd.check_g12, "存在局限一处，不足一处。", {},
+                             ["命中 2 处（需 ≥3）", "≥3 条具体局限"])
+        self.assertIs(gd.check_g12("局限1；局限2；不足3；限制4", {}), True)
+
+    def test_g13_holding_decision(self):
+        d = self._fail_truth(gd.check_g13, "建议持有", {"holding_status": {"cost": 12.3}},
+                             ["holding_status={'cost': 12.3}", "持仓语境"], no_l_anchor=True)
+        self.assertIs(gd.check_g13("无词", {}), True)            # auto_pass
+        self.assertIs(gd.check_g13("决策：持有", {"holding_status": "x"}), True)
+
+    def test_g17_tariff_disclosure(self):
+        tv = {"computed_metrics": {"tariff_vulnerability": {"level": "fatal"}}}
+        d = self._fail_truth(gd.check_g17, "关税风险存在", tv,
+                             ["level=fatal", "缺 §7.1.1 估值折让", "L1"])
+        self.assertIs(gd.check_g17("关税存在，折让 -5%～-10%", tv), True)
+        self.assertIs(gd.check_g17("无词", {"computed_metrics": {}}), True)  # none 放行
+
+    def test_g19_forecast_range_or_disclaimer(self):
+        d = self._fail_truth(gd.check_g19, "# 报告\n预期营收向好，方向明确。", {},
+                             ["无数值区间", "无法量化/难以预测"])
+        self.assertIs(gd.check_g19("预期营收增速 15~20 亿", {}), True)   # N~M 直连（%会挡）
+        self.assertIs(gd.check_g19("预期影响难以预测", {}), True)
+
+    def test_g22_segment_table_src(self):
+        seg = {"s1_financial": {"data": {"segment_composition":
+            {"dimension_status": {"product": {"status": "disclosed_ok"}}}}}}
+        d = self._fail_truth(gd.check_g22, "分业务收入见表", seg,
+                             ["disclosed_ok 维度=['product']", "溯源"])
+        self.assertIn("segment_composition.product", d["fix"])
+        self.assertIs(gd.check_g22("分业务表 [src: snapshot.s1_financial.data.segment_composition.product]", seg), True)
+        self.assertIs(gd.check_g22("无表", {}), True)           # 无 disclosed 维放行
+
+    def test_g26_fund_flow_consumption_and_envelope(self):
+        ff = {"s3_fund_flow": {"data": {"fund_flow": {"status": "ok", "items": [
+            {"name": "特大单", "in": 0.0, "out": 0.24}, {"name": "大单", "in": 2.51, "out": 0.0},
+            {"name": "中单", "in": 1.0, "out": 1.0}, {"name": "小单", "in": 3.0, "out": 2.0}]}}}}
+        d = self._fail_truth(gd.check_g26, "正文无资金词", ff,
+                             ["特大单 in=0.0/out=0.24", "大单 in=2.51/out=0.0"], no_l_anchor=True)
+        self.assertIs(gd.check_g26("主力资金净流入", ff), True)
+        # arm1 信封细分两极：failed→[数据层] 禁改稿动词；缺失→双选
+        dlf = self._fail_truth(gd.check_g26, "x", {"s3_fund_flow": {"data":
+            {"fund_flow": {"status": "failed"}}}}, ["status=failed"], datalayer=True, no_l_anchor=True)
+        dvac = self._fail_truth(gd.check_g26, "x", {}, ["scene 整体未生成", "如实标注"],
+                                no_l_anchor=True)
+        # 脏注入：items 含非 dict 行不炸（crash-fix 面）
+        r = gd.check_g26("无词", {"s3_fund_flow": {"data": {"fund_flow":
+            {"status": "ok", "items": [None, 5, {"name": "特大单"}] * 4}}}})
+        self.assertIsInstance(r, (bool, dict))
+
+    def test_g31_quote_coverage_datalayer(self):
+        q = {"valuation_snapshot": {"data": {"quote": {"peTtm": 25.0, "pbRatio": None, "totalMarketCap": None}}}}
+        d = self._fail_truth(gd.check_g31, "", q, ["pbRatio、totalMarketCap 为 None", "peTtm=25.0"],
+                             datalayer=True, no_l_anchor=True)
+        self.assertIs(gd.check_g31("", {"valuation_snapshot": {"data":
+            {"quote": {"peTtm": 25.0, "pbRatio": 3.0, "totalMarketCap": 1e10}}}}), True)
+        self._fail_truth(gd.check_g31, "", {}, ["非 dict"], datalayer=True, no_l_anchor=True)
+
+    def test_g37_macro_coverage_datalayer(self):
+        mac = {"s6_macro": {"data": {"pmi": {"latest_period": {"value": 50.3}}}}}
+        d = self._fail_truth(gd.check_g37, "", mac, ["ppi、m2 latest_period 缺值", "pmi=50.3"],
+                             datalayer=True, no_l_anchor=True)
+        self.assertIs(gd.check_g37("", {"s6_macro": {"data": {
+            "pmi": {"latest_period": {"value": 50.3}}, "ppi": {"latest_period": {"value": 104.1}}}}}), True)
+        # 脏注入：latest_period 非 dict / scene 缺失不炸
+        for snap in ({"s6_macro": {"data": {"pmi": "not-dict", "ppi": {"latest_period": "x"}, "m2": None}}},
+                     {}, {"s6_macro": None}):
+            r = gd.check_g37("", snap)
+            self.assertIsInstance(r, (bool, dict))
+
+    def test_dirty_injections_word_gates(self):
+        """逐门脏注入（scene 缺失/None/非 dict）：不炸 + 类型合法。"""
+        cases = (
+            (gd.check_g11, {"timestamp": None}), (gd.check_g12, None),
+            (gd.check_g13, {"holding_status": 5}), (gd.check_g17, {"computed_metrics": None}),
+            (gd.check_g19, None), (gd.check_g22, {"s1_financial": None}),
+            (gd.check_g31, {"valuation_snapshot": {"data": {"quote": "x"}}}),
+        )
+        for fn, snap in cases:
+            r = fn("无词正文", snap)
             self.assertIsInstance(r, (bool, dict))
 
 
