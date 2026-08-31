@@ -24,6 +24,8 @@ import sys
 import unittest
 from pathlib import Path
 
+import yaml
+
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent / "scripts"))
 sys.path.insert(0, str(_HERE.parent / "scripts" / "lib"))
@@ -686,6 +688,49 @@ class TestV21DualFormRenderAndBoolWarn(unittest.TestCase):
                       "M 级 bool-expression 门在场时须有 warn；若为空说明已全量 GateResult 化，"
                       "可将 verify_gates warn 升硬断言")
         self.assertIsInstance(res["bool_return_warn"], list)
+
+
+# ---------------------------------------------------------------------------
+# 批2 — trap_corpus.yaml 永久陷阱语料（裁决C-1/C-2：形态进 fixture 才是回归保护）
+# ---------------------------------------------------------------------------
+class TestTrapCorpus(unittest.TestCase):
+    """消费 regression-tests/trap_corpus.yaml，按 check 字段分发断言。
+    新陷阱先入 references/trap_ledger.yaml（签名/修法），再在此语料登记形态 case。"""
+
+    @classmethod
+    def setUpClass(cls):
+        p = _HERE / "trap_corpus.yaml"
+        if not p.exists():
+            raise unittest.SkipTest("trap_corpus.yaml 缺席")
+        cls.cases = yaml.safe_load(p.read_text(encoding="utf-8"))["cases"]
+
+    def test_corpus_schema(self):
+        """每条 case 带 id/gate/check/line/source 且 id 唯一（新增形态的最低合同）。"""
+        ids = [c["id"] for c in self.cases]
+        self.assertEqual(len(ids), len(set(ids)), f"corpus id 重复：{ids}")
+        for c in self.cases:
+            for key in ("gate", "check", "line", "source"):
+                self.assertIn(key, c, f"case {c.get('id')} 缺 {key}")
+
+    def test_tokenizer_no_percentile_number(self):
+        """批2#1：分位族全形态（分位/百分位/分位数/分数）数字不得泄漏为价位候选。
+        修前实锤（HEAD 旧引擎逐字复跑）：『94 百分位』『第99百分位』泄漏 94/99 →
+        G63 误判转录错（偏 0.8%/4.5%）；修后 E1 剥全形态。"""
+        cases = [c for c in self.cases if c["check"] == "tokenizer_no_percentile_number"]
+        self.assertGreaterEqual(len(cases), 4, "分位族四形态语料不齐")
+        for c in cases:
+            got = gd._extract_price_candidates(c["line"])
+            self.assertEqual(got, [], f"{c['id']}：分位数字泄漏为价位候选 {got}")
+
+    def test_g63_e2e_bai_percentile_flip(self):
+        """批2#1 单元级翻转对账：语境词行含『94 百分位』+照抄真值 94.78——
+        修前 FAIL（94≈94.78 偏 0.8% 误伤，语料现存 7 处活雷）→ 修后 PASS。"""
+        if not SNAP_636.exists():
+            raise unittest.SkipTest("语料缺席：002636_20260831.json")
+        body = "换手率处于 94 百分位，量能节奏中性，支撑 94.78 附近承接有效。"
+        ret = check_g63("## 三、技术分析\n" + body + "\nTD 共振。\n", _load(SNAP_636))
+        ok = ret if isinstance(ret, bool) else ret.get("passed", True)
+        self.assertTrue(ok, f"百分位数字仍被对拍真值误伤：{ret}")
 
 
 if __name__ == "__main__":

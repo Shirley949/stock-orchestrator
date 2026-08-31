@@ -1,0 +1,40 @@
+# trap_corpus — 陷阱形态永久语料（裁决C-1/C-2：陷阱形态进 fixture 才是回归保护，禁散落单元测试）
+#
+# 单一真相源：每条陷阱形态带实证来源（cron 实锤 / 语料 grep / 构造）；
+# 新增陷阱先入 references/trap_ledger.yaml（签名/修法），再在此登记形态 case。
+# 消费方：regression-tests/test_diag_contract.py TestTrapCorpus（按 check 字段分发断言）。
+#
+# schema：
+#   id:      唯一（<gate家族>_<形态>_<来源>）
+#   gate:    目标门
+#   check:   断言分发键（tokenizer_no_percentile_number / g30_first_action / …）
+#   line:    报告行原文（逐字，含空格/标点形态）
+#   expect:  check 需要的期望值（如 g30_first_action 的期望动作词）
+#   source:  实证来源（金安 cron / 语料 grep N 处 / 原型构造）
+cases:
+  # ---- G63 分位族四形态（批2#1，裁决C-1 逐字取证）----
+  - id: g63_pct_space_jinan
+    gate: G63
+    check: tokenizer_no_percentile_number
+    line: "换手率处于 85 分位，量能节奏中性"
+    source: "金安 002636 cron 原文形态（N+空格+分位，语料最高频 22 处）——E1 回归锚"
+  - id: g63_pct_bai_corpus
+    gate: G63
+    check: tokenizer_no_percentile_number
+    line: "换手率处于 94 百分位，量能节奏中性"
+    source: "语料 grep 实锤（94/3/1 百分位 共 7 处现存）——批2#1 主陷阱，修前泄漏"
+  - id: g63_pct_bai_di
+    gate: G63
+    check: tokenizer_no_percentile_number
+    line: "换手率处于第99百分位，量能节奏中性"
+    source: "原型构造（第N 前缀语料 0 现存，防御覆盖）"
+  - id: g63_pct_shu_variant
+    gate: G63
+    check: tokenizer_no_percentile_number
+    line: "换手率处于 94 分位数，量能节奏中性"
+    source: "变体（分位数 语料 19 处均无数字直连，防御覆盖）"
+  - id: g63_pct_fraction
+    gate: G63
+    check: tokenizer_no_percentile_number
+    line: "换手率处于 99/100 分位，量能节奏中性"
+    source: "分数形式（E1 原设计覆盖，回归锚）"

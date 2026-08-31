@@ -223,10 +223,10 @@ entries:
     match: "百分位"
     count: 0
     last_seen: "2026-08-31"
-    status: inflight
+    status: landed
     root_cause: engine
     blocked: false
-    fix: "E1 剥离正则补百分位/分位数变体（批2#1）：『N 百分位』的『百』挡在 \\s*分位 前——语料实锤『94 百分位』『3 百分位』今仍泄漏价位对拍；修后分位族（分位/百分位/分位数）全形态不进对拍池"
+    fix: "E1 剥离正则补百分位/分位数变体（批2#1 landed）：『N 百分位』的『百』挡在 \\s*分位 前——语料实锤『94 百分位』『3 百分位』今仍泄漏价位对拍；修后分位族（分位/百分位/分位数/分数）全形态不进对拍池。证据：HEAD 旧引擎复跑『94 百分位』FAIL（偏0.8%）→修后 PASS；归档44对0翻转；5形态进 trap_corpus.yaml 永久语料"
   - signature: G30#1:synonym_dingzeng
     gate: G30
     subcheck: "1"

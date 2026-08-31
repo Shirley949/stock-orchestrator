@@ -1,3 +1,15 @@
+## 2026-09-01 批2 落码 #1：G63 分位族全形态豁免（百分位/分位数变体）+ trap_corpus 永久语料
+
+触发：裁决C-1 取证——cron 原始措辞「N 分位」E1 已覆盖，但语料现存「94/3/1 百分位」7 处活雷：`百` 挡在 `\s*分位` 前，数字仍泄漏价位对拍。修法一行：E1 正则 `\s*分位` → `\s*(?:百分位|分位数|分位)`（长形在前防前缀截断；分数形式原样保留）。
+
+- **证据链**：HEAD 旧引擎忠实复跑（git show 取归档模块，非模拟）——「94 百分位」FAIL（94≈94.78 偏 0.8% 误伤）、「第99百分位」FAIL（偏 4.5%）→ 修后双 PASS；tokenizer 5 形态修前泄漏 [94]/[99] → 修后全 `[]`（「N 分位数」旧正则本就覆盖=防御性）。**归档级零漂移**：44 对全 gate verdict 向量双引擎差分 **0 翻转**（verdict/failed_gates/gate 三层均无）。
+- **trap_corpus.yaml 永久语料**（裁决C-1：形态进 fixture 才是回归保护，禁散落单元测试）：`regression-tests/trap_corpus.yaml` 单一真相源，每条带 id/gate/check/line/source（实证来源必注）；消费方 `TestTrapCorpus`（schema 唯一性 + tokenizer 5 形态 + e2e 翻转对账）。批2 #2 的 7 句评测集随后同落此处。
+- **风险面**：regex 锚定数字前缀，价位句不以「N百分位」收尾——无新增误剥（长形只增剥离域，new-PASS ⊇ old-PASS 方向安全）。
+- ledger：`G63#percentile_variant:bai_percentile_leak` inflight→**landed**（count=0 基线，复发=回归）。
+
+验证：test_diag_contract 39 用例全绿；test_archive_replay 44 对 REPLAY_ERROR 0；run_regression.sh exit 0。
+
+
 ## 2026-08-31 诊断契约 v2.1：11 站点 reason 真值化（批1）+ 双防线 + 删记忆实验 + 两指标 + 契约路线图（plan wiggly-moseying-spring）
 
 触发：圣邦实测 G57 裸 False 臂只回 registry 泛句，LLM 被迫重查快照多花一轮。定理锚定：verify_gates.py 只消费 verdict ⇒ `return False` ≡ `GateResult(passed=False, reasons=[...])`——reason 升级 verdict 天然中性（418 次真实调用差分零翻转）。批1 = 11 站点（7 裸 False 尾注 + 4 静态编造 reason）原位真值化；批2（5 引擎根因）独立立项勿合并。
