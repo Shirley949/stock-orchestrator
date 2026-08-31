@@ -1,3 +1,18 @@
+# ⏳ pending 欠账总图（裁决 2026-09-01 登记；本段钉在文件顶）
+
+> 纪律：**人工追踪队列只在此处**（每项带登记日+完成判据），机器可追踪的全部交还机器（scan/tracker 首行自报）。落地一项 → 写 dated 条目 + 删本段对应行；新欠账先进本段再排期。
+
+| # | 事项 | 登记 | 完成判据 | 状态 |
+|---|---|---|---|---|
+| 1 | C-4 暴露度验收 | 2026-09-01 | — | ✅ **机器化闭环**：`trap_ledger_scan --field-acceptance` 首行自报（暴露/复现/窗剩），验收 yaml 自动关闭/展期/降级，无需人工记 |
+| 2 | **WP1b**：余 19 门 lossy-bool gate reason 真值化 | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转+回归 exit 0；启动条件=WP1a 过闸（**已过闸 2026-09-01，7849213**） | ⏳ 待启动 |
+| 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 排队 |
+| 4 | warn→硬断言升级 | 2026-09-01 | — | ✅ **机器化闭环**：acceptance yaml `flipped` 位一轮 cron 零命中自动翻，verify_gates 硬断言执法 verdict 中性 |
+| 5 | **ledger 入账半自动化**：unclassified 按 gate#subcheck 聚簇出签名提案 | 2026-09-01 | scan 输出聚簇提案 → 人判陷阱 vs 真错（cron 收尾 ≤5 分钟）→ 进条文；判据=流程跑通一次且 unclassified 存量清零 | ⏳ 排队 |
+| 6 | **R10-min**：文档 src 路径可达性校验器进回归 | 2026-09-01 | 校验器（A/B 双快照极）接 run_regression exit 0；文档示例 src 路径全部真实可达 | ⏳ 排队 |
+| 7 | **WP-M memory 瘦身** | 2026-09-01 | 三量化目标（实测基线 2026-09-01：MEMORY.md **6.4KB**/body **50 份** 154KB/索引加载 ≈1.7K token——裁决引数 21KB/156 为 8-31 治理前旧数已失效）：① MEMORY.md ≤5.0KB ② body ≤40 份（同族合并去重，跨票根因零丢失）③ 索引加载 ≤1.3K token（−25%）；索引-文件闭合（零未入索引/零悬空）保持 | ⏳ 排队 |
+
+
 ## 2026-09-01 WP1a：G7/G8/G9 词表门 reason 真值化（reason-only 批）
 
 裁决 B（2026-09-01）：WP1 拆批，WP1a=G7/G8/G9 先行（过闸后启动 WP1b 余 19 门）；**分离原则**——WP1 恒 reason-only（定理保 verdict 中性、归档重放零翻转），F4 verdict-affecting 批（G49/G69/G16:696/G67:3105+presence 门）单列且预申报翻转，**两者永不同批**。转化标准：五类路由 expected 来源 + [数据层] 家族归类 + 全 schema lint 同批过 + 逐臂 None 注入崩溃测试。
