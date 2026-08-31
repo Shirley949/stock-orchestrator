@@ -16,6 +16,7 @@
   python snapshot_view.py <snap.json> consensus    # 一致预期（annual/时序/实绩/指引）
   python snapshot_view.py <snap.json> peer         # 同业对比（items 指标表 + 排名 + 中值）
   python snapshot_view.py <snap.json> annual       # 年报维度（分红/前十大/客户供应商/员工）
+  python snapshot_view.py <snap.json> b_head       # 模式B核心结论头块（10槽+整块草稿，m38数据源）
   python snapshot_view.py <snap.json> --list       # 列出可用视图与状态
   python snapshot_view.py <snap.json> any <scene或路径> [--depth 2]  # 任意节键树探查（扁平小节首选）
   python snapshot_view.py <snap.json> --raw a.b.c  # 兜底：任意 raw 路径直读（视图缺数据时）
@@ -46,6 +47,8 @@ VIEW_PATHS = {
     "short_term":    ("s4_technical", "data", "short_term_enrich", "report_view"),
     "market_context": ("market_context", "data", "report_view"),
     "fund_flow":     ("s3_fund_flow", "data", "fund_flow"),
+    # 模式B核心结论头块（2026-08-31）：跨 scene 聚合 + head_draft_md 整块预渲染（m38/G71）
+    "b_head":        ("s4_technical", "data", "b_head"),
     "valuation": ("valuation_snapshot", "data", "report_view"),
     "consensus": ("consensus_forecast", "data", "report_view"),
     "peer":      ("s11_peer", "data", "report_view"),
@@ -75,7 +78,8 @@ def _print_kline(v):
     s = v.get("stats") or {}
     print("\n[stats]")
     for k in ("close_latest", "high_52w", "low_52w", "dist_52w_high_pct", "dist_52w_low_pct",
-              "ytd_high", "ytd_low", "ytd_chg_pct", "avg_amount_20d_亿", "max_amount_60d_亿"):
+              "ytd_high", "ytd_low", "ytd_chg_pct", "avg_amount_20d_亿", "max_amount_60d_亿",
+              "high_5d", "low_5d", "ret5d_pct"):
         print(f"  {k:22s} = {_fmt(s.get(k))}")
     rec = v.get("recent") or []
     print(f"\n[recent desc rows[0]=最新 共{len(rec)}行]")
@@ -407,6 +411,42 @@ def _print_fund_flow(v):
               f"(占比 {_fmt(it.get('in_ratio'))}/{_fmt(it.get('out_ratio'))})")
 
 
+def _print_b_head(v):
+    """b_head 头块视图：模式B核心结论的 10 槽全量（m38 模板数据源，数字照抄勿改）。"""
+    print(f"## 核心结论头块 status={_fmt(v.get('status'))} "
+          f"as-of {v.get('as_of', '—')} 截止 {v.get('period_label', '—')}")
+    if v.get("missing_fields"):
+        print(f"  ⚠️ missing_fields={v.get('missing_fields')}")
+    print(f"\n[现价/近5日/分时]")
+    print(f"  现价={_fmt(v.get('close'))} 涨跌={_fmt(v.get('change_pct'))}% "
+          f"成交={_fmt(v.get('amount_yi'))}亿 换手={_fmt(v.get('turnover_pct'))}%")
+    print(f"  近5日: 区间 {_fmt(v.get('low_5d'))}～{_fmt(v.get('high_5d'))} "
+          f"ret5={_fmt(v.get('ret5d_pct'))}% ret20={_fmt(v.get('ret20_pct'))}% "
+          f"分类词(开放槽)={_fmt(v.get('trend_class'))}")
+    print(f"  分时: gap={_fmt(v.get('open_gap_pct'))}% 上影={_fmt(v.get('upper_shadow_pct'))}% "
+          f"下影={_fmt(v.get('lower_shadow_pct'))}% 尾盘={_fmt(v.get('tail_signal'))} "
+          f"MA60态={_fmt(v.get('ma60_state'))}")
+    print(f"\n[预测] direction={_fmt(v.get('direction'))} 置信={_fmt(v.get('confidence'))} "
+          f"p={_fmt(v.get('probability'))} 胜率={_fmt(v.get('sample_win_rate'))} "
+          f"规则={_fmt(v.get('rule_name'))} 视野={_fmt(v.get('horizon_days'))}日 "
+          f"共振={_fmt(v.get('resonance_level'))}")
+    er = v.get("expected_range") or {}
+    print(f"  预期区间[{_fmt(er.get('low'))} ~ {_fmt(er.get('high'))}]")
+    for row in v.get("scenario_rows") or []:
+        print(f"    {'|'.join(str(c) for c in row)}")
+    print(f"\n[关键位] {v.get('key_levels_line', '—')}")
+    print(f"[纪律位] {v.get('discipline_line', '—')}")
+    print(f"  stop_side={v.get('stop_side')} ATR止损={_fmt(v.get('atr_stop'))} "
+          f"悲观目标={_fmt(v.get('pess_target_1'))}→{_fmt(v.get('pess_target_2'))}")
+    print(f"[筹码] 90%带 {_fmt(v.get('band90_low'))}～{_fmt(v.get('band90_high'))} "
+          f"c90={_fmt(v.get('c90'))}% 均成本={_fmt(v.get('chip_avg_cost'))} "
+          f"获利盘={_fmt(v.get('chip_profit_rate'))}%")
+    print(f"[主力/散户] {v.get('fund_line', '—')}")
+    print(f"[仓位] kelly={_fmt(v.get('kelly_fraction'))} ({v.get('kelly_note', '—')})")
+    print("\n[head_draft_md 整块草稿（默认整段照抄，唯二开放槽=走势分类词/形态词）]")
+    print(v.get("head_draft_md", "—").rstrip())
+
+
 # ---------------------------------------------------------------------------
 # any 两级探查：任意节键树（深度可调，扁平小节首选读取方式）
 # ---------------------------------------------------------------------------
@@ -419,7 +459,7 @@ PRINTERS = {
     "technical": _print_technical, "valuation": _print_valuation,
     "consensus": _print_consensus, "peer": _print_peer, "annual": _print_annual,
     "short_term": _print_short_term, "market_context": _print_market_context,
-    "fund_flow": _print_fund_flow,
+    "fund_flow": _print_fund_flow, "b_head": _print_b_head,
 }
 
 

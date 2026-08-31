@@ -104,6 +104,7 @@ GATE_DESCS = {
     "G68": "模式B分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利 f* ±0.01）",
     "G69": "模式B筹码资金结构 ≥3 维 [src:] 消费（资金流/融资/估值分位/获利盘四维）",
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
+    "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
@@ -198,7 +199,7 @@ GATE_HINTS = {
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -238,7 +239,7 @@ PROFILES = {
 # —— 模式B gate 隔离（双保险之一；2026-08-26 B v2）——
 # G65-G70 只在 profile_quick 实跑：A 报告（profile_full）结构上不含这些 gate；
 # A 快照即便误跑 quick 也被每个 check 顶部的 mode 短路放行（双保险之二）。
-B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70"]
+B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70", "G71"]
 PROFILES["profile_full"]["gates"] = [g for g in ALL_GATES if g not in B_ONLY_GATES]
 PROFILES["profile_quick"]["gates"] = PROFILES["profile_quick"]["gates"] + B_ONLY_GATES
 
@@ -3330,6 +3331,100 @@ def check_g70(report: str, data: dict) -> bool:
     return True
 
 
+# —— G71（模式B核心结论头块 · 2026-08-31 m38 配套）——
+_G71_HEAD_RE = re.compile(r"^#{1,4}\s.*核心结论", re.MULTILINE)
+_G71_VERIFY_RE = re.compile(r"^#{1,4}\s.*(?:方向预测|纪律位)", re.MULTILINE)
+_G71_SLOTS = ("现价", r"近\s*5\s*日", "分时", "方向预测", "情景", "关键位",
+              "纪律位", "筹码", "主力", "仓位")
+# 标签配对（模板与 gate 同形：「{价}（60m MA60 档[已失守]?）」——标签消歧，
+# 无 G68 表格行档间差<5% 互 hit 问题；兼容破位态「已失守」后缀，实测 7/18 票）
+_G71_STOP_PAT = {
+    "h60_ma60": r"(\d+(?:\.\d+)?)\s*[（(]\s*60m\s*MA60\s*档(?:\s*已失守)?\s*[)）]",
+    "daily_ma20": r"(\d+(?:\.\d+)?)\s*[（(]\s*日\s*MA20\s*档(?:\s*已失守)?\s*[)）]",
+}
+
+
+def check_g71(report: str, data: dict) -> bool:
+    """G71: 模式B核心结论头块执法四项（存在性/槽位完整性/纪律位散文对拍/头表=capstone 投影）。
+    SOFT(weight1)。真相源：s4.data.b_head（引擎预渲染 head_draft_md）+ risk_control.stops。
+    与 G65/G68 分工（不重复执法）：方向/p/胜率/凯利/ATR 数值由 G65/G68 全文对拍
+    （头块写了就被抓）；G71 只管结构四项。头块在 §5 capstone 切片外，
+    G30 概率闭合不双计（2026-08-30 v2 实证）；G68 管 capstone 表格行，本门管头块散文
+    （标签配对取数，无档间互 hit 面）。"""
+    if not _b_gate_active(data):
+        return True
+    head, diag = _locate_section(report, head_re=_G71_HEAD_RE,
+                                 verify_re=_G71_VERIFY_RE,
+                                 weak=("方向预测", "纪律位", "现价"))
+    if diag == "no_anchor":
+        return GateResult(passed=False, reasons=[
+            "B 报告缺核心结论头块：须有「## 核心结论（数据截止 … 收盘）」标题块"
+            "（m38 模板，G11 声明后、首章节前；整块草稿照抄 b_head 视图 head_draft_md）"])
+    # ① 槽位完整性（10 槽锚词；降级态文案保留锚词，见 m38 缺失态表）
+    missing = [s for s in _G71_SLOTS if not re.search(s, head)]
+    if missing:
+        return GateResult(passed=False, reasons=[
+            f"头块槽位缺失：{missing}（10 槽锚词必齐：现价/近5日/分时/方向预测/情景/"
+            "关键位/纪律位/筹码/主力/仓位；数据降级时锚词照写+降级说明）"])
+    reasons = []
+    # ② 纪律位散文对拍（标签配对 ±1%；truth 优先 risk_control，旧快照退 b_head）
+    bh = _snapshot_get(data, "s4_technical.data.b_head")
+    rc = _snapshot_get(data, _B_STE + ".risk_control")
+    stops = (rc.get("stops") if isinstance(rc, dict) else None) or \
+            (bh.get("stops") if isinstance(bh, dict) else None) or []
+    truth = {s.get("level"): s["price"] for s in stops
+             if isinstance(s, dict) and isinstance(s.get("price"), (int, float))}
+    for lv, pat in _G71_STOP_PAT.items():
+        pr = truth.get(lv)
+        if pr is None:
+            continue  # 引擎无该档（降级）→ 不强制该行
+        m = re.search(pat, head)
+        if not m:
+            reasons.append(f"头块纪律位缺「{lv}」标签行（模板：{_fmt_label(lv)} 档）失守减仓，"
+                           f"快照值 {round(pr, 3)}")
+        elif not _hit_tol(float(m.group(1)), pr, 0.01):
+            reasons.append(f"头块纪律位 {lv} 价不符：报告 {m.group(1)} vs 快照 {round(pr, 3)}"
+                           "（±1%，照抄 b_head.discipline_line）")
+    # ③ 头块悲观目标与引擎 pess 分支对拍（仅 direction≠bear：bear 的悲观行=主推行，
+    #    目标=er_low（G65/引擎区间管），非 pess 档——防 G71×引擎死锁，002202 全链路实测）
+    if (isinstance(bh, dict) and bh.get("direction") != "bear"
+            and isinstance(bh.get("pess_target_1"), (int, float))):
+        pes_nums = [n for ln in head.splitlines()
+                    if ln.strip().startswith("|") and "悲观" in ln for n in _nums_in(ln)]
+        if not any(_hit_tol(n, bh["pess_target_1"], 0.01) for n in pes_nums):
+            reasons.append(f"头块悲观目标与引擎不符：悲观行情景行须含 pess_target_1="
+                           f"{bh['pess_target_1']}（±1%；破位票≠纪律位，见 b_head 视图）")
+    # ④ 头表概率 = §5 capstone 投影（词根配对字符串相等；capstone 不可定位则跳过）
+    cap, cdiag = _locate_section(report)
+    if cdiag != "no_anchor":
+        hp, cp = _prob_by_root(head), _prob_by_root(cap)
+        drift = {k: (hp[k], cp[k]) for k in hp if k in cp and hp[k] != cp[k]}
+        if drift:
+            reasons.append(f"头块情景概率与 §5 capstone 漂移：{drift}"
+                           "（头表=capstone 精简投影，概率数字须逐字一致）")
+    if reasons:
+        return GateResult(passed=False, reasons=reasons)
+    return True
+
+
+def _fmt_label(lv):
+    return {"h60_ma60": "60m MA60", "daily_ma20": "日 MA20"}.get(lv, lv)
+
+
+def _prob_by_root(sec):
+    """情景表行按 乐观/中性/悲观 词根取首个百分数（词根消歧，列序无关）。"""
+    out = {}
+    for ln in sec.splitlines():
+        if not (ln.strip().startswith("|") and re.search(r"\d+(?:\.\d+)?\s*%", ln)):
+            continue
+        for root in ("乐观", "中性", "悲观"):
+            if root in ln and root not in out:
+                m = re.search(r"(\d+(?:\.\d+)?)\s*%", ln)
+                if m:
+                    out[root] = m.group(1)
+    return out
+
+
 
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
@@ -3360,7 +3455,7 @@ GATE_CHECKERS = {
     "G60": check_g60,
     "G61": check_g61, "G62": check_g62, "G63": check_g63, "G64": check_g64,
     "G65": check_g65, "G66": check_g66, "G67": check_g67,
-    "G68": check_g68, "G69": check_g69, "G70": check_g70,
+    "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
 }
 
 # ============================================================
@@ -3623,6 +3718,10 @@ GATE_REGISTRY = {
             "data_dim": "market_context.data.index_sh.verdict",
             "requires": "大盘 regime 表述与 verdict.regime 一致；market_context 必现",
             "fail_hint": "regime 断言与快照不一致，或缺失时编造 regime"},
+    "G71": {"checker": check_g71, "weight": 1, "owner": ["m38"],
+            "data_dim": "s4_technical.data.b_head",
+            "requires": "核心结论头块（m38 模板）必现：10 槽锚词齐 + 纪律位标签行 ±1% + 头表概率=§5 capstone 投影",
+            "fail_hint": "头块缺失/槽缺/纪律位价不符/头表与 capstone 概率漂移（整块草稿照抄 b_head 视图）"},
 }
 
 # GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）

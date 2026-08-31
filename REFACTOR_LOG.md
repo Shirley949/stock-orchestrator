@@ -1,3 +1,15 @@
+## 2026-08-31 模式B核心结论头块固化：G71 + b_head 视图接线 + m38 契约（plan b-snapshot-5-eager-tome）
+
+触发：用户拍板 300433 模式B v2 报告的「核心结论」置顶块固化为 B 报告标准开头（点名 10 槽位），硬要求「模板每次一致 + 数据新鲜正确」。三层分工：脆弱归引擎（routing 仓 `build_b_head_view` 预渲染 `head_draft_md`）、结构归 gate（G71）、开放归散文（quality 仓 m38）。
+
+- **G71（check_g71，B_ONLY，weight=1，owner=m38）四段执法**——只执法 G65/G68 未覆盖的净增量（方向/p/胜率/凯利/ATR 数值不二次执法，防双执法漂移）：①头块存在性（`核心结论` 标题锚 + 方向预测/纪律位 verify；整块省略仍 10/10 过 = 执法空白，正是「每次都是这种」的产品需求编码）②10 槽锚词完整性（现价/近5日/分时/方向预测/情景/关键位/纪律位/筹码/主力/仓位——v2 金票回放实测恰缺『现价/分时』= 用户点名的第 1/3 优先槽）③纪律位散文**标签配对**对拍（`（60m MA60 档已失守?）` 标签消歧 vs `risk_control.stops`，±1%——G68 刻意收窄到表格行防档间互 hit，G71 用标签配对无此面）④头表概率=§5 capstone 投影字符串相等。
+- **G71×引擎死锁消解（002202 fresh 全链路实测）**：bear 方向头块的悲观行=主推行（目标=er_low，G65/引擎区间管）非 pess 档 → pess 对拍门控 `direction != "bear"`（Gate 修复验证硬规则③死锁类：强制消费 gate × 对拍 gate 真值域不交）。
+- **接线面**：snapshot_view.py 加 b_head 视图（VIEW_PATHS/_print_b_head/PRINTERS）；token_audit.py VIEW_NAMES+VIEW_TO_MODULE 成对（漏 VIEW_TO_MODULE = classify_block KeyError）；gate_fixture_test.py EXPECTED 加 G71 行（3 A 票 mode 短路结构性 True）；generate_checklist.py B phase_3 加 c59（m38 头块步骤）；skill_dep_graph.py MODE_SCENARIO_FILES["B"] 加 m38；data_contracts.py m38-b-conclusion-head consumer tag（s2 kline/realtime_quote、s4 short_term_enrich+G71/chip/support_resistance、s3 fund_flow、intraday_60min）；SKILL.md:180 B 行 m38/m3/m36/m37/m6（顺手修 m36/m37 缺登 drift）；run_regression.sh 挂 test_b_head_g71.py。
+- **新增 `regression-tests/test_b_head_g71.py` 28 用例**：C1 18 票真实语料回放（十槽全非空、数字==raw、300054 双快照逐字节幂等、7 破位票 stop_side/pess 分支）+ C2-C12 聚合/换算/分支/降级/A no-op/截断残骸 + C13 G71 四极反例（无头块/缺槽/纪律位偏差/概率漂移全 FAIL）+ C14 v2 金票对齐裁决（标记缺现价/分时，执法面收敛在真缺口）。
+
+验证：run_regression.sh exit 0（62 门漏报=0 误伤=0；契约双向闭合 m38 零 error；checklist 分母自适配）；002202 fresh runner B 全链路（fetch→store→read→consume）check_g71 PASS + verify_gates quick G71 ✅。
+
+
 ## 2026-08-30 第4批机制层：R8 静默降级 fail-fast + R10 文档路径机器校验 + R12 fixture 真实正文探针（failure-family 修复执行令）
 
 触发：同执行令第4批（机制层是「彻底解决」构成要件）。gate 逻辑零改动（`scripts/lib/gate_definitions.py` 相对 HEAD 空 diff），全部为机制/测试/文档层：

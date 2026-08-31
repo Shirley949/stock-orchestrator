@@ -105,8 +105,8 @@ SCENES = {
              "note": "fetcher 硬编码中文{特大单,大单,中单,小单}(runner.py:979-989)；G26 严格依赖此集合，错则 FAIL"},
         ],
         "consumers": {
-            "data.fund_flow":              ["G26", "m10:10A.4"],
-            "data.fund_flow.items[].name": ["G26"],
+            "data.fund_flow":              ["G26", "m10:10A.4", "m38-b-conclusion-head"],   # m38 头块主力/散户槽（经 b_head 视图换算 main/retail_net_yi）
+            "data.fund_flow.items[].name": ["G26", "m38-b-conclusion-head"],
         },
         "priority": P0,   # G26 依赖
         "cost": {"calls": 1, "calls_worst": 3, "latency": "high", "throttle_prone": True},
@@ -139,8 +139,8 @@ SCENES = {
         "consumers": {
             "data.daily_kline":   ["m3-technical", "computed_metrics", "R6_holder_distribution", "G14", "_EXPECTED_SCENES"],
             "data.daily_kline.latest_period": ["G30"],   # #1 数值新鲜度（close stale 兜底）
-            "data.daily_kline.report_view": ["m3", "m12"],   # 视图直出（近20日叙事+区间统计）
-            "data.realtime_quote": ["m3-technical", "computed_metrics"],
+            "data.daily_kline.report_view": ["m3", "m12", "m38-b-conclusion-head"],   # 视图直出（近20日叙事+区间统计；近5日聚合 stats→b_head）
+            "data.realtime_quote": ["m3-technical", "computed_metrics", "m38-b-conclusion-head"],
             # 换手率归一% 扩展到 7 模块 + G1（量价四镜头消费链；原仅 m3 → 603663 漏消费根因）
             "data.realtime_quote.turnover":      ["m3-technical", "m4-sentiment", "m5-valuation", "m6-decision", "m7-risk", "m9-governance", "m25-orders", "G1"],
             "data.realtime_quote.turnover_pct":  ["m3-technical", "m6-decision"],     # 归一字段同 turnover 语义
@@ -736,10 +736,10 @@ SCENES = {
              "note": "ma60_state/ma60/last_close/tail_signal/t1_window 投影"},
         ],
         "consumers": {
-            "data.ma60_state":  ["short_term_engine", "m36-short-term"],
-            "data.tail_signal": ["m36-short-term"],
+            "data.ma60_state":  ["short_term_engine", "m36-short-term", "m38-b-conclusion-head"],
+            "data.tail_signal": ["m36-short-term", "m38-b-conclusion-head"],
             "data.tail_10_bars": ["m36-short-term"],
-            "data.report_view": ["m36-short-term"],
+            "data.report_view": ["m36-short-term", "m38-b-conclusion-head"],
         },
         "priority": P1,
         "cost": {"calls": 1, "latency": "low"},   # sina 源实测无限流
@@ -934,12 +934,12 @@ SCENES = {
         ],
         "consumers": {
             "data.report_view":        ["m3-technical", "m6-decision"],
-            "data.short_term_enrich":  ["m36-short-term", "m6-decision", "G65", "G66", "G67", "G68"],  # m36 周期状态表、m6 forecast block、G65-68 消费对拍
+            "data.short_term_enrich":  ["m36-short-term", "m6-decision", "G65", "G66", "G67", "G68", "m38-b-conclusion-head", "G71"],  # m36 周期状态表、m6 forecast block、G65-68+G71 消费对拍（m38 头块/G71 读 b_head 子树）
             "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
-            "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验）
+            "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41", "m38-b-conclusion-head"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验；m38 头块筹码槽经 b_head 换算消费）
             "data.td":                 ["m3-technical", "m6-decision", "G1", "G14"],  # m3 §3.1 TD、G14 数据驱动 setup≥9
             "data.fibonacci":          ["m3-technical", "G40"],                     # §3.4 斐波那契 + G40 渲染校验
-            "data.support_resistance": ["m3-technical", "m6-decision", "m7-risk", "G40"],  # §3.3 五层支撑压力 + m6/m7 止损价位 + G40
+            "data.support_resistance": ["m3-technical", "m6-decision", "m7-risk", "G40", "m38-b-conclusion-head"],  # §3.3 五层支撑压力 + m6/m7 止损价位 + G40；m38 头块关键位槽
             "data.volume_price":       ["m3-technical", "m6-decision"],             # 量价配合（四镜头之量价领先）
             "data.chip_behavior":      ["m6-decision"],                             # 主力行为四联判定
             "data.signals":            ["m3-technical", "m6-decision", "m7-risk", "G40"],  # m3 直读 state/events、m6/m7 止损收紧、G40 消费校验

@@ -181,6 +181,7 @@ PHASE_STEPS = {
             {"id": "c50", "desc": "数据收单完成（来自 runner s10_checklist）"},
         ],
         "phase_3": [
+            {"id": "c59", "desc": "m38 核心结论头块（G11 声明后、首章节前；整块照抄 b_head 视图 head_draft_md，数字禁改）"},
             {"id": "c60", "desc": "m3 技术面"},
             {"id": "c61", "desc": "m6 操作建议"},
             {"id": "c62", "desc": "m36 短期多周期共振 + m37 筹码与资金结构"},

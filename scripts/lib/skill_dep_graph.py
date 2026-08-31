@@ -102,6 +102,7 @@ MODE_SCENARIO_FILES = {
         "financial-data-routing/references/scenarios/market-context.md",
         "financial-data-routing/references/scenarios/intraday-60min.md",
         "stock-analysis-quality/references/modules/m3-technical.md",
+        "stock-analysis-quality/references/modules/m38-b-conclusion-head.md",
         "stock-analysis-quality/references/modules/m36-short-term.md",
         "stock-analysis-quality/references/modules/m37-positioning.md",
         "stock-analysis-quality/references/modules/m6-decision.md",

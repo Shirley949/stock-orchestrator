@@ -44,14 +44,15 @@ MODULE_RE = re.compile(r"modules/(m\d[\w-]*)\.md")
 
 VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder",
               "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual",
-              # 模式B视图（2026-08-26 B v2）
-              "short_term", "market_context", "fund_flow"]
+              # 模式B视图（2026-08-26 B v2；2026-08-31 +b_head 核心结论头块）
+              "short_term", "market_context", "fund_flow", "b_head"]
 # 视图 → 消费模块（报告归因用；events 双消费取 m4）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
                   "news": "m4", "events": "m4", "holder": "m4",
                   "balance": "m2", "timeline": "m4", "technical": "m3",
                   "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
-                  "short_term": "m36", "market_context": "m36", "fund_flow": "m37"}
+                  "short_term": "m36", "market_context": "m36", "fund_flow": "m37",
+                  "b_head": "m38"}
 
 # 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
 VIEW_MOUNT_PREFIXES = [
