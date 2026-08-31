@@ -5,12 +5,17 @@
 | # | 事项 | 登记 | 完成判据 | 状态 |
 |---|---|---|---|---|
 | 1 | C-4 暴露度验收 | 2026-09-01 | — | ✅ **机器化闭环**：`trap_ledger_scan --field-acceptance` 首行自报（暴露/复现/窗剩），验收 yaml 自动关闭/展期/降级，无需人工记 |
-| 2 | **WP1b**：余 19 门 lossy-bool gate reason 真值化 | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转+回归 exit 0；启动条件=WP1a 过闸（**已过闸 2026-09-01，7849213**） | ⏳ 待启动 |
-| 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 排队 |
+| 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ⏳ 已启动 2026-09-01 |
+| 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | **G69 方向相反裁决先行**（用户拍板）→ 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 留位 |
 | 4 | warn→硬断言升级 | 2026-09-01 | — | ✅ **机器化闭环**：acceptance yaml `flipped` 位一轮 cron 零命中自动翻，verify_gates 硬断言执法 verdict 中性 |
 | 5 | **ledger 入账半自动化**：unclassified 按 gate#subcheck 聚簇出签名提案 | 2026-09-01 | scan 输出聚簇提案 → 人判陷阱 vs 真错（cron 收尾 ≤5 分钟）→ 进条文；判据=流程跑通一次且 unclassified 存量清零 | ⏳ 排队 |
-| 6 | **R10-min**：文档 src 路径可达性校验器进回归 | 2026-09-01 | 校验器（A/B 双快照极）接 run_regression exit 0；文档示例 src 路径全部真实可达 | ⏳ 排队 |
-| 7 | **WP-M memory 瘦身** | 2026-09-01 | 三量化目标（实测基线 2026-09-01：MEMORY.md **6.4KB**/body **50 份** 154KB/索引加载 ≈1.7K token——裁决引数 21KB/156 为 8-31 治理前旧数已失效）：① MEMORY.md ≤5.0KB ② body ≤40 份（同族合并去重，跨票根因零丢失）③ 索引加载 ≤1.3K token（−25%）；索引-文件闭合（零未入索引/零悬空）保持 | ⏳ 排队 |
+| 6 | **R10-min**：文档 src 路径可达性校验器进回归 | 2026-09-01 | 校验器（A/B 双快照极）接 run_regression exit 0；文档示例 src 路径全部真实可达 | ⏳ 排队（可与 WP1b 并行） |
+| 7 | **WP-M memory 结构审计**（2026-09-01 复核改判据：**结构病优先，尺寸只是代理**——达标即结项不追 KB） | 2026-09-01 | 结构审计三条：① memory 内确定性合同=0（合同唯一真相源在 code/repo，memory 只存跨票根因——发现即迁出）② 未裁决矛盾对=0（两份 memory 对同一 gate/机制记载冲突）③ 索引 gate 号覆盖率达标（族文件 description 含最锋利 gate 号，见 memory-writing-conventions）。基线证据（2026-09-01 实测）：MEMORY.md 6.4KB/body 50 份 154KB；**8-31 治理批重写 42/51 份（mtime 实证）**——裁决引数 21KB/156 无实体对应（全库唯一 memory 目录 51 份 .md，156 应为治理前旧计数对象，无从复现），基线以实测为准 | ⏳ 排队（可能直接关闭） |
+| 8 | **G28 双轨**（延后≠登记，2026-09-01 补登记——防 8-30 capstone 劫持同剧本游离） | 2026-09-01 | **轨1 reason-only**：收编 WP1b（10 真实 FAIL 实例领跑 lossy 语料；reason 带闭合差值+「混装形态下本 FAIL 不代表提取错误」提示；FAIL 仍 FAIL，verdict 政策无关）。**轨2 mixed_caliber 政策**：单列 verdict-affecting 批**待用户拍板**（软化与否；2027 中报季前须有结论，否则 7 只闭合 FAIL 股处置仍是「路径 a 靠自觉披露」） | ⏳ 轨1 已并入 #2；轨2 待拍板 |
+| 9 | **测试清册批次**（清理是小批次非顺手 rm；时机=WP1b 落地后一次清） | 2026-09-01 | 四层清册：① 永久层**永不清**（trap_corpus+TestTrapCorpus+test_diag_contract 全家+每批行为测试+gate_fixture_test+test_archive_replay+run_regression.sh）② 升格层 脚本→命名工具（diff_engine ✅已升格 2026-09-01）③ 归档层 工作区清除（批2 淘汰原型/研究电池/plan 文件——结论已沉淀 REFACTOR_LOG，manifest 记一行）④ 即删层 /tmp 临时物。闸：grep 全库引用确认无 load-bearing 依赖 → 回归 exit 0 → 单提交 → manifest 更新 | ⏳ 排队（WP1b 后） |
+
+**终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
+① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
 
 ## 2026-09-01 WP1a：G7/G8/G9 词表门 reason 真值化（reason-only 批）
@@ -25,7 +30,7 @@
 - **健壮性净增**：旧 G7 在 fa 行非 dict 时直接 `row.get` 崩溃，新引擎 isinstance 守卫降级不炸（crash≠verdict，非翻转）。
 
 **验证链**：
-1. 归档 30 对（sidecar+代码配 cache 最新快照）×3 门=90 评估，HEAD 旧引擎 vs 新引擎双子进程差分：**0 翻转、0 崩溃、21 处 reason 升级**；两极真实分布（每门 True 23/False 7，FAIL 臂在现场语料真实点火）。
+1. 归档差分两轮（HEAD 旧引擎 vs 新引擎双子进程）：首轮 30 对（cache 配对）0 翻转/21 处升级；复轮改**目录内 runner_snapshot*.json 优先配对**（与报告同期，更忠实的输入对）→ **49 对 ×3 门=147 评估：0 翻转、0 崩溃、45 处 reason 升级**，两极分布 True 34/False 15——超批2 基线 44 对。**30 vs 44 成因一句话**：归档集未变（68 目录/73 sidecar 全在），首轮少是因配对要求「该代码快照仍在 live cache」且同代码多目录去重，cache 只留最近快照致 26 个历史代码不可配；复轮目录内快照回补后覆盖反超。零翻转基线未缩水。
 2. `TestWP1aWordGates` 8 测试：三门 FAIL 真值 token+L 锚+diag 六键+degraded=False / PASS 字面 bool / G8 rows=0 臂 / G9 data_full 单键（Sina 路径）/ 逐臂 None·脏行注入（None/str/int 行、False 占位值、非 list data、scene 缺失）零崩溃。
 3. `test_diag_contract.py` 51/51；`run_regression.sh` exit 0（gate_fixture_test 62 门漏报=0；engine_pending 0）。
 4. 无 trap_ledger 耦合（G7/G8/G9 无既有条目，reason 文本变更不触碰任何 match）；无 fail_hint 锚定。
