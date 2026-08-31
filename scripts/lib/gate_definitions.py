@@ -264,6 +264,19 @@ def _has_keywords(text: str, keywords: list[str]) -> bool:
     return all(kw in text for kw in keywords)
 
 
+def _fmt_yi(x) -> str:
+    """元→亿元统一口径（三表真值引用）。bool 是 int 子类须先排除（快照用 False 作空占位）。"""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return "—"
+    return f"{x / 1e8:.2f}亿"
+
+
+def _iso8(p) -> str:
+    """"20260630" → "2026-06-30"（financial_abstract 列键日期归一；非 8 位期键原样返回）"""
+    s = str(p)
+    return f"{s[:4]}-{s[4:6]}-{s[6:]}" if re.fullmatch(r"20\d{6}", s) else s
+
+
 def _snapshot_get(data: dict, path: str):
     """从 data（即 snapshot）中按点分路径读取值"""
     parts = path.split(".")
@@ -436,58 +449,160 @@ def check_g6(report: str, data: dict) -> bool:
     return len(set(dates)) >= 6
 
 
-def check_g7(report: str, data: dict) -> bool:
+def check_g7(report: str, data: dict):
     """G7: 扣非对比（净利润/扣非/差额%三列已展示）"""
     # 优先：从 snapshot 检查 financial_abstract 是否有扣非数据
     # 双兜底 data/data_full（CLAUDE.md 硬规则：THS/EM 填 .data、Sina 填 .data_full；
     # 单读任一键 = 静默 never-match。镜像 G8 cf_section 范式）。
     fa_section = _snapshot_get(data, "s1_financial.data.financial_abstract")
     fa = fa_section.get("data", fa_section.get("data_full", [])) if isinstance(fa_section, dict) else None
-    if fa and isinstance(fa, list):
-        for row in fa:
-            if '扣非' in str(row.get('指标', '')):
-                return _has_keywords(report, ["扣非", "净利润"])
-    # 降级：纯文本匹配
-    return _has_keywords(report, ["扣非", "净利润"]) or _has_keywords(report, ["扣非净利润", "非经常性"])
+    koufei = next((r for r in (fa if isinstance(fa, list) else [])
+                   if isinstance(r, dict) and '扣非' in str(r.get('指标', ''))), None)
+    # 词表判定（verdict 与旧引擎恒等：有扣非行=两词全；无扣非行=降级双组合任一）
+    if koufei:
+        ok = _has_keywords(report, ["扣非", "净利润"])
+    else:
+        ok = (_has_keywords(report, ["扣非", "净利润"])
+              or _has_keywords(report, ["扣非净利润", "非经常性"]))
+    if ok:
+        return True
+    # FAIL → reason 真值化（WP1a：False→GateResult(passed=False)，verify_gates 只消费
+    # verdict 故恒等；PASS 路径保持 bool True）
+    missing = [w for w in ("扣非", "净利润") if w not in report]
+    present = [w for w in ("扣非", "净利润") if w in report]
+    periods = sorted((k for k in (koufei or {})
+                      if re.fullmatch(r"20\d{6}", str(k))), reverse=True) if koufei else []
+    parts = [f"G7 扣非对比缺词：报告缺『{'、'.join(missing)}』"]
+    if koufei and periods:
+        v0 = koufei.get(periods[0])
+        truth = f"快照真值：{koufei.get('指标')} {_iso8(periods[0])}={_fmt_yi(v0)}"
+        if len(periods) > 1 and koufei.get(periods[1]) is not None:
+            truth += f"（上期 {_iso8(periods[1])}={_fmt_yi(koufei.get(periods[1]))}）"
+        parts.append(truth)
+        fix = (f"补写（照抄真值）：{koufei.get('指标')}{_iso8(periods[0])} {_fmt_yi(v0)}，"
+               f"与净利润并列展示扣非对比")
+    else:
+        parts.append("snapshot financial_abstract 无扣非行（降级纯文本档）")
+        fix = "补写扣非对比句（全文须含『扣非』『净利润』两词）——snapshot 无扣非行，无可引真值"
+    hits = (locate_lines(report, report, lambda ln: present[0] in ln)[:2] if present else [])
+    if hits:
+        parts.append(f"已有词锚点 {_fmt_violation_lines(hits)}")
+    else:
+        parts.append("全文 0 处『扣非』『净利润』")
+    parts.append(fix)
+    return GateResult(passed=False, reasons=["；".join(parts)],
+                      diag={"subcheck": "koufei_comparison",
+                            "expected": "全文含『扣非』且含『净利润』（词表型：两词并列展示扣非对比）",
+                            "found": f"缺 {'、'.join(missing)}"
+                                     + (f"；已含 {'、'.join(present)}" if present else ""),
+                            "fix": fix,
+                            "src": "s1_financial.data.financial_abstract.data[]（指标 含『扣非』行）",
+                            "degraded": False})
 
 
-def check_g8(report: str, data: dict) -> bool:
+def check_g8(report: str, data: dict):
     """G8: 现金流三件套（CFO/CFI/CFF/FCF/FCF净利润比）
     P0-3 fix: 增加空数组假阳性检测 — status=ok/failed+data=[] → 明确失败
     """
     # P0-3: 检查 snapshot 结构完整性
     cf_section = _snapshot_get(data, "s1_financial.data.cash_flow")
+    cf_data = None
     if isinstance(cf_section, dict):
         cf_status = cf_section.get("status", "")
         cf_data = cf_section.get("data", cf_section.get("data_full", []))
-        if isinstance(cf_data, list):
-            # P0-3 fix: 数据为空且状态异常 → 明确失败
-            if len(cf_data) == 0 and cf_status in ("ok", "failed", "empty"):
-                return GateResult(passed=False, reasons=[f"cash_flow rows=0 且 status={cf_status}——现金流数据空须如实披露，不得静默过"])
-            # 有数据 → 正常验证
-            if len(cf_data) > 0:
-                for row in cf_data:
-                    if isinstance(row, dict) and row.get('经营活动产生的现金流量净额') is not None:
-                        fcf_present = "FCF" in report or "自由现金流" in report
-                        cfo_present = "CFO" in report or "经营性现金流" in report or "经营活动现金流" in report
-                        return fcf_present and cfo_present
-
-    # snapshot 不存在或无数据 → 降级到报告文本检查（保留容错）
+        # P0-3 fix: 数据为空且状态异常 → 明确失败（数据空 + 报告须如实披露，非 [数据层]：
+        # 含报告侧披露动作）
+        if isinstance(cf_data, list) and len(cf_data) == 0 and cf_status in ("ok", "failed", "empty"):
+            return GateResult(passed=False, reasons=[
+                f"cash_flow rows=0 且 status={cf_status}——现金流数据空：重跑 s1_financial 拉取，"
+                "报告侧须如实标注「现金流数据不可得」，不得静默过"
+            ], diag={"subcheck": "cashflow_trio_empty",
+                     "expected": "cash_flow.data ≥1 行（status 与行数一致）",
+                     "found": f"rows=0 且 status={cf_status}",
+                     "fix": "重跑 s1_financial 拉取；或报告如实标注「现金流数据不可得」",
+                     "src": "s1_financial.data.cash_flow",
+                     "degraded": False})
+    cfo_row = next((r for r in (cf_data if isinstance(cf_data, list) else [])
+                    if isinstance(r, dict) and r.get('经营活动产生的现金流量净额') is not None), None)
+    # 词表判定（verdict 与旧引擎恒等：snapshot 不存在/无 CFO 行时旧代码落到同表达式降级档）
     fcf_present = "FCF" in report or "自由现金流" in report
     cfo_present = "CFO" in report or "经营性现金流" in report or "经营活动现金流" in report
-    return fcf_present and cfo_present
+    if fcf_present and cfo_present:
+        return True
+    # FAIL → reason 真值化（WP1a）
+    miss = ([("FCF", "FCF/自由现金流")] if not fcf_present else []) + \
+           ([("CFO", "CFO/经营性现金流/经营活动现金流")] if not cfo_present else [])
+    miss_txt = "、".join(g for _, g in miss)
+    parts = [f"G8 现金流三件套缺词：缺 {miss_txt}"]
+    if cfo_row is not None:
+        d0 = str(cfo_row.get("报告日", ""))[:10]
+        v0 = cfo_row.get("经营活动产生的现金流量净额")
+        parts.append(f"快照真值：经营活动产生的现金流量净额 {d0}={_fmt_yi(v0)}")
+        fix = (f"补写缺词（{miss_txt}）；CFO 侧可照抄真值："
+               f"经营活动产生的现金流量净额 {d0} {_fmt_yi(v0)}")
+    else:
+        parts.append("snapshot cash_flow 无 CFO 行（降级纯文本档）")
+        fix = f"补写缺词（{miss_txt}）——snapshot 无 cash_flow 真值"
+    first_present = next((w for w in ("FCF", "自由现金流", "CFO", "经营性现金流", "经营活动现金流")
+                          if w in report), None)
+    hits = (locate_lines(report, report, lambda ln: first_present in ln)[:2]
+            if first_present else [])
+    if hits:
+        parts.append(f"已有词锚点 {_fmt_violation_lines(hits)}")
+    else:
+        parts.append("全文 0 处 FCF/CFO 系词")
+    parts.append(fix)
+    return GateResult(passed=False, reasons=["；".join(parts)],
+                      diag={"subcheck": "cashflow_trio",
+                            "expected": "全文含 FCF/自由现金流 且含 CFO/经营性现金流/经营活动现金流",
+                            "found": f"缺 {miss_txt}"
+                                     + (f"；已含 {first_present}" if first_present else ""),
+                            "fix": fix,
+                            "src": "s1_financial.data.cash_flow.data[0]（报告日/经营活动产生的现金流量净额）",
+                            "degraded": False})
 
 
-def check_g9(report: str, data: dict) -> bool:
+def check_g9(report: str, data: dict):
     """G9: 利润归因闭合（ΔNetProfit四项分解闭合）"""
     # 优先：从 snapshot 检查收入数据（需要≥2期）。读路径范式：data 优先 + data_full 兜底
     # （三表因源不同填不同键：THS/EM 主路径只填 .data，Sina 只填 .data_full；单读 data_full → 永不命中）。
     inc = _snapshot_get(data, "s1_financial.data.income_statement")
     rows = inc.get("data", inc.get("data_full", [])) if isinstance(inc, dict) else []
-    if isinstance(rows, list) and len(rows) >= 2:
-        return "利润归因" in report or ("归因" in report and "净利润" in report)
-    # 降级：纯文本匹配
-    return "利润归因" in report or ("归因" in report and "净利润" in report)
+    has2 = isinstance(rows, list) and len(rows) >= 2
+    # 词表判定（两分支同表达式，与旧引擎恒等；has2 只影响 reason 真值丰富度）
+    if "利润归因" in report or ("归因" in report and "净利润" in report):
+        return True
+    # FAIL → reason 真值化（WP1a）
+    detail = ("有『归因』但缺『净利润』并列" if "归因" in report
+              else "全文 0 处『归因』/『利润归因』")
+    parts = [f"G9 利润归因缺词：{detail}"]
+    truth = fix = None
+    if has2 and all(isinstance(r, dict) for r in rows[:2]):
+        n0, n1 = rows[0].get("净利润"), rows[1].get("净利润")
+        d0 = str(rows[0].get("报告日", ""))[:10]
+        d1 = str(rows[1].get("报告日", ""))[:10]
+        if all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in (n0, n1)):
+            delta = f"Δ{(n0 - n1) / 1e8:+.2f}亿"
+            truth = f"快照真值：净利润 {d0}={_fmt_yi(n0)}、{d1}={_fmt_yi(n1)}（{delta}）"
+            fix = (f"补写利润归因（照抄真值）：净利润 {d0} {_fmt_yi(n0)} vs {d1} {_fmt_yi(n1)}"
+                   f"（{delta}），归因于〈营收/毛利/费用/非经常损益拆解〉")
+    if truth is None:
+        truth = ("snapshot income_statement 不足两期（降级纯文本档）" if not has2
+                 else "快照两期行缺『净利润』数值（降级纯文本档）")
+        fix = "补写『利润归因』或『归因』+『净利润』并列的归因句——snapshot 无可引真值"
+    parts.append(truth)
+    hits = (locate_lines(report, report, lambda ln: "归因" in ln)[:2]
+            if "归因" in report else [])
+    if hits:
+        parts.append(f"已有词锚点 {_fmt_violation_lines(hits)}")
+    parts.append(fix)
+    return GateResult(passed=False, reasons=["；".join(parts)],
+                      diag={"subcheck": "profit_attribution",
+                            "expected": "全文含『利润归因』，或『归因』与『净利润』并列",
+                            "found": detail + ("；已含『归因』" if hits else ""),
+                            "fix": fix,
+                            "src": "s1_financial.data.income_statement.data[0:2]（报告日/净利润）",
+                            "degraded": False})
 
 
 

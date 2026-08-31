@@ -778,5 +778,112 @@ class TestTrapCorpus(unittest.TestCase):
             self.assertIn(c["expect"], hint, f"{c['id']}：提示缺 registry/数据层 归因——{hint}")
 
 
+class TestWP1aWordGates(unittest.TestCase):
+    """WP1a（2026-09-01）：G7/G8/G9 词表门 FAIL 臂 reason 真值化（reason-only，verdict 中性）。
+
+    三门分类（[数据层] 家族归类）：全部 FAIL 臂均为写作侧词表/披露门，无 [数据层] 臂
+    （G8 rows=0 臂含报告侧「如实披露」动作，故不带前缀）。
+    """
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+
+    FA = {"s1_financial": {"data": {"financial_abstract": {"data": [
+        {"选项": "常用指标", "指标": "扣非净利润", "20260630": 7.7e8, "20250630": 0.73e8}]}}}}
+    CF = {"s1_financial": {"data": {"cash_flow": {"status": "ok", "data": [
+        {"报告日": "2026-06-30", "经营活动产生的现金流量净额": 3.59e8}]}}}}
+    INC = {"s1_financial": {"data": {"income_statement": {"data": [
+        {"报告日": "2026-06-30", "净利润": 1.0e9}, {"报告日": "2026-03-31", "净利润": 0.1e9}]}}}}
+
+    def _ret(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        return (bool(r.get("passed")), " | ".join(r.get("reasons") or []), r.get("diag")) \
+            if isinstance(r, dict) else (bool(r), "", None)
+
+    def _assert_fail_truth(self, ok, joined, diag, tokens, line_no=None, line_txt=None):
+        self.assertFalse(ok, "verdict 回退（应 FAIL）")
+        for t in tokens:
+            self.assertIn(t, joined, f"reason 缺真值 {t!r}：{joined[:120]}")
+        if line_no is not None:
+            self.assertIn(f"L{line_no}", joined, f"未定位违规行 L{line_no}：{joined[:120]}")
+            self.assertIn(line_txt[:10], joined)
+        self.assertIsInstance(diag, dict, "无 diag")
+        for k in self._DIAG_KEYS:
+            self.assertIn(k, diag, f"diag 缺 {k}")
+        self.assertFalse(diag["degraded"], "原生 diag 须 degraded=False")
+        self.assertTrue(diag["fix"], "fix 非空")
+
+    # ---------- G7 扣非对比 ----------
+
+    def test_g7_fail_truth_and_anchor(self):
+        rpt = "# 报告\n净利润 7.67 亿，同比高增。\n"   # 有『净利润』缺『扣非』→ L2 锚
+        ok, joined, diag = self._ret(gd.check_g7, rpt, self.FA)
+        self._assert_fail_truth(ok, joined, diag,
+                                 ["扣非净利润", "7.70亿", "2026-06-30", "0.73亿"], 2, "净利润 7.67 亿")
+        self.assertIn("缺 扣非；已含 净利润", diag["found"])
+
+    def test_g7_pass_and_degraded(self):
+        self.assertIs(gd.check_g7("扣非净利润 7.70 亿 vs 净利润 7.67 亿", self.FA), True)  # PASS=字面 bool
+        ok, joined, diag = self._ret(gd.check_g7, "基本面稳健", {})
+        self._assert_fail_truth(ok, joined, diag, ["无扣非行（降级纯文本档）", "全文 0 处"])
+
+    def test_g7_crash_injections(self):
+        dirty = {"s1_financial": {"data": {"financial_abstract": {"data": [
+            None, "x", {"指标": "扣非净利润", "20260630": None}]}}}}
+        for snap in ({}, {"s1_financial": None}, dirty,
+                     {"s1_financial": {"data": {"financial_abstract": None}}}):
+            r = gd.check_g7("无词报告", snap)          # 逐臂 None/脏注入：不崩溃 + 类型合法
+            self.assertIsInstance(r, (bool, dict))
+
+    # ---------- G8 现金流三件套 ----------
+
+    def test_g8_fail_truth_and_anchor(self):
+        rpt = "# 报告\n自由现金流充裕。\n"              # 有 FCF 系词缺 CFO 系词 → L2 锚
+        ok, joined, diag = self._ret(gd.check_g8, rpt, self.CF)
+        self._assert_fail_truth(ok, joined, diag,
+                                 ["经营活动产生的现金流量净额", "3.59亿", "2026-06-30"], 2, "自由现金流")
+        self.assertIn("CFO/经营性现金流", diag["found"])
+
+    def test_g8_rows0_arm_and_pass(self):
+        snap = {"s1_financial": {"data": {"cash_flow": {"status": "failed", "data": []}}}}
+        ok, joined, diag = self._ret(gd.check_g8, "x", snap)
+        self.assertFalse(ok)
+        self.assertIn("rows=0 且 status=failed", joined)
+        self.assertIn("如实标注", diag["fix"])
+        self.assertIs(gd.check_g8("FCF 转正，经营性现金流为正", self.CF), True)
+
+    def test_g8_crash_injections(self):
+        dirty = {"s1_financial": {"data": {"cash_flow": {"data": [
+            None, {"报告日": "2026-06-30", "经营活动产生的现金流量净额": False}]}}}}
+        for snap in ({}, {"s1_financial": {"data": {}}}, dirty,
+                     {"s1_financial": {"data": {"cash_flow": {"data": "not-a-list"}}}}):
+            r = gd.check_g8("无词", snap)               # False 占位值经 _fmt_yi 归『—』不炸
+            self.assertIsInstance(r, (bool, dict))
+
+    # ---------- G9 利润归因 ----------
+
+    def test_g9_fail_truth_delta_and_anchor(self):
+        rpt = "# 报告\n业绩归因于费用管控。\n"           # 有『归因』缺『净利润』→ L2 锚
+        ok, joined, diag = self._ret(gd.check_g9, rpt, self.INC)
+        self._assert_fail_truth(ok, joined, diag,
+                                 ["10.00亿", "1.00亿", "Δ+9.00亿"], 2, "业绩归因")
+        self.assertIn("归因于〈", diag["fix"])
+
+    def test_g9_pass_variants_and_data_full(self):
+        self.assertIs(gd.check_g9("利润归因：净利提升", self.INC), True)
+        self.assertIs(gd.check_g9("归因于营收，净利润同步", self.INC), True)
+        sina = {"s1_financial": {"data": {"income_statement":
+            {"data_full": [{"报告日": "2026-06-30", "净利润": 5e8},
+                           {"报告日": "2026-03-31", "净利润": 4e8}]}}}}
+        ok, joined, _ = self._ret(gd.check_g9, "无归因句", sina)   # data_full 单键路径（Sina）
+        self.assertFalse(ok)
+        self.assertIn("5.00亿", joined)
+
+    def test_g9_crash_injections(self):
+        for snap in ({}, {"s1_financial": {"data": {"income_statement": {"data": [{}, "x", 5]}}}},
+                     {"s1_financial": {"data": {"income_statement": {"data": [None, None]}}}}):
+            r = gd.check_g9("无词", snap)
+            self.assertIsInstance(r, (bool, dict))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

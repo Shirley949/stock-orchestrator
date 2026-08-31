@@ -1,3 +1,25 @@
+## 2026-09-01 WP1a：G7/G8/G9 词表门 reason 真值化（reason-only 批）
+
+裁决 B（2026-09-01）：WP1 拆批，WP1a=G7/G8/G9 先行（过闸后启动 WP1b 余 19 门）；**分离原则**——WP1 恒 reason-only（定理保 verdict 中性、归档重放零翻转），F4 verdict-affecting 批（G49/G69/G16:696/G67:3105+presence 门）单列且预申报翻转，**两者永不同批**。转化标准：五类路由 expected 来源 + [数据层] 家族归类 + 全 schema lint 同批过 + 逐臂 None 注入崩溃测试。
+
+- **三门分类（[数据层] 家族归类）**：全部 FAIL 臂均为**写作侧词表/披露门，无 [数据层] 臂**——G8 rows=0 臂含报告侧「如实披露」动作，不带前缀。
+- **G7**：FAIL 臂裸 bool → 病名+缺词清单+快照真值（`扣非净利润 {期}={亿}（上期 {期}={亿}）`，列键 `20\d{6}` desc 取最新两期）+已含词锚点 `L{n}`+照抄补写句；降级档（无扣非行）如实标注。verdict 恒等：有扣非行=两词全、无=双组合任一（旧引擎分支结构原样保留）。
+- **G8**：词缺臂真值化（CFO 侧锚=`经营活动产生的现金流量净额 {报告日} {亿}`，miss 分组 FCF 系/CFO 系）；rows=0 臂（原已有 reasons）补 diag 六键+修法双选（重跑拉取 or 如实标注）。verdict 恒等：旧代码 CFO 行循环内 return 的表达式不依赖行内容，提升到循环外求值等价。
+- **G9**：FAIL 臂真值化（净利润两期值+`Δ±N亿` 带符号+归因句骨架〈…〉填空位）；`data`/`data_full` 双键兜底保持。verdict 恒等：旧代码两分支同表达式，has2 只影响 reason 真值丰富度。
+- 共享 helper ×2（`gate_definitions.py`）：`_fmt_yi`（元→亿统一口径，**bool 先排除**——快照用 False 作空占位，bool 是 int 子类）+ `_iso8`（`20260630`→`2026-06-30` 列键归一）。行号定位复用 `locate_lines`+`_fmt_violation_lines`（同一语义一个实现）。
+- **健壮性净增**：旧 G7 在 fa 行非 dict 时直接 `row.get` 崩溃，新引擎 isinstance 守卫降级不炸（crash≠verdict，非翻转）。
+
+**验证链**：
+1. 归档 30 对（sidecar+代码配 cache 最新快照）×3 门=90 评估，HEAD 旧引擎 vs 新引擎双子进程差分：**0 翻转、0 崩溃、21 处 reason 升级**；两极真实分布（每门 True 23/False 7，FAIL 臂在现场语料真实点火）。
+2. `TestWP1aWordGates` 8 测试：三门 FAIL 真值 token+L 锚+diag 六键+degraded=False / PASS 字面 bool / G8 rows=0 臂 / G9 data_full 单键（Sina 路径）/ 逐臂 None·脏行注入（None/str/int 行、False 占位值、非 list data、scene 缺失）零崩溃。
+3. `test_diag_contract.py` 51/51；`run_regression.sh` exit 0（gate_fixture_test 62 门漏报=0；engine_pending 0）。
+4. 无 trap_ledger 耦合（G7/G8/G9 无既有条目，reason 文本变更不触碰任何 match）；无 fail_hint 锚定。
+
+**G28 延后单列（裁决 B.1 核实）**：`source_mixed_caliber` **未落码**（全库 grep 零命中），G28 不入 WP1a——待口径修复立项时单列裁决。WP1b（余 19 门 lossy-bool）待本批过闸后启动。
+
+文档同步：quality 仓 m11-gates.md 新增 2026-09-01 WP1a 语义变更小节（三门行+分离原则+G28 延后注）。
+
+
 ## 2026-09-01 C-4 现场验收暴露度化（机器簿记，禁依赖记忆）
 
 裁决 2026-09-01：「等零复发」不成立——**零暴露时零复发空洞**（流调「零确诊须配检测量」同理），三形态暴露度差异极大（分位高暴露/否定句中等/定增稀疏可能零暴露）。改暴露度调整验收，机器簿记：
