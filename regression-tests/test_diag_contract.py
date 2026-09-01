@@ -1428,5 +1428,82 @@ class TestF4bG69Narrow(unittest.TestCase):
             "主力净流出 [src: x]", ("主力",), anchors=("src",),
             forbid=("未消费",), scope="line"))
 
+class TestF4bPresenceBatch(unittest.TestCase):
+    """F4b② presence 批（2026-09-01 裁决 C）：逐门逐门 commit，本类按门增量填充。
+
+    预申表（窗口语义逐门显式，禁默认）：
+      G25 事件消费：scope=section（初申 line 被重放证伪：002130/300223 等 5 对合法消费
+          = 节标题带事件词 + src 挂节内明细行，行级全假 FAIL → 窗口修正，改锚表不改报告；
+          翻转 6 对中仅 000657 存留 = B 模式报告×cache 全量快照配对伪影）
+      G13 持仓决策：scope=section（「操作决策如下：\\n- 维持现有仓位」跨行同节合法，裁决例句）
+      G29 危险 surface：scope=line，anchor=资产安全对象词（m2 §2.10 flags 文本天然同行）；
+          消费臂维持现状（字段词即对象词，无干净锚——占行显式，防默认收窄）
+      G39 #1 类型句：scope=line，anchor=分类陈述词（属/类型/分类，m1 开篇句合同）；
+          #2 框架词/#3 宏观词维持现状（触发词自锚：估值框架词/宏观指标名本身即语境，
+          否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL）——占行显式
+    重放裁决规则（制度化）：翻转中若原出现本属合法内容（002138 型）=锚表不全→改锚表；
+    只有真污染才裁「预期收紧」。
+    """
+
+    def _v(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        return bool(r.get("passed")) if isinstance(r, dict) else bool(r)
+
+    # ---- G25（门 1/4）----
+    _G25_SNAP = {"s5_events": {"data": {"news": {
+        "high_value": [{"title": "并购"}], "_python_layer": "completed"}}}}
+
+    def test_g25_anchored_consumption_pass(self):
+        self.assertTrue(self._v(gd.check_g25,
+            "事件扫描：近 3 月新闻分桶（高价值 1 条/中价值 60 条）"
+            "[src: snapshot.s5_events.data.news.high_value]", self._G25_SNAP))
+
+    def test_g25_word_only_with_foreign_src_now_fails(self):
+        # 预申翻转形态：事件词散落 + src 挂别节（旧两独立全文条件可拼出消费）
+        r = gd.check_g25(
+            "近期无重大事件扰动。\n估值锚 [src: snapshot.valuation_snapshot.data.quote]",
+            self._G25_SNAP)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("同节", "".join(r["reasons"]))
+        for k in ("subcheck", "expected", "found", "fix", "src", "degraded"):
+            self.assertIn(k, r["diag"])
+
+    def test_g25_section_scope_crossline_pass(self):
+        # 重放证伪行级预申的实锤形态（002130/300223 型）：节标题带事件词，
+        # src 挂节内明细行——同节跨行合法消费，行级锚假 FAIL
+        self.assertTrue(self._v(gd.check_g25,
+            "## 六、市场情绪与重大事件\n\n"
+            "事件时间线（28 条事件）：\n\n"
+            "| 日期 | 事件 | 意义 |\n|---|---|---|\n"
+            "| 2026-08-29 | 披露中报 [src: snapshot.s5_events.data.risk_signals.processed.timeline] | 兑现日 |",
+            self._G25_SNAP))
+
+    def test_g25_cross_section_join_still_fails(self):
+        # 跨节拼不算消费：事件词在技术节叙事里，s5_events src 在全景表另一节
+        self.assertFalse(self._v(gd.check_g25,
+            "## 五、技术面\n离散事件（缺口高频反复）：8 月以来跳空缺口交替。\n\n"
+            "## 九、全景表\nrisk [src: snapshot.s5_events.data.risk_signals.processed.timeline]",
+            self._G25_SNAP))
+
+    def test_g25_bare_word_no_src_now_fails(self):
+        # 旧臂 1 只要「事件」词任意处在即过（high=0+medium>0 时不查 src）——纯词散落
+        snap = {"s5_events": {"data": {"news": {
+            "medium_value": [{"title": "行业新闻"}], "_python_layer": "completed"}}}}
+        self.assertFalse(self._v(gd.check_g25, "近期事件面平静，无新催化剂。", snap))
+
+    def test_g25_timeline_src_counts(self):
+        # 事件检测读 timeline（m4 单一事件源）——timeline src 同样含 s5_events 锚
+        self.assertTrue(self._v(gd.check_g25,
+            "事件面：近 180 天 timeline 无致命码 [src: snapshot.s5_events.data.risk_signals.processed.timeline]",
+            self._G25_SNAP))
+
+    def test_g25_python_layer_guard_unchanged(self):
+        snap = {"s5_events": {"data": {"news": {"high_value": [{}], "_python_layer": ""}}}}
+        r = gd.check_g25("事件 [src: snapshot.s5_events.data.news]", snap)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("_python_layer", "".join(r["reasons"]))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

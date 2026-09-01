@@ -1459,13 +1459,24 @@ def check_g25(report: str, data: dict) -> bool:
     if python_layer != "completed":
         return GateResult(passed=False, reasons=[f"news 有 high={high_count}/medium={medium_count} 条但 _python_layer={python_layer!r}（≠completed）——引擎加工层断裂，须重跑"])
     
-    if "事件扫描" not in report and "事件" not in report:
-        return GateResult(passed=False, reasons=["快照有事件数据但报告无「事件」表述——m9 须消费事件扫描结论"])
-    
-    src_count = _count_pattern(report, r'\[src:')
-    if high_count > 0 and src_count == 0:
-        return GateResult(passed=False, reasons=[f"high_value 事件 {high_count} 条但报告 0 个 [src:]——事件结论须带溯源锚点"])
-    
+    # F4b② 语境锚（2026-09-01 裁决 C，presence 批）：旧两独立全文条件（「事件」词任意处
+    # + 任意 [src:] 计数）与 G69 R7 同构——src 挂别节、事件词散落即可拼出「消费」。
+    # 消费=事件词 + s5_events src 锚**同节**（重放证伪行级预申：m4 实际写作形态是
+    # 「## 市场情绪与重大事件」节标题带事件词、src 挂在节内明细行——002130/300223/
+    # 688195/000960/300835 五对合法消费全跨行同节，行级锚全假 FAIL；仅 000657 一对
+    # 翻转=B 模式报告×cache 全量快照配对伪影。窗口=line→section 修正，非报告问题）。
+    # timeline src 亦含 s5_events 同锚覆盖。
+    if _contextual_presence(report, ("事件",), anchors=("s5_events",), scope="section") is None:
+        fix = ("照抄骨架：事件扫描：近 3 月新闻分桶（高价值 X 条/中价值 Y 条）"
+               "[src: snapshot.s5_events.data.news.high_value]")
+        return GateResult(passed=False, reasons=[
+            f"news 有 high={high_count}/medium={medium_count} 条但报告无「事件词+s5_events src 锚」"
+            f"同节消费（high>0 还须逐一引述）——叙事性提及「事件」二字不算（src 挂别节拼不算）；{fix}"],
+            diag={"subcheck": "news_consumption",
+                  "expected": "事件词与 [src: snapshot.s5_events.…] 同节（m4 事件结论带溯源锚）",
+                  "found": f"high={high_count}/medium={medium_count} 条；s5_events 同节消费 0 处",
+                  "fix": fix, "src": "s5_events.data.news（m4 数据白名单）", "degraded": False})
+
     return True
 
 

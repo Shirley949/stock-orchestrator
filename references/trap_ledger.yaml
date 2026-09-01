@@ -315,3 +315,18 @@ entries:
     root_cause: engine
     blocked: false
     fix: "消费判定改同行共现+否定披露守卫（F4b① 裁决 B landed，_contextual_presence forbid 首用）：旧『src_token in report AND 维度词 in report』两独立全文条件可跨行拼「消费」——降级披露行如实挂 [src:] 反被计入维度（R7 观察档实证，8-27 暂缓、9-01 回读 m37 四维表合同=行级意图后落码）。披露词表（未消费/未拉取/降级/不可得）从 m37 披露措辞合同推导并已入 m37；暴露计数（守卫命中维度）进 diag.found；值对拍缺口登记 pending #10；归档 56 对 0 翻转=预申③兑现；watch 探针 True 不变仅注记更新（预申①）"
+  # ---- F4b② presence 批（2026-09-01，裁决 C：逐门 commit，窗口语义逐门显式预申）----
+  # G47 负收益豁免不入 entries（裁决 C 条件 ④，无引擎改动无 FAIL 面）：唯一已知碰撞形态「北向增持」
+  # 本属股东面真内容（northbound processed summary 的合法 surface 词），给 G47 触发词加语境锚反而对
+  # 合法北向行制造假 FAIL——负收益，显式豁免维持现状。若日后归档/语料出现 G47 真·跨节拼消费实证再复议。
+  - signature: G25#news_consumption:crossline_join
+    gate: G25
+    subcheck: news_consumption
+    reason_class: crossline_join
+    match: "同节消费"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "消费判定改语境锚同节共现（_contextual_presence scope=section）：旧两独立全文条件（『事件』词任意处 + 任意 [src:] 计数）与 G69 R7 同构——事件词散在技术面叙事（『离散事件』）+ s5_events src 挂全景表即可拼出「消费」（000657 形态）。窗口裁决过程=纪律 ROI 第二实证：初申 line 被 56 对重放证伪（6 翻转中 5 对=002130/300223/688195/000960/300835 合法消费全为『节标题带事件词+src 挂节内明细行』跨行同节形态，行级锚全假 FAIL）→ 按制度化规则改锚表（line→section）不改报告；仅存 000657 一对翻转=B 模式报告×cache 全量快照配对伪影（报告自身管道未拉 news，旧 True 系『离散事件』叙事词侥幸命中）。REAL_WATCH 双向探针：同节跨行=True（防回退行级）+跨节拼=False（防松动回全文级）；锚表已入 m4 §4.1.1 gate 锚点块"

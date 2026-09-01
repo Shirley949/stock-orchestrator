@@ -53,6 +53,16 @@
 
 **验证链**：test_diag_contract 103/103（+6：TestF4bG69Narrow 含共享 API scope 契约）；diff_engine g69 归档 56 对 0 翻转 0 crash；REAL_WATCH G69 判决复核 True 不变；trap_ledger unclassified=0。
 
+## 2026-09-01 F4b② G25 收窄：同节语境锚（presence 批门 1/4，verdict-affecting，裁决 C）
+
+- **形态**：G25 旧消费判定=「事件」词任意处 + 任意 [src:] 计数**两独立全文条件**——与 G69 R7 同构的跨行拼洞：事件词散在技术面叙事（「离散事件（缺口高频反复）」）+ s5_events src 挂全景表即可拼出「消费」（000657 形态）。收窄为 `_contextual_presence(("事件",), anchors=("s5_events",), scope=…)` 单条件。
+- **窗口裁决=纪律 ROI 第二实证（pre-declare+重放在落码后、commit 前再次否决设计初版）**：初申 scope=line，归档 56 对重放 **6 翻转**；逐条裁决（未截断行证据，首轮裁决脚本 `[:70]` 截断造成同行=0 伪影已修）——002130/300223/688195/000960/300835 五对=**合法消费**（「## 市场情绪与重大事件」节标题带事件词 + src 挂节内明细行，行级锚全假 FAIL）→ 按制度化规则**改锚表（line→section）不改报告**；仅 000657 存留翻转 = **配对伪影**（B 模式报告×cache 全量快照：报告自身管道未拉 news 而如实写 gap，cache 快照 news h=3/m=71 配对后 gate 正确执法；旧 True 系「离散事件」叙事词侥幸命中，非合法消费）。修正后重放 **flips=1（仅该伪影）**，forbid 零干扰（55 对 PASS 全保）。
+- **锚表先行**（裁决 C 条件 ②）：窗口合同+❌ 反例已写入 m4 §4.1.1 gate 锚点块；m11 增 F4b② 表。
+- **REAL_WATCH 双向探针**（改判须连注释一起显性更新）：同节跨行=True（防回退行级）/ 跨节拼=False（防松动回全文级）；watch 3→5。
+- **G47 负收益豁免（裁决 C 条件 ④，本批唯一已知碰撞）**：见 trap_ledger pending 节——「北向增持」词与股东面真内容天然共现，加锚反制造假 FAIL，维持现状带理由占行，不落锚。
+
+**验证链**：test_diag_contract 110/110（+2：section 跨行正例 + 跨节拼反例；预申表窗口行同步裁决结果）；diff_engine g25 归档 56 对 flips=1（000657 伪影，逐条裁决如上）；gate_fixture_test 漏报=0 drift=0 watch=5；run_regression exit 0。
+
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
 
 > **算术对账（2026-09-01 收官裁决补）**：22 = 3（WP1a：G7/G8/G9）+ 19（WP1b：词表批 9 = G11/G12/G13/G17/G19/G22/G26/G31/G37 + legacy 批 9 = G1/G6/G14/G15/G16/G21/G34/G35/G36 + **G28 轨1 单列条目**——见下方独立条目，含 10 真实 FAIL 领跑语料与 mixed_caliber 轨2 分离，不靠算术反推完成状态）。
