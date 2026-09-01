@@ -132,9 +132,15 @@ class TestFieldAcceptance(unittest.TestCase):
         lines, st = self._run(st)
         self.assertTrue(st["warn_upgrade"]["flipped"])       # 一轮 cron 零命中即翻
         self.assertTrue(any("flipped=true" in ln for ln in lines))
-        # 硬断言执法（隔离注入点，不碰仓库真实状态文件）
+        # 硬断言执法（隔离注入点，不碰仓库真实状态文件）。
+        # 2026-09-01 起 WP1a+WP1b 22 门 lossy 全 GateResult 化，真实夹具（24 门 FAIL）
+        # 已无裸 bool-FAIL 火种——机制证明改为注入裸 bool checker（同 test_diag_contract
+        # test_bool_return_warn_fires 注入式）；触发器语义不变：bool 门 FAIL 恒 FAIL 只升 action。
         save_acceptance(st, self.state_path)
         old = vg._ACC_OVERRIDE_PATH
+        import gate_definitions as gd
+        orig_g6 = gd.GATE_CHECKERS.get("G6")
+        gd.GATE_CHECKERS["G6"] = lambda r, d: False      # 注入裸 bool FAIL
         vg._ACC_OVERRIDE_PATH = str(self.state_path)
         try:
             res = vg.verify_gates("## 五、估值\n缩量无词表命中", {"s1_financial": {"data": {}}},
@@ -143,6 +149,7 @@ class TestFieldAcceptance(unittest.TestCase):
             self.assertTrue(any("硬断言" in a for a in res.get("action_required") or []))
         finally:
             vg._ACC_OVERRIDE_PATH = old
+            gd.GATE_CHECKERS["G6"] = orig_g6
         # 反极：warn 非空窗不翻转
         _mk_window(self.root, "2026-09-03", "x", warn=["G22"])
         st2 = _state()

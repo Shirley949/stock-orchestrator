@@ -1088,5 +1088,170 @@ class TestWP1bWordGates(unittest.TestCase):
             self.assertIsInstance(r, (bool, dict))
 
 
+class TestWP1bLegacyGates(unittest.TestCase):
+    """WP1b legacy+真值门批（2026-09-01）：G1/G14 + G6/G15/G16/G21/G34/G35/G36。
+
+    分类：G1(never_traded 反编造+降级档)/G6(短历史+rows=0 细分)/G14(计数展示)/G15(诚实披露)
+    /G16(grounded+回退偏差)/G21(report-only websearch 下限) = 写作侧可修臂；
+    G6 rows=0·failed、G15 ok<2、G34/35/36 marker 异常 = 纯数据臂 → [数据层]（禁改稿动词）。
+    """
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+    _DL_VERBS = ("照抄", "改写", "补写", "删除")
+
+    def _ret(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        return (bool(r.get("passed")), r.get("reasons", [""])[0], r.get("diag")) \
+            if isinstance(r, dict) else (bool(r), "", None)
+
+    def _fail_truth(self, fn, rpt, snap, tokens, datalayer=False, no_l_anchor=True):
+        ok, joined, diag = self._ret(fn, rpt, snap)
+        self.assertFalse(ok, "verdict 回退")
+        for t in tokens:
+            self.assertIn(t, joined, f"缺真值 {t!r}：{joined[:120]}")
+        self.assertIsInstance(diag, dict)
+        for k in self._DIAG_KEYS:
+            self.assertIn(k, diag)
+        self.assertFalse(diag["degraded"])
+        if datalayer:
+            self.assertIn("[数据层]", joined)
+            for v in self._DL_VERBS:
+                self.assertNotIn(v, diag["fix"])
+        else:
+            self.assertNotIn("[数据层]", joined)
+        return diag
+
+    def test_g1_never_traded_fabrication(self):
+        snap = {"s4_technical": {"status": "never_traded"}}
+        d = self._fail_truth(gd.check_g1, "## 技术面\nMACD：-0.52，KDJ 80。", snap,
+                             ["never_traded", "疑似编造"], no_l_anchor=True)
+        self.assertIn("MACD", d["found"])
+
+    def test_g1_never_traded_clean_pass(self):
+        snap = {"s4_technical": {"status": "never_traded"}}
+        ok, _, _ = self._ret(gd.check_g1, "## 技术面\n技术指标数据不可得，如实标注。", snap)
+        self.assertTrue(ok)
+
+    def test_g1_legacy_no_matrix(self):
+        d = self._fail_truth(gd.check_g1, "## 正文\n纯粹正文。", {},
+                             ["降级档", "缺『信号/矩阵』词"], no_l_anchor=True)
+        self.assertIn("signal_matrix_legacy", d["subcheck"])
+
+    def test_g6_rows0_failed_datalayer(self):
+        snap = {"s1_financial": {"data": {"income_statement":
+               {"status": "failed", "data": []}}}}
+        self._fail_truth(gd.check_g6, "正文。", snap,
+                         ["rows=0", "status=failed", "重跑"], datalayer=True)
+
+    def test_g6_rows0_vacuum_dual(self):
+        snap = {"s1_financial": {"data": {"income_statement":
+               {"status": "empty", "data": []}}}}
+        self._fail_truth(gd.check_g6, "正文。", snap,
+                         ["源端真空", "如实标注"], no_l_anchor=True)
+
+    def test_g6_short_history_truth(self):
+        rows = [{"报告期": "2025-12-31"}, {"报告期": "2025-09-30"}, {"报告期": "2025-06-30"}]
+        snap = {"s1_financial": {"data": {"income_statement": {"status": "ok", "data": rows}}}}
+        d = self._fail_truth(gd.check_g6, "正文 2024Q1 与 2024Q2 两期。", snap,
+                             ["仅 3 期", "2 个季度表述"], no_l_anchor=True)
+        self.assertIn("2025-12", d["found"])
+
+    def test_g14_stage_no_count(self):
+        snap = {"s4_technical": {"status": "ok",
+               "data": {"td": {"summary": {"stage": "买Setup 7/9"}}}}}
+        d = self._fail_truth(gd.check_g14, "## 三\nTD 序列健康。", snap,
+                             ["stage=买Setup 7/9", "0 处）"], no_l_anchor=True)
+        self.assertIn("买Setup 7/9", d["fix"])
+
+    def test_g14_count_pass(self):
+        snap = {"s4_technical": {"status": "ok",
+               "data": {"td": {"summary": {"stage": "买Setup 7/9"}}}}}
+        ok, _, _ = self._ret(gd.check_g14, "## 三\nTD Setup 7/9 进行中，持有。", snap)
+        self.assertTrue(ok)
+
+    def test_g15_placeholder_undisclosed(self):
+        snap = {"s11_peer": {"data": {"status": "missing", "items": []}}}
+        d = self._fail_truth(gd.check_g15, "## 正文\n纯粹正文。", snap,
+                             ["从未跑", "未披露"], no_l_anchor=True)
+        self.assertIn("0 处", d["found"])
+        self.assertIn("无适用同业", d["fix"])
+
+    def test_g15_ok_lt2_datalayer(self):
+        core = {k: 1.0 for k in ("rev_yoy", "np_yoy", "pe", "pb", "roe", "gross_margin")}
+        snap = {"s11_peer": {"data": {"status": "ok", "items": [
+            {"name": "甲", "metrics": core},
+            {"name": "乙", "metrics": {k: 1.0 for k in ("rev_yoy",)}}]}}}
+        self._fail_truth(gd.check_g15, "正文。", snap,
+                         ["1/2 家", "重跑"], datalayer=True)
+
+    def test_g16_grounded_missing(self):
+        snap = {"s1_financial": {"data": {"balance_sheet": {"data": [{"合同负债": 3.5e9}]}}}}
+        d = self._fail_truth(gd.check_g16,
+                             "在手订单核对：合同负债 30.5 亿，交叉核对通过。", snap,
+                             ["35.00 亿", "照抄"], no_l_anchor=True)
+        self.assertIn("35.00 亿", d["fix"])
+
+    def test_g16_fallback_deviation_over(self):
+        d = self._fail_truth(gd.check_g16, "合同负债与订单核对，偏差 40%，已交代。", {},
+                             ["偏差 40%", "偏差过大"], no_l_anchor=True)
+        self.assertIn("40.0%", d["found"])
+
+    def test_g21_empty_snapshot_floor(self):
+        d = self._fail_truth(gd.check_g21, "数据 [src: websearch 官网公告]。", {},
+                             ["report-only 降级档", "仅 1 个"], no_l_anchor=True)
+        self.assertIn("≥2", d["expected"])
+
+    def test_g34_datalayer(self):
+        snap = {"_quality_markers": {"segment_product": {"status": "fetch_failed"}}}
+        self._fail_truth(gd.check_g34, "正文。", snap,
+                         ["G34", "status=fetch_failed", "重跑"], datalayer=True)
+
+    def test_g34_valid_pass(self):
+        snap = {"_quality_markers": {"segment_product": {"status": "disclosed_ok"}}}
+        ok, _, _ = self._ret(gd.check_g34, "正文。", snap)
+        self.assertTrue(ok)
+
+
+class TestWP1bLegacyInjection(unittest.TestCase):
+    """WP1b legacy 批崩溃面注入（裁决⑥惯例）：truthy 非 dict / 缺键 / 空容器逐臂封闭。
+
+    覆盖 crash-fix ×3（G14 summary / G15 items 元素 / G34-36 marker，出定理域：
+    旧引擎这些输入直接崩，守卫后按缺臂 FAIL——注入测试背书非定理背书）。
+    """
+
+    def _no_crash(self, fn, rpt, snap):
+        try:
+            r = fn(rpt, snap)
+            return bool(r.get("passed")) if isinstance(r, dict) else bool(r)
+        except Exception as e:
+            self.fail(f"注入输入崩溃: {type(e).__name__}: {e}")
+
+    def test_g14_summary_non_dict(self):
+        snap = {"s4_technical": {"status": "ok", "data": {"td": {"summary": "x"}}}}
+        v = self._no_crash(gd.check_g14, "TD 序列。", snap)
+        self.assertTrue(v, "summary 非 dict → stage 不可读 → 无信号档（提及 TD 即过；旧引擎此处直接崩）")
+
+    def test_g15_items_non_dict(self):
+        snap = {"s11_peer": {"data": {"status": "ok", "items": ["x", {"name": "乙"}]}}}
+        self._no_crash(gd.check_g15, "同业对比。", snap)   # <2 valid → FAIL，不崩
+
+    def test_g34_marker_non_dict(self):
+        snap = {"_quality_markers": {"segment_product": "x"}}
+        self.assertFalse(self._no_crash(gd.check_g34, "正文。", snap), "marker 非 dict → FAIL [数据层]")
+
+    def test_g6_income_data_non_list(self):
+        snap = {"s1_financial": {"data": {"income_statement": {"status": "ok", "data": "x"}}}}
+        v = self._no_crash(gd.check_g6, "2024Q1 2024Q2 2024Q3 2024Q4 2023Q1 2023Q2。", snap)
+        self.assertTrue(v, "data 非 list → 纯文本降级档（6 季度词在场 → PASS）")
+
+    def test_g16_balance_non_list(self):
+        snap = {"s1_financial": {"data": {"balance_sheet": {"data": "x"}}}}
+        v = self._no_crash(gd.check_g16, "合同负债 30 亿，核对偏差 5%。", snap)
+        self.assertTrue(v, "balance data 非法 → _extract None → 文本回退档 PASS")
+
+    def test_g1_s4_non_dict(self):
+        v = self._no_crash(gd.check_g1, "正文。", {"s4_technical": "x"})
+        self.assertFalse(v, "s4 非 dict → legacy 降级档 FAIL")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

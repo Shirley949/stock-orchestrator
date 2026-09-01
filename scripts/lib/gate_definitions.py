@@ -374,7 +374,19 @@ def check_g1(report: str, data: dict) -> bool:
     # 三态放行：never_traded（北交/港股/指标全None）→ 结构性 PASS（禁编造：见下）
     if status == "never_traded" or signal_type == "never_traded":
         # 禁编造：never_traded 却报告出现具体技术数值 → FAIL（数据不可得不应有数值）
-        return not _has_specific_tech_numbers(report)
+        if not _has_specific_tech_numbers(report):
+            return True
+        bogus = [ln.strip()[:60] for ln in report.split("\n")
+                 if any(re.search(p, ln) for p in _SPECIFIC_TECH_PATTERNS)][:3]
+        return GateResult(passed=False, reasons=[
+            f"s4_technical status=never_traded（技术指标结构性不可得）但报告出现具体指标数值——"
+            f"疑似编造：{ '；'.join(bogus) }——删除具体数值，改为「技术指标数据不可得」如实标注"
+        ], diag={"subcheck": "never_traded_fabrication",
+                 "expected": "never_traded 时报告无 具体指标数值（MACD/KDJ/RSI/MA+数字）",
+                 "found": f"{len(bogus)} 行含指标数值（如 {bogus[0] if bogus else ''}）",
+                 "fix": "删除具体指标数值行，如实标注「技术指标数据不可得」",
+                 "src": "s4_technical.status=never_traded vs 报告技术数值行",
+                 "degraded": False})
     # fetch_failed → FAIL（禁编造：failed 却报告出现具体技术数值同样 FAIL）
     if status == "failed" or signal_type == "fetch_failed":
         return GateResult(passed=False, reasons=[f"s4_technical status={status or signal_type}（拉取失败）——报告须如实标注技术数据不可得，禁编造指标数值"])
@@ -402,12 +414,36 @@ def check_g1(report: str, data: dict) -> bool:
 def _g1_legacy(report: str) -> bool:
     """旧 snapshot（无 s4_technical）退化：原信号矩阵行数检查，保 fixture 漏报=0。"""
     if "信号" not in report and "矩阵" not in report:
-        return False
+        return GateResult(passed=False, reasons=[
+            "G1 降级档（snapshot 无 s4_technical）：报告缺『信号/矩阵』词且信号矩阵表行数不足"
+            "——须含技术信号矩阵（短/中/长期三行）"], diag={
+            "subcheck": "signal_matrix_legacy", "expected": "含『信号』或『矩阵』+短/中/长周期词+表行≥8",
+            "found": "缺『信号』『矩阵』两词", "fix": "补技术信号矩阵表（短/中/长期三档）",
+            "src": "report-only 降级档（snapshot 无 s4_technical）", "degraded": False})
     if not (_has_keywords(report, ["短", "中", "长"]) or _has_keywords(report, ["短期", "中期", "长期"])):
-        return False
+        return GateResult(passed=False, reasons=[
+            "G1 降级档：信号矩阵缺周期词（短/中/长期 任一组）——矩阵须按周期分档"],
+            diag={"subcheck": "signal_matrix_legacy", "expected": "短/中/长（或 短期/中期/长期）周期词在场",
+                  "found": "0 组周期词", "fix": "信号矩阵按 短/中/长期 三档补周期词",
+                  "src": "report-only 降级档", "degraded": False})
     matrix_rows = _count_pattern(report, r'[│|].*[│|].*[│|]')      # 表格行
     table_rows = _count_pattern(report, r'^\s*\|.*\|.*\|')         # markdown 表格行
-    return matrix_rows >= 8 or table_rows >= 8
+    if matrix_rows >= 8 or table_rows >= 8:
+        return True
+    return GateResult(passed=False, reasons=[
+        f"G1 降级档：信号矩阵表行数不足（matrix={matrix_rows}+md={table_rows} < 8）"
+        "——三周期×多指标矩阵至少 8 行"], diag={
+        "subcheck": "signal_matrix_legacy", "expected": "表行 ≥8（│ 矩阵或 markdown 表）",
+        "found": f"matrix={matrix_rows}, markdown={table_rows}", "fix": "补全三周期信号矩阵行（≥8 行）",
+        "src": "report-only 降级档", "degraded": False})
+
+
+# 具体技术指标数值模式（never_traded 禁编造判定用；模块级供真值提取复用）
+_SPECIFIC_TECH_PATTERNS = [
+    r'(?:MACD|DIF|DEA)\s*[：:=\-]?\s*-?\d',
+    r'(?:KDJ|RSI|CCI|WR|VR)\s*[：:=\-]?\s*-?\d',
+    r'MA[_\s]?\d+\s*[：:=\-]?\s*-?\d',
+]
 
 
 def _has_specific_tech_numbers(report: str) -> bool:
@@ -416,12 +452,7 @@ def _has_specific_tech_numbers(report: str) -> bool:
     用于 never_traded 禁编造判定：数据结构性不可得时，报告不应出现具体指标数值。
     仅匹配「指标名+数字」组合，避免「RSI 超买」等定性词误判。
     """
-    patterns = [
-        r'(?:MACD|DIF|DEA)\s*[：:=\-]?\s*-?\d',
-        r'(?:KDJ|RSI|CCI|WR|VR)\s*[：:=\-]?\s*-?\d',
-        r'MA[_\s]?\d+\s*[：:=\-]?\s*-?\d',
-    ]
-    return any(re.search(p, report) for p in patterns)
+    return any(re.search(p, report) for p in _SPECIFIC_TECH_PATTERNS)
 
 
 def check_g6(report: str, data: dict) -> bool:
@@ -434,16 +465,46 @@ def check_g6(report: str, data: dict) -> bool:
         snapshot_status = income.get("status", "")
         rows = income.get("data", income.get("data_full", []))
         if isinstance(rows, list):
-            # P0-3 fix: 数据为空且状态异常 → 明确失败（无论 status 是 ok 还是 failed）
+            # P0-3 fix + rows=0 细分（pending #2 成文规则，对齐 G8/G26）：
+            # failed=error 信封在场 → [数据层]（fix 禁改稿动词）；ok/empty=源端真空 → 双选
             if len(rows) == 0 and snapshot_status in ("ok", "failed", "empty"):
-                return GateResult(passed=False, reasons=[f"income_statement rows=0 且 status={snapshot_status}——数据空须如实披露（m11 局限段），不得静默过"])
+                if snapshot_status == "failed":
+                    return GateResult(passed=False, reasons=[
+                        "[数据层] income_statement rows=0 且 status=failed——三表拉取失败："
+                        "重跑 s1_financial 拉取；本臂为数据侧失败，报告侧无需改稿"],
+                        diag={"subcheck": "quarterly_continuity_empty",
+                              "expected": "income_statement.data ≥1 行（status 与行数一致）",
+                              "found": "rows=0 且 status=failed",
+                              "fix": "重跑 s1_financial 拉取（勿改报告）",
+                              "src": "s1_financial.data.income_statement", "degraded": False})
+                return GateResult(passed=False, reasons=[
+                    f"income_statement rows=0 且 status={snapshot_status}——源端真空：重跑 "
+                    "s1_financial 拉取；报告侧须如实标注「历史季报数据不可得」，不得静默过"],
+                    diag={"subcheck": "quarterly_continuity_empty",
+                          "expected": "income_statement.data ≥1 行（status 与行数一致）",
+                          "found": f"rows=0 且 status={snapshot_status}（信封干净=源端真空）",
+                          "fix": "重跑 s1_financial 拉取；或报告如实标注「历史季报数据不可得」",
+                          "src": "s1_financial.data.income_statement", "degraded": False})
             # 有效数据 >= 6 行 → 通过
             if len(rows) >= 6:
                 return True
             # 有数据但不足 → 退回文本检查
             if 0 < len(rows) < 6:
                 quarter_pattern = r'20\d{2}[Qq][1-4]|20\d{2}年[第]?[一二三四1-4]季[度报]'
-                return len(re.findall(quarter_pattern, report)) >= 6
+                found_q = re.findall(quarter_pattern, report)
+                if len(found_q) >= 6:
+                    return True
+                snap_q = [str(r.get("报告期", r.get("日期", "")))[:7] for r in rows
+                          if isinstance(r, dict)][:5]
+                return GateResult(passed=False, reasons=[
+                    f"G6 季报连续性不足：snapshot 仅 {len(rows)} 期（{('、'.join(snap_q))}）"
+                    f"且报告正文仅 {len(found_q)} 个季度表述（<6）——次新股/数据短历史时"
+                    "须如实披露「上市以来季度数据不足 6 期」，不得硬凑"],
+                    diag={"subcheck": "quarterly_continuity",
+                          "expected": "≥6 连续季度（snapshot ≥6 行 或 正文 ≥6 个季度表述）",
+                          "found": f"snapshot {len(rows)} 期（{'、'.join(snap_q)}）；正文 {len(found_q)} 个季度词",
+                          "fix": "如实披露季度数据覆盖期数；勿编造缺失季度",
+                          "src": "s1_financial.data.income_statement.data 报告期列", "degraded": False})
 
     # snapshot 不存在 → 降级到报告文本检查（保留容错）
     quarter_pattern = r'20\d{2}[Qq][1-4]|20\d{2}年[第]?[一二三四1-4]季[度报]'
@@ -452,7 +513,16 @@ def check_g6(report: str, data: dict) -> bool:
         return True
     date_pattern = r'20\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01])'
     dates = re.findall(date_pattern, report)
-    return len(set(dates)) >= 6
+    if len(set(dates)) >= 6:
+        return True
+    return GateResult(passed=False, reasons=[
+        f"G6 季报连续性（纯文本降级档，snapshot 无 income_statement）：正文季度表述 "
+        f"{len(quarters)} 个、独立日期 {len(set(dates))} 个（均 <6）——须覆盖 ≥6 个连续季度"],
+        diag={"subcheck": "quarterly_continuity_text",
+              "expected": "正文 ≥6 个季度表述（2024Q1 形态）或 ≥6 个独立日期",
+              "found": f"季度词 {len(quarters)}、独立日期 {len(set(dates))}",
+              "fix": "时间线按季度展开至 ≥6 期（含历史各期营收/净利）",
+              "src": "report-only 降级档（snapshot 无 income_statement）", "degraded": False})
 
 
 def check_g7(report: str, data: dict):
@@ -715,10 +785,20 @@ def check_g14(report: str, data: dict) -> bool:
     # 消费：报告须含 TD
     if "TD" not in report:
         return GateResult(passed=False, reasons=["s4_technical.data.td 有 summary（TD 序列已落盘）但报告未提「TD」——m3 须消费 TD 读数"])
-    stage = (td.get("summary", {}) or {}).get("stage", "")
+    _summ = td.get("summary")
+    stage = _summ.get("stage", "") if isinstance(_summ, dict) else ""
     # 有信号（stage≠无信号，如"买Setup N/9"/"Countdown M/13"/"TD13完成"）→ 须有计数展示
     if stage and stage != "无信号":
-        return _count_pattern(report, r'(?:TD|计数|Setup|Countdown|序列)\s*\d+') >= 1
+        cnt = _count_pattern(report, r'(?:TD|计数|Setup|Countdown|序列)\s*\d+')
+        if cnt >= 1:
+            return True
+        return GateResult(passed=False, reasons=[
+            f"G14 TD 有信号（s4_technical.data.td.summary.stage={stage}）但报告无计数展示"
+            "（TD/计数/Setup/Countdown/序列+数字 0 处）——照抄 stage 读数补计数行"],
+            diag={"subcheck": "td_count_display", "expected": "≥1 处 计数展示（如「TD Setup 7/9」）",
+                  "found": "0 处计数展示",
+                  "fix": f"照抄快照：TD {stage}（数字计数必须落正文）",
+                  "src": "s4_technical.data.td.summary.stage", "degraded": False})
     # 无信号 → 提及 TD 即可（标注"无 TD 信号"等）
     return True
 
@@ -726,8 +806,19 @@ def check_g14(report: str, data: dict) -> bool:
 def _g14_legacy(report: str) -> bool:
     """旧 snapshot（无 s4.td）退化：TD + ≥9 计数行，保 fixture 漏报=0。"""
     if "TD" not in report:
-        return False
-    return _count_pattern(report, r'(?:TD|计数|Setup)\s*\d+') >= 9
+        return GateResult(passed=False, reasons=[
+            "G14 降级档（snapshot 无 s4.td）：报告未提「TD」——技术面须消费 TD 序列（或如实标注不可得）"],
+            diag={"subcheck": "td_legacy", "expected": "含「TD」+ ≥9 计数行",
+                  "found": "0 处「TD」", "fix": "补 TD 序列读数（≥9 个计数行）",
+                  "src": "report-only 降级档（snapshot 无 s4.td）", "degraded": False})
+    cnt = _count_pattern(report, r'(?:TD|计数|Setup)\s*\d+')
+    if cnt >= 9:
+        return True
+    return GateResult(passed=False, reasons=[
+        f"G14 降级档：TD 计数行不足（{cnt} < 9）——TD 序列须逐根展开（Setup/Countdown 计数）"],
+        diag={"subcheck": "td_legacy", "expected": "≥9 计数行（TD|计数|Setup+数字）",
+              "found": f"{cnt} 行", "fix": "补 TD 逐根计数行至 ≥9（Setup 1-9 / Countdown 1-13）",
+              "src": "report-only 降级档（snapshot 无 s4.td）", "degraded": False})
 
 
 # G15 核心 6 字段（gate 计数对象 = API 层真实数据，非正文词频）。
@@ -774,7 +865,17 @@ def check_g15(report: str, data: dict) -> bool:
             disclosed = any(kw in report for kw in (
                 "无适用同业", "无可比", "独家", "垄断", "次新", "无同业",
                 "尚无可比", "行业唯一", "无可比标的"))
-            return bool(disclosed)
+            if disclosed:
+                return True
+            return GateResult(passed=False, reasons=[
+                "G15 同业对比占位 missing（discovered_peer_codes=None=从未跑）且报告未披露"
+                "「无适用同业」类诚实说明（无适用同业/无可比/独家/垄断/次新 任一）——"
+                "零数据不得静默跳过，须如实交代同业面缺位"],
+                diag={"subcheck": "peer_missing_disclosure",
+                      "expected": "披露 无适用同业/无可比/独家/垄断/次新/行业唯一 任一",
+                      "found": "0 处同业缺位披露词",
+                      "fix": "补写一句：「公司属独家/垄断/次新标的，无适用同业可比」（按实情选词）",
+                      "src": "s11_peer.data.discovered_peer_codes（None=never-run）", "degraded": False})
         has_peer_phrasing = any(kw in report for kw in ("同业", "可比公司", "对比", "竞品", "同行", "对标"))
         has_peer_number = bool(re.search(r"(毛利率|PE|PB|ROE)\s*[:：]\s*[\d.]+", report))
         # F2: 回填了 discovered_peer_codes 却仍 missing/空 items → 拉取失败/全限流；
@@ -793,9 +894,21 @@ def check_g15(report: str, data: dict) -> bool:
         return True
 
     # 2. 核心 6 计数（遍历 items 实际长度）
-    valid = [it for it in items if _has_core(it.get("metrics", {}))]
+    valid = [it for it in items if isinstance(it, dict) and _has_core(it.get("metrics", {}) or {})]
     if len(valid) < 2:
-        return status == "degraded"   # degraded(部分缺)宽容 PASS；ok 但 <2 家齐全 → FAIL
+        if status == "degraded":
+            return True   # degraded(部分缺)宽容 PASS
+        # ok 但 <2 家齐全 → FAIL（[数据层]：纯数据臂，报告改稿不能补齐 peer metrics）
+        names = [str(it.get("name") or it.get("code") or "?") for it in items[:5] if isinstance(it, dict)]
+        return GateResult(passed=False, reasons=[
+            f"[数据层] s11_peer status=ok 但核心字段齐全的 peer 仅 {len(valid)}/{len(items)} 家"
+            f"（<2，无对比面；items：{'、'.join(names)}）——同业拉取残缺：重跑 peer 拉取"
+            "或如实标注「同业对比面不足」；报告侧改稿不能补齐"],
+            diag={"subcheck": "peer_core_coverage",
+                  "expected": "≥2 家 peer 核心 6（金融 5）字段 non-null",
+                  "found": f"{len(valid)}/{len(items)} 家齐全（status=ok）",
+                  "fix": "重跑 s11_peer 拉取或如实标注「同业对比面不足」",
+                  "src": "s11_peer.data.items[].metrics", "degraded": False})
 
     # 3. src 溯源：报告须带 s11_peer 溯源（首选）或同业对比措辞（底线）
     if "s11_peer" not in report and not any(
@@ -894,7 +1007,18 @@ def check_g16(report: str, data: dict) -> bool:
             return GateResult(passed=False, reasons=["文本回退模式：报告提了合同负债但无核对表述（核对/交叉验证/偏差/验证 任一）"])
         deviation = re.search(r'偏差[：:]*\s*(\d+(?:\.\d+)?)\s*%', report)
         if deviation:
-            return float(deviation.group(1)) <= 15
+            dv = float(deviation.group(1))
+            if dv <= 15:
+                return True
+            dev_line = next((ln.strip()[:60] for ln in report.split("\n")
+                             if "偏差" in ln and "%" in ln), "")
+            return GateResult(passed=False, reasons=[
+                f"G16 文本回退档：报告自报核对偏差 {dv}%（>15%）——『{dev_line}』偏差过大，"
+                "须核对数据源口径（订单口径 vs 合同负债口径）后修正，或如实说明偏差成因"],
+                diag={"subcheck": "cl_crosscheck_deviation",
+                      "expected": "自报核对偏差 ≤15%（snapshot 无合同负债真值的回退档）",
+                      "found": f"偏差 {dv}%", "fix": "修正数值或如实说明偏差成因（口径差异）",
+                      "src": "report 自报偏差 vs 阈值 15%", "degraded": False})
         return True
 
     # snapshot 有数据 → 报告必须消费
@@ -938,8 +1062,19 @@ def check_g16(report: str, data: dict) -> bool:
     has_src_on_cl_line = any('[src:' in ln for ln in cl_lines)
 
     if not has_crosscheck:
-        return GateResult(passed=False, reasons=["snapshot 有合同负债数据：报告有核对表述但数值既不对齐（无真值字符串）亦无行内 [src:] 溯源——grounded 要件缺一"])
-    return value_aligned or has_src_on_cl_line
+        return GateResult(passed=False, reasons=[
+            f"snapshot 有合同负债真值 {cl_yi:.2f} 亿且报告已提，但缺核对表述"
+            "（核对/交叉验证/偏差/验证 任一）——m2 订单层须与合同负债交叉核对"])
+    if value_aligned or has_src_on_cl_line:
+        return True
+    return GateResult(passed=False, reasons=[
+        f"G16 核对 grounded 缺失：有核对表述但合同负债行数值既不对齐"
+        f"（真值 {cl_yi:.2f} 亿，可照抄 {sorted(aligned_candidates)}）亦无行内 [src:] 溯源"
+        "——照抄真值或行内挂 [src: snapshot.s1_financial.data.balance_sheet]"],
+        diag={"subcheck": "cl_grounded", "expected": "数值对齐（真值字符串在场）或行内 [src:] 任一",
+              "found": f"真值 {cl_yi:.2f} 亿 0 命中；合同负债行 [src:] 0 处",
+              "fix": f"照抄真值 {cl_yi:.2f} 亿 或行内挂 [src:] 溯源",
+              "src": "s1_financial.data.balance_sheet.合同负债（元）", "degraded": False})
 
 
 # ============================================================
@@ -1142,7 +1277,15 @@ def check_g21(report: str, data: dict) -> bool:
     if not snapshot or snapshot == {}:
         # 只接受 websearch 标记，不接受 snapshot/bare 标记
         websearch_only = [t for t in all_tags if t not in snapshot_tags and t not in bare_tags]
-        return len(websearch_only) >= 2
+        if len(websearch_only) >= 2:
+            return True
+        return GateResult(passed=False, reasons=[
+            f"G21 report-only 降级档（snapshot 为空）：websearch 标记仅 {len(websearch_only)} 个"
+            f"（<2）——无快照可验时每个数据断言须带 [src: websearch …] 溯源（≥2）"],
+            diag={"subcheck": "src_websearch_floor", "expected": "≥2 个 [src: websearch …] 标记",
+                  "found": f"{len(websearch_only)} 个 websearch 标记（snapshot 空，snapshot/bare 标记不可验）",
+                  "fix": "数据断言逐条挂 [src: websearch 关键词/来源] 标记至 ≥2",
+                  "src": "report [src:] vs 空 snapshot", "degraded": False})
 
     # 正常模式：snapshot. 标记 + bare scene 标记都按 snapshot 子路径验证
     path_failures = []
@@ -2251,11 +2394,27 @@ def _check_segment_dim(data: dict, dim: str) -> bool:
         （有效状态：真披露 / 真·空 / 历史停披 / 行数过少——均非失败）
       - fetch_failed / degraded / marker 缺失 → FAIL（拉取失败 / 脏数据 / 数据层未产 marker）
     消费（报告是否渲染）由 G30 #1 / G22 覆盖，本 gate 只校验数据层完整性。
+    FAIL 臂为纯数据臂 → [数据层]（WP1b：reason 真值化，fix 禁改稿动词）。
     """
     quality = data.get("_quality_markers", {})
-    marker = quality.get(f"segment_{dim}") or {}
+    _mk = quality.get(f"segment_{dim}")
+    marker = _mk if isinstance(_mk, dict) else {}
     status = marker.get("status")
-    return status in ("disclosed_ok", "not_disclosed", "stale_disclosure", "partial")
+    if status in ("disclosed_ok", "not_disclosed", "stale_disclosure", "partial"):
+        return True
+    _dim_cn = {"product": "分产品", "industry": "分行业", "geo": "分地区"}[dim]
+    found = f"status={status}" if status else "marker 缺失（None=数据层未产该 marker）"
+    return GateResult(passed=False, reasons=[
+        f"[数据层] G{_GATE_DIM_NUM[dim]} {_dim_cn}维 marker 异常：segment_{dim}.{found}"
+        "——纯数据臂，重跑 s1_financial 拉取或上报管道异常；报告侧无需改稿"],
+        diag={"subcheck": f"segment_{dim}_integrity",
+              "expected": "status ∈ {disclosed_ok, not_disclosed, stale_disclosure, partial}",
+              "found": found, "fix": "重跑 s1_financial 拉取（勿改报告）",
+              "src": f"_quality_markers.segment_{dim}.status", "degraded": False})
+
+
+# 三维 gate 号映射（reason 文案用；_check_segment_dim 单一实现，三门共用）
+_GATE_DIM_NUM = {"product": "34", "industry": "35", "geo": "36"}
 
 
 def check_g34(report: str, data: dict) -> bool:

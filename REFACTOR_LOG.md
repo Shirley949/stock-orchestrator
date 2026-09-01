@@ -5,7 +5,7 @@
 | # | 事项 | 登记 | 完成判据 | 状态 |
 |---|---|---|---|---|
 | 1 | C-4 暴露度验收 | 2026-09-01 | — | ✅ **机器化闭环**：`trap_ledger_scan --field-acceptance` 首行自报（暴露/复现/窗剩），验收 yaml 自动关闭/展期/降级，无需人工记 |
-| 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ⏳ 进行中：G28 轨1+词表 9 门已落（见 2026-09-01 两条目），余 G1/G14 + G6/G15/G16/G21/G34/G35/G36（任务 #45） |
+| 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ✅ 2026-09-01 完成：G28 轨1 + 词表 9 门 + legacy 9 门全落（三条目），**22 门 lossy 清零**；rows=0 细分规则落地 4 例（G8/G26/G28/G6） |
 | 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | **G69 方向相反裁决先行**（用户拍板）→ 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 留位 |
 | 4 | warn→硬断言升级 | 2026-09-01 | — | ✅ **机器化闭环**：acceptance yaml `flipped` 位一轮 cron 零命中自动翻，verify_gates 硬断言执法 verdict 中性 |
 | 5 | **ledger 入账半自动化**：unclassified 按 gate#subcheck 聚簇出签名提案 | 2026-09-01 | scan 输出聚簇提案 → 人判陷阱 vs 真错（cron 收尾 ≤5 分钟）→ 进条文；判据=流程跑通一次且 unclassified 存量清零 | ⏳ 排队 |
@@ -17,6 +17,15 @@
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
+
+## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
+
+- **形态**：G1（never_traded 反编造 + legacy 信号矩阵降级档）/G14（stage 计数展示 + legacy）/G6（短历史期数真值）/G15（占位披露句）/G16（grounded+回退偏差）= 写作侧可修臂；G6 rows=0·failed（细分第 4 例）、G15 ok<2 家、G34/35/36 marker 异常 = **[数据层]**（纯数据臂，fix 禁改稿动词）。G34/35/36 经 `_check_segment_dim` 单一实现一次转化三门同享。
+- **顺修 1 处 reason 措辞错位（G16 940 行预存问题）**：`not has_crosscheck` 分支旧文案误称「数值既不对齐」——该分支实际缺的是**核对表述**；分两臂各写准确（缺核对表述 / 有核对但 grounded 缺失）。reason-only，verdict 不动。
+- **含 3 处 crash-fix 出定理域（注入测试背书）**：G14 `td.summary` truthy 非 dict（守卫后 stage 不可读→无信号档）、G15 `items[]` 非 dict 元素、G34-36 marker truthy 非 dict（守卫后按 marker 缺失 FAIL）。
+- **流程教训（自我记录）**：词表批 m11 编辑发生在回归之后、提交之前，`[src: snapshot.…]` 省略号字面漏过 verify_doc_src_paths（R10 校验器抓到，m11:231）——「改完必跑回归」须覆盖**同批全部文档改动**；本批已改为全部 .md 落笔后统一跑。
+
+**验证链**：diff_engine 9 门归档 53 对 477 求值 **0 翻转 0 crash**、reason 升级 74 处，双极 g15:False×18/g16:False×19/g21:False×16/g34-36:False×16/g6:False×9；test_diag_contract 87/87（+16：TestWP1bLegacyGates 15 行为 + 注入 6）；run_regression exit 0（含 R10 文档路径校验）。
 
 ## 2026-09-01 WP1b 词表批：G11/G12/G13/G17/G19/G22/G26/G31/G37 reason 真值化（reason-only）
 
