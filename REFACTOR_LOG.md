@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | 1 | C-4 暴露度验收 | 2026-09-01 | — | ✅ **机器化闭环**：`trap_ledger_scan --field-acceptance` 首行自报（暴露/复现/窗剩），验收 yaml 自动关闭/展期/降级，无需人工记 |
 | 2 | **WP1b**：19 门 lossy-bool gate reason 真值化（清单=S8 路线图 lossy 22 门 − WP1a 3 门：G1 G6 G11 G12 G13 G14 G15 G16 G17 G19 G21 G22 G26 **G28** G31 G34 G35 G36 G37）+ **G28 轨1 收编** | 2026-09-01 | 19 门全 GateResult+diag 六键+逐臂 None 注入测试+归档零翻转（tools/diff_engine.py）+回归 exit 0；优先序=G28（10 真实 FAIL 领跑）→ report-only 词表门 G11/G12/G13/G17/G19/G22/G26/G31/G37 → G1/G14 → G6/G15/G16/G21/G34/G35/G36。**rows=0 细分规则（成文，勿逐门现判）**：error 信封在场（`_fetch_log`/`_warnings` 记拉取失败）的空表 → `[数据层]` 前缀+fix 禁改稿动词；信封干净的空表 → 源端真空，双选修法（重跑拉取 or 如实披露） | ✅ 2026-09-01 完成：G28 轨1 + 词表 9 门 + legacy 9 门全落（三条目），**22 门 lossy 清零**；rows=0 细分规则落地 4 例（G8/G26/G28/G6） |
-| 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | **G69 方向相反裁决先行**（用户拍板）→ 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | ⏳ 留位 |
+| 3 | **F4 verdict-affecting 批**（G49/G69/G16:696/G67:3105 + 五个 presence 门） | 2026-09-01 | **G69 方向相反裁决先行**（用户拍板）→ 预申报翻转清单获批 → 落码 → EXPECTED_FLIPS 逐条对账全中；**与 WP1 批永不同批**（reason-only 与 verdict 翻转的零翻转证明语义相反） | 🔶 **F4a 已落地**（2026-09-01，G49/G16/G67 三门收窄+归档裁决，见独立条目）；F4b 留位（G69 R7 悬空事实补调研 + presence 5 门语境锚方案，设计会再裁，不同批） |
 | 4 | warn→硬断言升级 | 2026-09-01 | — | ✅ **机器化闭环**：acceptance yaml `flipped` 位一轮 cron 零命中自动翻，verify_gates 硬断言执法 verdict 中性 |
 | 5 | **ledger 入账半自动化**：unclassified 按 gate#subcheck 聚簇出签名提案 | 2026-09-01 | scan 输出聚簇提案 → 人判陷阱 vs 真错（cron 收尾 ≤5 分钟）→ 进条文；判据=流程跑通一次且 unclassified 存量清零 | ✅ 2026-09-01 完成：`--propose` 模式（gate×reasons 聚簇出 yaml 草稿）首跑即清零——G28 历史侧车 10 处聚 1 簇，人判=数据层环境态非引擎陷阱，入账 `G28#dupont_panel:data_layer_missing`（status=pending, count=10 冻结）；scan unclassified=0、--strict exit 0 |
 | 6 | **R10-min**：文档 src 路径可达性校验器进回归 | 2026-09-01 | 校验器（A/B 双快照极）接 run_regression exit 0；文档示例 src 路径全部真实可达 | ✅ 已落地（verify_doc_src_paths.py + test_doc_src_paths.py 契约层常跑；2026-09-01 WP1b legacy 批实战抓出 m11 坏字面并修复，基线坏路径 0） |
@@ -18,7 +18,23 @@
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
 
+## 2026-09-01 F4a 收窄批：G49 片段级 + G16 section 级 + G67 语境锚（verdict-affecting，裁决 B）
+
+> **方法论（裁决 B 原文）**：回读立项意图定作用域 + 两极用例 + 单元级 pre-declare 翻转清单（预期归档级 0 翻转、翻转在单元层逐条对账）。与 WP1 reason-only 批相反：**翻转是故意的**，归档翻转须逐条裁决（预期收紧 vs 误伤）。
+
+- **立项意图回读定作用域**：
+  - **G49**（买卖力量反编造）意图=「无 verdict 不得下阵营结论」→ 阵营词须与「买卖力量」**同片段**（`re.split(r"[|。；;\n]")`，套 G48 R5 范式）。旧全文共现把观点层「卖方研报」覆盖度语境误当阵营结论。
+  - **G16:696**（订单层 grounded）意图=「合同负债**语境**消费真值」→ 作用域=CL 行 ∪「合同负债」标题节正文（`slice_of` 单一实现，G63 section 范式）。旧 `c in report` 全文扫——股价 35.0 恰等 cl_yi 即假 grounded。
+  - **G67:3105**（量价分档消费）意图=「量比/成交倍数**数值消费**」→ 语境锚行（量比|成交|倍数|放量|缩量|换手|量能|量价|5日|20日|周成交 同行）内 ±5% 对拍。旧 `_nums_in(report)` 全文对拍，异 section 数字恰落容差窗即假 PASS。
+- **归档重放裁决（diff_engine 55 对 ×3 门 165 求值）**：初版 G16 行级作用域被重放抓出**误伤**——002138 顺络电子「### 4.1 合同负债」节内判读行（0.29 亿）不重复字面词，属合法语境消费却 FAIL → 收正为 section 级（裁决纪律生效的直接证据：翻转逐条对账非走形式）。终态翻转 **4 票全 G67 True→False，逐条裁决=预期收紧非误伤**：000657（TD9 均值 -1.02 撞 vol_ratio 1.048）/002130（毛利率/EPS/股息行撞数）/300433（**fib 回撤 0.786 撞 vol_ratio 0.817**）/002600（单季表/回购行撞数）——4 票量价数值均未进量价语境行，报告侧修法=把量比/成交倍数写进量价语境行。**G49 零翻转**（REAL_WATCH no_bsp 探针 frozen False→True 显性刷新，误伤态解除）；G16 终态零翻转。
+- **单元级**：TestF4aScopeNarrow 8 用例 + 归档裁决补锚 1 例（`test_g16_section_judgeline_pass`，002138 形态防再漂移）全绿；pre-declare 三翻转形态（①跨行共现 FAIL→PASS ②非 CL 行撞数 grounded 失效 ③异语境量价数值失效）均有两极。
+- **ledger**：三门各入 1 签名（landed, root_cause=engine），G67 条目记录 4 票实锤形态；scan unclassified=0、--strict 通过。
+
+**验证链**：test_diag_contract 97/97（97=96+1 补锚）；diff_engine g16/g49/g67 三门 165 求值 4 翻转全裁决 0 crash；run_regression exit 0；REAL_WATCH G49 探针刷新显性注记。
+
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
+
+> **算术对账（2026-09-01 收官裁决补）**：22 = 3（WP1a：G7/G8/G9）+ 19（WP1b：词表批 9 = G11/G12/G13/G17/G19/G22/G26/G31/G37 + legacy 批 9 = G1/G6/G14/G15/G16/G21/G34/G35/G36 + **G28 轨1 单列条目**——见下方独立条目，含 10 真实 FAIL 领跑语料与 mixed_caliber 轨2 分离，不靠算术反推完成状态）。
 
 - **形态**：G1（never_traded 反编造 + legacy 信号矩阵降级档）/G14（stage 计数展示 + legacy）/G6（短历史期数真值）/G15（占位披露句）/G16（grounded+回退偏差）= 写作侧可修臂；G6 rows=0·failed（细分第 4 例）、G15 ok<2 家、G34/35/36 marker 异常 = **[数据层]**（纯数据臂，fix 禁改稿动词）。G34/35/36 经 `_check_segment_dim` 单一实现一次转化三门同享。
 - **顺修 1 处 reason 措辞错位（G16 940 行预存问题）**：`not has_crosscheck` 分支旧文案误称「数值既不对齐」——该分支实际缺的是**核对表述**；分两臂各写准确（缺核对表述 / 有核对但 grounded 缺失）。reason-only，verdict 不动。

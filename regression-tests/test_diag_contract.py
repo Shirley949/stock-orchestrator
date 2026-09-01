@@ -1253,5 +1253,98 @@ class TestWP1bLegacyInjection(unittest.TestCase):
         v = self._no_crash(gd.check_g1, "正文。", {"s4_technical": "x"})
         self.assertFalse(v, "s4 非 dict → legacy 降级档 FAIL")
 
+class TestF4aScopeNarrow(unittest.TestCase):
+    """F4a verdict-affecting 批（2026-09-01，裁决 B）：G49 片段级 / G16 行内 / G67 语境锚。
+
+    pre-declare 对账（单元级逐条；归档级另由 diff_engine 重放）：
+      G49 翻转①「卖方研报」跨行共现 FAIL→PASS（R12 watch 形态，fixture 已同步刷新）；
+      G16 翻转②真值仅在非 CL 行撞数 旧假 grounded PASS→FAIL；
+      G67 翻转③量价数值仅在无量价语境行 旧假 PASS→FAIL。
+    """
+
+    _DIAG_KEYS = ("subcheck", "expected", "found", "fix", "src", "degraded")
+
+    def _v(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        return bool(r.get("passed")) if isinstance(r, dict) else bool(r)
+
+    def _fail_reason(self, fn, rpt, snap):
+        r = fn(rpt, snap)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        return "".join(r.get("reasons") or [])
+
+    # ---- G49 片段级（套 G48 R5 范式）----
+    def test_g49_crossline_no_longer_fires(self):
+        snap = {"s5_events": {"data": {"risk_signals": {"processed":
+               {"buy_sell_pressure": {"status": "unclear"}}}}}}
+        # 翻转①：跨行「卖方研报」覆盖度语境 + 「买卖力量」→ 不再误伤
+        self.assertTrue(self._v(gd.check_g49,
+            "买卖力量：无结论。\n观点层：卖方研报 0 覆盖、机构评级仅 1 家。", snap))
+
+    def test_g49_same_fragment_still_fires(self):
+        snap = {"s5_events": {"data": {"risk_signals": {"processed":
+               {"buy_sell_pressure": {"status": "unclear"}}}}}}
+        r = self._fail_reason(gd.check_g49,
+            "买卖力量：买方占优，材料级活动明确。", snap)
+        self.assertIn("同片段", r)
+
+    def test_g49_verdict_presence_unchanged(self):
+        snap = {"s5_events": {"data": {"risk_signals": {"processed":
+               {"buy_sell_pressure": {"status": "ok", "verdict": "buy_dominant"}}}}}}
+        self.assertTrue(self._v(gd.check_g49, "m9.2：买方阵营占优。", snap))
+        r = self._fail_reason(gd.check_g49, "正文无阵营词。", snap)
+        self.assertIn("buy_dominant", r)
+
+    # ---- G16 行内 grounded（套 G63 语境范式）----
+    _G16_SNAP = {"s1_financial": {"data": {"balance_sheet": {"data": [{"合同负债": 3.5e9}]}}}}
+
+    def test_g16_inline_aligned_pass(self):
+        self.assertTrue(self._v(gd.check_g16,
+            "订单核对：合同负债 35.00 亿，交叉核对通过。", self._G16_SNAP))
+
+    def test_g16_foreign_line_hit_now_fails(self):
+        # 翻转②：真值数仅在非 CL 行（股价行撞 35.0）——旧全文扫假 grounded，现行内须 FAIL
+        r = self._fail_reason(gd.check_g16,
+            "当前股价 35.0 元。\n合同负债与在手订单核对，偏差口径已交代。", self._G16_SNAP)
+        self.assertIn("可照抄", r)
+
+    def test_g16_section_judgeline_pass(self):
+        # 归档裁决补锚（002138 顺络电子，2026-09-01）：「### 合同负债」标题节内的
+        # 判读行不必逐行重复字面词——节内 0.29 亿 = 合法语境消费（G63 section 范式，
+        # 初版行级作用域曾误伤此形态，归档重放抓出后收正）
+        snap = {"s1_financial": {"data": {"balance_sheet": {"data": [{"合同负债": 2.9e7}]}}}}
+        self.assertTrue(self._v(gd.check_g16,
+            "### 4.1 合同负债 8 期趋势\n| 报告期 | 合同负债(万元) |\n"
+            "| 2026H1 | 2894 |\n判读：绝对量小（0.29 亿），方向上最新期创新高，核对通过。",
+            snap))
+
+    def test_g16_src_on_cl_line_pass(self):
+        self.assertTrue(self._v(gd.check_g16,
+            "合同负债 30.5 亿 [src: snapshot.s1_financial.data.balance_sheet]，核对完成。",
+            self._G16_SNAP))
+
+    # ---- G67 量价语境锚 ----
+    _G67_SNAP = {"mode": "B", "s4_technical": {"data": {"short_term_enrich":
+        {"volume_check": {"state": "ok", "vol_ratio_5d": 2.3,
+                          "amount_mult_20d": 1.8, "week_volume_mult": 1.2,
+                          "amplified": True, "pullback_shrink": False}}}}}
+
+    def test_g67_context_pass(self):
+        self.assertTrue(self._v(gd.check_g67,
+            "量价：5日量比 2.3，20日成交额倍数 1.8。", self._G67_SNAP))
+
+    def test_g67_foreign_context_now_fails(self):
+        # 翻转③：2.3 仅出现在估值语境行（无 量比/成交 词）——旧全文对拍假 PASS
+        r = self._fail_reason(gd.check_g67,
+            "估值：市盈率 2.3，PEG 1.1。", self._G67_SNAP)
+        self.assertIn("量价语境", r)
+        self.assertIn("无量价语境行", r)
+
+    def test_g67_flag_mismatch_unchanged(self):
+        r = self._fail_reason(gd.check_g67,
+            "量价：5日量比 2.3；amplified=false", self._G67_SNAP)
+        self.assertIn("amplified", r)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

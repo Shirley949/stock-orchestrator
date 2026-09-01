@@ -1052,11 +1052,17 @@ def check_g16(report: str, data: dict) -> bool:
             reasons.append(f"另有 {len(conflicts) - 5} 处同类冲突（本清单为全量，一轮修完再重跑）")
         return GateResult(passed=False, reasons=reasons)
 
-    # (b) 数值对齐
+    # (b) 数值对齐（F4a 收窄 2026-09-01，套 G63 section 语境范式）：立项意图=
+    # 「报告在合同负债语境消费了真值」；旧实现 `c in report` 全文扫——无关行撞数
+    # （如股价 35.0 恰等 cl_yi）即假 grounded 漏报。作用域 = CL 行 ∪「合同负债」
+    # 标题节正文（切片算法单一实现 slice_of；节内判读/表格行不必逐行重复字面词）。
     aligned_candidates = {f"{cl_yi:.2f}", f"{round(cl_yi, 1):.1f}"}
     if cl_yi >= 1:
         aligned_candidates.add(f"{int(round(cl_yi))}")
-    value_aligned = any(c in report for c in aligned_candidates)
+    cl_scope = list(cl_lines)
+    for _hm in re.finditer(r"^#{1,6}[^\n]*合同负债[^\n]*$", report, re.MULTILINE):
+        cl_scope.extend(slice_of(report, _hm).split("\n"))
+    value_aligned = any(c in ln for ln in cl_scope for c in aligned_candidates)
 
     # (c) 合同负债行带溯源
     has_src_on_cl_line = any('[src:' in ln for ln in cl_lines)
@@ -1068,11 +1074,11 @@ def check_g16(report: str, data: dict) -> bool:
     if value_aligned or has_src_on_cl_line:
         return True
     return GateResult(passed=False, reasons=[
-        f"G16 核对 grounded 缺失：有核对表述但合同负债行数值既不对齐"
-        f"（真值 {cl_yi:.2f} 亿，可照抄 {sorted(aligned_candidates)}）亦无行内 [src:] 溯源"
-        "——照抄真值或行内挂 [src: snapshot.s1_financial.data.balance_sheet]"],
-        diag={"subcheck": "cl_grounded", "expected": "数值对齐（真值字符串在场）或行内 [src:] 任一",
-              "found": f"真值 {cl_yi:.2f} 亿 0 命中；合同负债行 [src:] 0 处",
+        f"G16 核对 grounded 缺失：有核对表述但合同负债语境（「合同负债」行/标题节正文）"
+        f"数值既不对齐（真值 {cl_yi:.2f} 亿，可照抄 {sorted(aligned_candidates)}）"
+        "亦无 CL 行 [src:] 溯源——照抄真值或行内挂 [src: snapshot.s1_financial.data.balance_sheet]"],
+        diag={"subcheck": "cl_grounded", "expected": "合同负债语境（CL 行∪标题节正文）数值对齐（真值字符串）或 CL 行 [src:] 任一",
+              "found": f"真值 {cl_yi:.2f} 亿 合同负债语境 0 命中；CL 行 [src:] 0 处",
               "fix": f"照抄真值 {cl_yi:.2f} 亿 或行内挂 [src:] 溯源",
               "src": "s1_financial.data.balance_sheet.合同负债（元）", "degraded": False})
 
@@ -2836,9 +2842,13 @@ def check_g49(report: str, data: dict) -> bool:
         return True
     bsp = proc.get("buy_sell_pressure")
     if not isinstance(bsp, dict) or bsp.get("status") != "ok":
-        # 反编造：无 BSP（或 failed）却声称「买卖力量」+ 阵营结论词
-        if "买卖力量" in report and re.search(r"买方|卖方|买方占优|卖方占优", report):
-            return GateResult(passed=False, reasons=["buy_sell_pressure 无 verdict（unclear/failed）却写「买卖力量」+买方/卖方阵营词——无源阵营结论=编造"])
+        # 反编造：无 BSP（或 failed）却声称「买卖力量」+ 阵营结论词。
+        # F4a 片段级收窄（2026-09-01，套 G48 R5 范式）：旧实现两个全文条件 AND 可跨行共现
+        # ——R12 watch 实锤「卖方研报」（研报来源措辞）与他处「买卖力量」跨行拼出反编造误伤。
+        # 立项意图=「声称」（同句声明），片段切分同 G48（句号/分号/换行/表格竖线，逗号不切）。
+        if any("买卖力量" in frag and re.search(r"买方|卖方", frag)
+               for frag in re.split(r"[|。；;\n]", report)):
+            return GateResult(passed=False, reasons=["buy_sell_pressure 无 verdict（unclear/failed）却在「买卖力量」同片段写买方/卖方阵营词——无源阵营结论=编造"])
         return True
     verdict = bsp.get("verdict")
     if verdict in (None, "unclear"):
@@ -3977,12 +3987,26 @@ def check_g67(report: str, data: dict) -> bool:
               if isinstance(vc.get(k), (int, float))}
     if not truths:
         return True
-    nums = _nums_in(report)
-    hit = sum(1 for v in truths.values() if any(_hit_tol(n, v) for n in nums))
+    # F4a 语境锚收窄（2026-09-01，套 G63 section 语境范式）：立项意图=「量价分档**消费**」
+    # ——数值须出现在量价语境（量比/成交/倍数/放量/缩量/换手/量能等词同行的行内）。
+    # 旧实现 `_nums_in(report)` 全文扫：无关 section 数字（市值/PE/股价）恰落 ±5% 容差窗
+    # 即假 PASS 漏报。行级锚比 section header 鲁棒（B 门报告结构不定型）。
+    _VOL_CTX = re.compile(r"量比|成交|倍数|倍增|放量|缩量|换手|量能|量价|5日|五日|20日|二十日|周成交")
+    ctx_nums = [n for ln in report.splitlines() if _VOL_CTX.search(ln) for n in _nums_in(ln)]
+    hit = sum(1 for v in truths.values() if any(_hit_tol(n, v) for n in ctx_nums))
     if hit == 0:
+        hit_anywhere = sum(1 for v in truths.values()
+                           if any(_hit_tol(n, v) for n in _nums_in(report)))
+        extra = ("（数值在报告出现但均在无量价语境行——移入量比/成交倍数语境）"
+                 if hit_anywhere else "")
         return GateResult(passed=False, reasons=[
             "量价分档未消费：量比/成交倍数数值（volume_check.vol_ratio_5d/amount_mult_20d/week_volume_mult）"
-            "无一出现在报告中（±5% 容差对拍）"])
+            f"无一出现在量价语境行中（±5% 容差对拍）{extra}"],
+            diag={"subcheck": "volume_check_consumption",
+                  "expected": "≥1 个真值出现在量价语境行（量比/成交/倍数/换手等词同行）",
+                  "found": f"语境行 0/{len(truths)} 命中" + ("（全文有撞数但语境外）" if hit_anywhere else ""),
+                  "fix": "在量价分析处照抄：5日量比 vol_ratio_5d、20日成交额倍数 amount_mult_20d、周成交量倍数 week_volume_mult",
+                  "src": "s4_technical.data.short_term_enrich.volume_check", "degraded": False})
     for flag in ("amplified", "pullback_shrink"):
         truth = vc.get(flag)
         m = re.search(flag + r'\s*[=：]\s*(True|False|true|false)', report)

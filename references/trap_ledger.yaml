@@ -270,3 +270,37 @@ entries:
     status: pending
     blocked: false
     fix: "（2026-09-01 首批 --propose 入账）历史 sidecar 10 处：快照 dupont 面板未生成（s1_financial 无该键）→ 真数据层缺非引擎陷阱，引擎按设计执法；G28 轨1 已真值化（reason 带 [数据层]+status 真值），此类 FAIL 修数据不修报告（重跑 s1_financial），mixed_caliber 软化政策见 pending #8 轨2"
+  # ---- F4a 收窄批（2026-09-01，裁决 B：回读立项意图定作用域 + 两极用例 + pre-declare 翻转清单）----
+  - signature: G49#fabrication_arm:crossline_cooccurrence
+    gate: G49
+    subcheck: fabrication_arm
+    reason_class: crossline_cooccurrence
+    match: "同片段"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "反编造臂片段级收窄（套 G48 R5 范式，re.split [|。；;\\n]）：『买卖力量』与阵营词须同片段才 FAIL——旧全文共现把『卖方研报』覆盖度语境（观点层行）误当阵营结论，跨行误伤。REAL_WATCH no_bsp 探针同步刷新 frozen False→True；归档 55 对 G49 零翻转=无误伤存量"
+  - signature: G16#cl_grounded:fulltext_collision
+    gate: G16
+    subcheck: cl_grounded
+    reason_class: fulltext_collision
+    match: "合同负债语境"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "grounded 作用域从全文收窄为 CL 行∪『合同负债』标题节正文（slice_of 单一实现，G63 section 范式）：旧 `c in report` 全文扫——股价 35.0 恰等 cl_yi 即假 grounded。初版行级作用域被归档重放抓出误伤（002138：节内判读行 0.29 亿不重复字面词）→ 收正为 section 级；节内表格行/判读行均算合法语境消费。guard=test_g16_section_judgeline_pass；归档 g16 零翻转"
+  - signature: G67#vol_consumption:foreign_context_collision
+    gate: G67
+    subcheck: vol_consumption
+    reason_class: foreign_context_collision
+    match: "无量价语境行"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "量价数值对拍挂语境锚（量比|成交|倍数|放量|缩量|换手|量能|量价|5日|20日|周成交 同行）：旧 `_nums_in(report)` 全文对拍——归档实锤 4 票假 PASS 全为异语境撞数（fib 回撤 0.786 vs vol_ratio 0.817、TD9 均值 -1.02 vs 1.048、EPS/股息行撞数）。4 票翻转已逐条裁决=预期收紧非误伤（报告须把量比/成交倍数写进量价语境行）；G49/G16 零翻转"
