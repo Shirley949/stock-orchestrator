@@ -17,6 +17,31 @@
 
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
+> **⏳ 累积状态（2026-09-01 收官批重置申报，用户裁决 E）**：收官批（G72/F3/F8/宪法）落地即四条件**自本日起重新累积**——③ 的「连续 2 次 cron」从 9-01 起算；④ 的收敛判据按记分卡条款 D 只在累计 n≥10 后判定。四条齐 → 写闭合条目，四触发器转值守。
+
+
+## 2026-09-01 收官批：G72 降级源点名披露 + F3/F8 机制钉死 + 宪法两条（retro 处置令，用户裁决 A–E）
+
+> 触发：2026-09-01 质量审计（9 模块反溯复盘，9 findings F1–F9，verdict 🟡）。性质混合批：G72=**verdict-affecting 新门**（生效时点申报见 B6），其余为机制钉死/文档注记/簿记（零既有 gate 逻辑变化）。A1 违规修复：audit 期 `--field-acceptance` 反写 acceptance.yaml 剥掉 13 行注释头 → `git checkout --` 恢复（RESTORED_OK 实测）+ A2 补只读模式根治。
+
+- **A2 `--inspect` 只读模式**：`trap_ledger_scan.py` 新 flag——`--field-acceptance --inspect` 打印不写回（**簿记写回仅限 cron 运行态**，审计跑数一律带 `--inspect`）。两极实测：带 flag md5 前后不变+跳过提示；不带 flag 照常写回。
+- **B1 G72（新门，weight=1，owner=m8，data_dim=`snapshot._warnings`）**：`_warnings` 非空 → 报告 m8 须**逐条点名**各降级源特征 token（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn / curl_sina），**真值携带式防样板话**——任一 warning 的 token 集全部缺席即 FAIL；reason 逐条列『warning 原文 + 可写 token』+ 可照抄修法句。**生效时点 2026-09-01**：ts<2026-09-01 的 snapshot 一律豁免（G61 旧快照同款向后兼容）。五极实测：生效后+样板话 FAIL／生效后+点名 PASS／legacy+空报告 PASS／无 warnings PASS／只点名 1/3 条 FAIL。
+- **B2 F3 run-scoped 报告路径**：SKILL.md 约束5/Phase4 共 4 处 `/tmp/analysis_report.md`（连带 `/tmp/snapshot.json`）→ `/tmp/analysis_report_<code>.md`（sidecar/c70/strip 路径同步）+ strip_src docstring；`verify_gates.py` CLI 层新增 **report mtime ≥ snapshot mtime 校验**（早于快照 = 错文件/陈旧拷贝 → exit 2，修法入 reason）。校验放 CLI 层不放库函数——archive_replay 直调库函数不受影响。两极实测：早于→exit 2 拦截；新于→正常 gate 流。
+- **B3 F8 裁决落地**：websearch 素材单一机制入 SKILL.md Phase 2——runner `web_research` 写回 snapshot（scene=`web_research_findings`），报告引用带 `[src: snapshot.web_research_findings...]`；执法者 **G21 溯源 + G45 目标价/预测口径**；websearch=发现非验证、API 数据权威上游。
+- **B4 F6 基线落盘（此后每批次带实测数=宪法②）**：
+
+  | 指标 | 8-31 基线 | 9-01 中鼎首测 | 留盘点位 |
+  |---|---|---|---|
+  | 首轮收敛率 | 36%（S5 删记忆实验旧泛句 4/11） | 75%（3/4，n=1，不计判定） | token_audit `gate_fix_rounds`（sidecar + history jsonl） |
+  | 修复轮读源码 | 多次（sed 撞 gate_definitions） | 0 次（Bash 侧 sanctioned 3 次/9,526c 单列） | token_audit「gate 源码零读入」+ ℹ️ Bash 侧行 |
+  | memory 教训增量 | 线性膨胀 | 0（TRAP_LEDGER 承接） | MEMORY.md 行数/mtime 清单 |
+
+- **B5 一行级注记四件**：F4 `s2-quote-kline.md`（realtime_quote.close 盘中=昨收语义，现价以 change_pct/盘后快照为准）；F5 memory `datasnapshot-save-persists-warnings.md`（runner 快照 `_fetch_log` 嵌套 `ds_state` 非顶层——`any _fetch_log` 路径不存在≠字段缺失）；F7/F9 `token_audit.py`（环比 '？'股码=旧条目未存 stock 字段；「gate 源码零读入」=Read 侧口径、Bash 侧 sanctioned 单列不合并）；G54 疣 `m3-technical.md`（adx_state 括号值≠dmi.ADX 两路计算，值对拍以 dmi.ADX 为准）。
+- **B6 预申翻转清单（G72 生效时点申报，防收敛率下探被误读为回归）**：① `archive_replay_baseline.json` 全部存量对 G72 位 absent→True（legacy 豁免）——处置=**重冻结基线（锚点重置申报）**，非逐对白名单；② fixture 池 3 票 + 600183 modeB 金票 ts 均 2026-08-14/08-29（生效前）→ EXPECTED G72=True，零翻转；③ **000887 中鼎归档（ts=09-01 生效后）**：m8 原无降级点名 → 生效后重验 G72 必 FAIL（预期执法面非回归），本批已补第 8 条披露并重验 **失败 0 / self_score 100**（sidecar 刷新，publish 副本同步；已发布腾讯文档为旧版不回改）；④ profile_quick 不含 G72（B 报告不受影响）。
+- **C 宪法两条入 SKILL.md 约束 8**：①**合同必写执法者**（存量四条补登记：F1→G72／F8→G21·G45／G54 双路→G54 值对拍／数值对拍容差→G63）；②**指标必绑留盘点位**（每批次 REFACTOR_LOG 带实测数）。**D 记分卡条款**：阈值只作用于累计 n≥10，单票展示不计判定。
+
+**验证链**：gate_fixture_test **63 门**漏报=0 误伤=0 crash=0 drift=0（G72 进 Level A 三票 + Level C 探针 ×3；探针机制升级=元组可选第 4 元素自定义快照，向后兼容）；G72 五极直调；mtime guard 两极；中鼎归档重验 失败 0；archive_replay 重冻结 **52 对零翻转**（verdict 分布 FAIL 22/PASS 30）；run_regression **exit 0**（engine_pending 0）。
+> **批内碰撞实录（诚实入档）**：mtime guard 初版放 CLI 加载前，首轮回归 exit 1——test_r8_mechanism 反例②（坏 JSON 快照写晚于报告）被 guard 先行 exit 2 劫持，覆盖「解析失败 exit 1」硬闸语义。修法=guard 移至 `load_data_snapshot` 成功之后执法（坏 JSON 走原 exit 1 不被劫持），两极复验后 R8 3/3 绿、全量回归 exit 0。教训：新硬闸插入点须对「既有硬闸序列」做次序审计，回归不只是跑给改动面看的。
 
 **🔄 重开触发器（2026-09-01 裁决 D 登记；稳态非终局——任一触发 → program 重开对应轨道，逐项带响应动作）**：
 1. **引擎修复后签名复发**：landed 条目 scan 命中数回升（match 文本再现于新 sidecar）→ 对应 gate 回归 bug，按 trap_ledger 晋级流程第 3 次阻断处置（scan 自动抓，无需人工盯）。

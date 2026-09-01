@@ -547,7 +547,8 @@ def main():
              f"｜gate修复轮 {gate_fix_rounds}{'·已全过' if gate_converged else '·未收敛' if vg_result_texts else '·无verify'}"
              f"｜P4 dump {p4_dump_chars:,}c｜外科豁免 {len(hw_exempt)} 处）")
     if recent:
-        L.append("- 环比（最近 3 次）：" + "；".join(
+        # F7 注记（2026-09-01）：stock 为 '？' = 历史条目未存 stock 字段（旧版本写入），非识别失败
+        L.append("- 环比（最近 3 次；'？'股码=旧条目未存 stock 字段）：" + "；".join(
             f"{r.get('date','?')} {r.get('stock','?')}: {r.get('total',0):,}c" for r in recent))
 
     L.append("\n## ① Phase × 类别矩阵（归因占比 %）\n")
@@ -617,6 +618,8 @@ def main():
         ("gate 源码零读入", not gate_src_reads,
          f"{len(gate_src_reads)} 次 Read gate_definitions（178K）——FAIL 修法看 verify 输出 "
          f"💡 hint，不足再读 m11-gates.md" if gate_src_reads else "0 次"),
+        # F9 注记（2026-09-01）：本检查只计 Read 侧；Bash 侧 sed/grep 访问是 sanctioned
+        # fallback（见下方 ℹ️ 行），两口径分列不合并——「✅ 零读入 + Bash N 次」不矛盾。
         ("视图覆盖率>80%", view_cov_pct > 80,
          f"CLI 直读 {cli_chars:,} / (CLI+手写) {cli_chars + hw_chars:,} chars = "
          f"{view_cov_pct:.0f}%（any 命中扁平小节计合规）"),

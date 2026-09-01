@@ -3,7 +3,7 @@
 """strip_src_for_publish —— 报告发布层剥离器：本地 md → 外部文档（腾讯文档等）发布版。
 
 用法：
-    python3 strip_src_for_publish.py /tmp/analysis_report.md /tmp/analysis_report_publish.md
+    python3 strip_src_for_publish.py /tmp/analysis_report_<code>.md /tmp/analysis_report_<code>_publish.md
 
 做什么：剥除全部溯源标记（gate 执法用，读者不需要）：
   · 明文形式  `[src: snapshot.x.y]` / `[src: websearch x]`

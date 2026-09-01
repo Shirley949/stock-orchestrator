@@ -107,6 +107,7 @@ GATE_DESCS = {
     "G69": "模式B筹码资金结构 ≥3 维 [src:] 消费（资金流/融资/估值分位/获利盘四维）",
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
+    "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
@@ -195,13 +196,17 @@ GATE_HINTS = {
            "触发词「大单」，特大单数值会被逐数对拍主力真值 → 误标 FAIL；②把特大单数值标成主力。"
            "写法：主力行只写主力口径数值；分层细节另起一行（避开主力语境行）。"
            "已知宽松区：主力-guard 整行跳过（数值在但口径词缺失时不执法）。",
+    "G72": "降级源点名披露：precheck _warnings 非空 → 报告 m8 须逐条点名降级源"
+           "（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn / curl_sina），"
+           "样板话（「已披露数据降级」不带源名）不算。修法：照 FAIL reason 里的"
+           "『可写 token』清单在 m8 补点名行。ts<2026-09-01 的旧快照豁免。",
 }
 
 # GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70", "G71"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -4363,6 +4368,52 @@ def _prob_by_root(sec):
 
 
 
+# ============================================================
+# G72 — 降级源点名披露（收官批 F1，2026-09-01 生效）
+# precheck 退出时 _warnings 非空 = 存在数据源降级；报告 m8 局限性须逐条点名
+# 降级源特征 token（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn /
+# curl_sina），样板话（「已披露数据降级」不带源名）不执法通过。
+# 生效时点 2026-09-01：此前 snapshot 向后兼容豁免（G61 旧快照同款），
+# 防 corpus/归档重放全量翻转——生效前存量报告按当时契约判定。
+# ============================================================
+_G72_EFFECTIVE = "2026-09-01"
+_G72_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.]{3,}")
+_G72_TAG_RE = re.compile(r"\[([^\]]+)\]")
+
+
+def _g72_warning_tokens(w: str) -> set:
+    """单条 warning 的降级源特征 token：[方括号源标签] + ≥4 字符 API/域名片段。"""
+    toks = {t.strip().lower() for t in _G72_TAG_RE.findall(w)}
+    toks |= {t.rstrip(".").lower() for t in _G72_TOKEN_RE.findall(w)}
+    return {t for t in toks if len(t) >= 4 and not t.isdigit()}
+
+
+def check_g72(report: str, data: dict) -> bool:
+    """G72 降级源点名披露（m8 收官批 F1）：snapshot._warnings 非空时，报告须逐条
+    点名各降级源特征 token（API 名/域名/源标签），逐条判定——任一 warning 的
+    token 全部缺席即 FAIL；样板话（「已披露数据降级」不带源名）不通过。
+    ts<2026-09-01 豁免（G61 旧快照同款向后兼容，防归档重放翻转）。"""
+    warnings = data.get("_warnings") or []
+    if not warnings:
+        return True
+    if str(data.get("timestamp") or "")[:10] < _G72_EFFECTIVE:
+        return True
+    low = report.lower()
+    missing = []
+    for w in warnings:
+        toks = _g72_warning_tokens(w)
+        if toks and not any(t in low for t in toks):
+            missing.append((w, sorted(toks)[:4]))
+    if not missing:
+        return True
+    det = "；".join(f"『{w}』未点名（可写 {' 或 '.join(toks)}）" for w, toks in missing)
+    return GateResult(passed=False, reasons=[
+        "降级源未逐条点名披露——precheck _warnings 非空，报告 m8 局限性须逐条点名"
+        f"降级源特征名，样板话不算：{det}。💡 修法：m8 补一行，例：「K线源降级为 "
+        "akshare stock_zh_a_daily；实时行情走新浪 curl（curl_sina）；量价字段补自"
+        "腾讯 qt.gtimg.cn（tencent）」"])
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G11": check_g11, "G12": check_g12,
@@ -4393,6 +4444,7 @@ GATE_CHECKERS = {
     "G61": check_g61, "G62": check_g62, "G63": check_g63, "G64": check_g64,
     "G65": check_g65, "G66": check_g66, "G67": check_g67,
     "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
+    "G72": check_g72,
 }
 
 # ============================================================
@@ -4661,6 +4713,10 @@ GATE_REGISTRY = {
             "data_dim": "s4_technical.data.b_head",
             "requires": "核心结论头块（m38 模板）必现：10 槽锚词齐 + 纪律位标签行 ±1% + 头表概率=§5 capstone 投影",
             "fail_hint": "头块缺失/槽缺/纪律位价不符/头表与 capstone 概率漂移（整块草稿照抄 b_head 视图）"},
+    "G72": {"checker": check_g72, "weight": 1, "owner": ["m8"],
+            "data_dim": "snapshot._warnings",
+            "requires": "_warnings 非空→报告逐条点名各降级源特征 token（API 名/域名/源标签）；ts<2026-09-01 豁免（向后兼容）",
+            "fail_hint": "降级未逐条点名（样板话不算）——照 FAIL reason『可写 token』清单在 m8 补点名行"},
 }
 
 # GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）

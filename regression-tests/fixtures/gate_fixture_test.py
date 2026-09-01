@@ -113,6 +113,9 @@ EXPECTED = {
     # 核心结论头块门（2026-08-31 m38 配套）：三票全 A 快照，mode 短路结构性 True；
     # 抓错能力由 test_b_head_g71.py 两极单测覆盖（存在性/槽位/纪律位标签/概率投影/pess 分支）
     "G71": {"000988": True,  "002008": True,  "300394": True},
+    # 降级源点名披露门（2026-09-01 收官批 F1）：池票快照 ts=2026-08-14（生效前）→
+    # legacy 豁免恒 True；两极执法由 SECTION_PROBES 带构造快照（第 4 元素）的 G72 探针覆盖
+    "G72": {"000988": True,  "002008": True,  "300394": True},
 }
 
 # Level C：段内省略探针（段存在但内容缺席 → 必 FAIL；内容合规 → PASS）
@@ -173,6 +176,25 @@ SECTION_PROBES = [
         "- 治理战略：无源（定性补充）\n"
         "- 前瞻催化：分红计划落地 [src: snapshot.s5_events.data.risk_signals.processed.timeline]\n",
         True,
+    ),
+    # —— G72 降级源点名披露（2026-09-01 收官批 F1）两极 + legacy 豁免，第 4 元素 = 构造快照 ——
+    (
+        "G72",
+        "## 14. 数据时效与局限\n本报告数据存在降级，已在相应章节如实披露。\n",
+        False,  # 样板话（无源名）必抓——真值携带式：逐条点名才算披露
+        {"_warnings": ["[akshare] K线使用 stock_zh_a_daily"], "timestamp": "2026-09-01T09:00:00"},
+    ),
+    (
+        "G72",
+        "## 14. 数据时效与局限\nK线源降级为 akshare stock_zh_a_daily（新浪源）。\n",
+        True,  # 点名 API 名即达标
+        {"_warnings": ["[akshare] K线使用 stock_zh_a_daily"], "timestamp": "2026-09-01T09:00:00"},
+    ),
+    (
+        "G72",
+        "",
+        True,  # legacy 豁免极：ts<2026-09-01 空报告亦 PASS（G61 旧快照同款向后兼容）
+        {"_warnings": ["[akshare] K线使用 stock_zh_a_daily"], "timestamp": "2026-08-14T18:00:00"},
     ),
 ]
 
@@ -333,10 +355,12 @@ def main():
                     f"{gname}/{code}: 期望{'FAIL' if exp else 'PASS'} 实际{'PASS' if got else 'FAIL'}"
                 )
 
-    # Level C：段内省略探针
-    for gname, report, exp in SECTION_PROBES:
+    # Level C：段内省略探针（元组可选第 4 元素 = 自定义快照，覆盖生效期/构造态两极）
+    for probe in SECTION_PROBES:
+        gname, report, exp = probe[0], probe[1], probe[2]
+        snap = probe[3] if len(probe) > 3 else stocks["000988"]
         try:
-            got, reasons = engine_verdict(GATE_CHECKERS[gname], report, stocks["000988"])
+            got, reasons = engine_verdict(GATE_CHECKERS[gname], report, snap)
         except Exception as e:  # noqa: BLE001
             crashes.append(f"{gname}/probe: {type(e).__name__}: {e}")
             continue

@@ -58,13 +58,14 @@ Phase N 结束前 → 检查 Phase N 所有 `[ ]` 项是否打勾，**未打勾�
 报告写完后、输出前 → **必须**运行 `verify_gates.py`，它会**自动产出 sidecar**（分数唯一真相源）：
 ```bash
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
-  --report /tmp/analysis_report.md \
-  --data-snapshot /tmp/snapshot.json \
+  --report /tmp/analysis_report_<code>.md \
+  --data-snapshot /tmp/runner_snapshot_<code>.json \
   --profile full        # 或 quick
-# → 产出 /tmp/analysis_report.verified.json（sidecar）+ 退出码
+# → 产出 /tmp/analysis_report_<code>.md.verified.json（sidecar）+ 退出码
 ```
+- **路径必须 run-scoped（带 `<code>`，2026-09-01 F3）**：`/tmp` 是跨会话共享区，裸 `/tmp/analysis_report.md` 会被并行分析会话互覆（实证：000887 审计中报告被 688385 会话覆盖）；verify_gates 同时校验 **report mtime ≥ snapshot mtime**（报告早于快照 = 写错了文件/陈旧拷贝，exit 2）。
 - **m11 区只放指针行，禁止手填分数**：`[verified: self_score=N profile=full | see analysis_report.verified.json]`
-- **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
+- **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report_<code>.md.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
 - `verify_gates` 退出码 1 = `verdict==FAIL`，报告不能输出，必须补全失败的 Gate。
 → 原因：Gate 校验是最后一道质量关卡。**分数、verdict、≥80 阈值全部由代码强制**（根治"三套分数 87/93/95"漂移：手填分数从不进报告，引擎产出无下游消费）。
 
@@ -75,6 +76,10 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 ### 约束 7：审计任务 fork 执行 + 独立复验（2026-09-01 WP-M 固化）
 结构审计/大范围复核类任务 → fork 执行，主会话**独立复验后才收口**（回归 exit 0 / git 推送态 / 抽验关键修复点）。
 → 原因：审计者不给自己的作业打分（WP-M 实证：fork 报告 4 组迁出/4 对矛盾裁决，主会话复验全中才置 ✅）。
+
+### 约束 8：机制宪法两条（2026-09-01 收官批）
+1. **合同必写执法者**：写入 SKILL/模块文档的任何机制、数据合同、路径约定，条目必须注明**执法者**（gate 号/脚本/校验命令）；无执法者的合同 = 口头约定（漂移起点）。存量四条已补登记：F1 降级披露→**G72**；F8 web_research 机制→**G21/G45**；G54 ADX 双路→**G54 值对拍**；数值对拍容差→**G63**。
+2. **指标必绑留盘点位**：定义/变更任何质量指标（收敛率/覆盖率/token 降幅…）必须同时绑定**留盘点位**（哪个文件哪个字段可复查实测数），此后每批次 REFACTOR_LOG 带实测数——无留盘点位的指标无法审计，等于没定义。记分卡阈值（如首轮收敛率 ≥90%/80-90%/<80%）**只作用于累计 n≥10**；单票展示不计判定（2026-09-01 记分卡条款 D）。
 
 ---
 
@@ -170,6 +175,19 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 串行：s2 盘口解读（依赖实时行情）
 ```
 
+### ⚠️ websearch 素材落 snapshot（单一机制，2026-09-01 F8 裁决）
+
+用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）：
+
+```bash
+python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_research <code> \
+  --snapshot /tmp/runner_snapshot_<code>.json \
+  --items '<json | @findings.json>'     # [{source,title,url,published,content}, ...]
+```
+
+- 写回后 scene=`web_research_findings`；报告引用处带 `[src: snapshot.web_research_findings...]`（**执法者：G21 溯源 + G45 目标价/预测口径**；裸贴 findings = 溯源断裂）。
+- websearch 是**发现**工具非**验证**工具：API 结构化数据是权威上游，冲突时以 snapshot 为准（CLAUDE.md 同款原则）。
+
 ---
 
 ## Phase 3：报告生成（JIT 模块加载 + 视图直读）
@@ -229,14 +247,14 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
 
 > **⚠️ 报告写完后、输出前，必须运行 `verify_gates.py`（见约束 5）。单一出口 = sidecar + 指针行。**
 
-1. 将报告写入 `/tmp/analysis_report.md`
-2. 运行 Gate 校验脚本（**自动产出 sidecar**）：
+1. 将报告写入 `/tmp/analysis_report_<code>.md`（**run-scoped 命名，2026-09-01 F3**——裸固定路径会被并行会话互覆）
+2. 运行 Gate 校验脚本（**自动产出 sidecar**；同时校验 report mtime ≥ snapshot mtime，报告早于快照 = 错文件/陈旧拷贝 → exit 2）：
    ```bash
    python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
-     --report /tmp/analysis_report.md \
-     --data-snapshot /tmp/snapshot.json \
+     --report /tmp/analysis_report_<code>.md \
+     --data-snapshot /tmp/runner_snapshot_<code>.json \
      --profile full      # 或 quick
-   # → 产出 /tmp/analysis_report.verified.json（含 verdict / self_score / failed_gates）
+   # → 产出 /tmp/analysis_report_<code>.md.verified.json（含 verdict / self_score / failed_gates）
    ```
 3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档）：
    ```
@@ -256,7 +274,7 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    **复发晋级（第 2 次必须落引擎）**：同一陷阱第 2 次复发 → 必须落引擎修复（trap_ledger 该签名置
    `root_cause=engine` + `status=inflight`→修后 `landed`），禁第 3 次报告级修补；`trap_ledger_scan`
    对 delta>0 条目自动打 🔴 新增 + ⚠️ 晋级提示行，cron 复盘按提示升级。
-   **现场验收簿记（C-4，cron 收尾必跑）**：`python3 regression-tests/trap_ledger_scan.py --field-acceptance`
+   **现场验收簿记（C-4，cron 收尾必跑；审计/人工跑数一律加 `--inspect` 只读——簿记写回仅限 cron 运行态）**：`python3 regression-tests/trap_ledger_scan.py --field-acceptance`
    ——暴露探针（当窗报告 grep 触发形态）+ 窗口递减/达标关闭/展期/降级 + warn→硬断言翻转，全部自动落账
    `references/trap_ledger_acceptance.yaml`，scan 首行与 engine_pending 并排自报；**零暴露 ≠ 安全**，
    关闭须暴露达标（分位≥3/否定句≥2/定增≥1）。方向局限：现场只证假阳性方向，假阴性由 corpus+归档重放守。
@@ -265,14 +283,14 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    ```
    [verified: self_score=<sidecar中的值> profile=full | see analysis_report.verified.json]
    ```
-5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report.verified.json`
+5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report_<code>.md.verified.json`
    —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
    c50 同款在场证明：`update_checklist.py --check c50 --file <清单> --evidence-from /tmp/runner_snapshot_<code>.json`
    （映射叶子 `s10_checklist.completed`，snapshot 在场即过——凭空打勾会 exit 1）。
 6. **发布到外部文档（腾讯文档等）前，先剥离 src 标记**（gate 执法用的溯源标记，读者不需要）：
    ```bash
    python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/strip_src_for_publish.py \
-     /tmp/analysis_report.md /tmp/analysis_report_publish.md
+     /tmp/analysis_report_<code>.md /tmp/analysis_report_<code>_publish.md
    # → 写入腾讯文档用 publish 副本；原报告 md 永不剥离（verify_gates 扫的就是它）
    ```
 

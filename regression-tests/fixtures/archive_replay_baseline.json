@@ -23,6 +23,7 @@
  "000657:analysis_report-glm-中钨高新-000657:analysis_report.md": {
   "failed_gates": [
    "G30",
+   "G67",
    "G68",
    "G71"
   ],
@@ -33,7 +34,7 @@
    "G30": "fail",
    "G65": "pass",
    "G66": "pass",
-   "G67": "pass",
+   "G67": "fail",
    "G68": "fail",
    "G69": "pass",
    "G70": "pass",
@@ -67,6 +68,69 @@
   },
   "profile": "profile_quick",
   "verdict": "FAIL"
+ },
+ "000887:analysis_report-glm5.3f-中鼎股份-000887:analysis_report-glm5.3f-中鼎股份-000887.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G12": "pass",
+   "G13": "pass",
+   "G14": "pass",
+   "G15": "pass",
+   "G16": "pass",
+   "G17": "pass",
+   "G19": "pass",
+   "G20": "pass",
+   "G21": "pass",
+   "G22": "pass",
+   "G23": "pass",
+   "G25": "pass",
+   "G26": "pass",
+   "G27": "pass",
+   "G28": "pass",
+   "G29": "pass",
+   "G30": "pass",
+   "G31": "pass",
+   "G32": "pass",
+   "G33": "pass",
+   "G34": "pass",
+   "G35": "pass",
+   "G36": "pass",
+   "G37": "pass",
+   "G38": "pass",
+   "G39": "pass",
+   "G40": "pass",
+   "G41": "pass",
+   "G42": "pass",
+   "G43": "pass",
+   "G44": "pass",
+   "G45": "pass",
+   "G47": "pass",
+   "G48": "pass",
+   "G49": "pass",
+   "G51": "pass",
+   "G52": "pass",
+   "G53": "pass",
+   "G54": "pass",
+   "G55": "pass",
+   "G56": "pass",
+   "G57": "pass",
+   "G58": "pass",
+   "G59": "pass",
+   "G6": "pass",
+   "G60": "pass",
+   "G61": "pass",
+   "G62": "pass",
+   "G63": "pass",
+   "G64": "pass",
+   "G7": "pass",
+   "G72": "pass",
+   "G8": "pass",
+   "G9": "pass"
+  },
+  "profile": "profile_full",
+  "verdict": "PASS"
  },
  "000960:analysis_report-glm5.3-锡业股份-000960:analysis_report.md": {
   "failed_gates": [],
@@ -124,6 +188,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -186,6 +251,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -250,6 +316,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -261,6 +328,7 @@
    "G30",
    "G65",
    "G66",
+   "G67",
    "G68",
    "G70",
    "G71"
@@ -272,7 +340,7 @@
    "G30": "fail",
    "G65": "fail",
    "G66": "fail",
-   "G67": "pass",
+   "G67": "fail",
    "G68": "fail",
    "G69": "pass",
    "G70": "fail",
@@ -339,11 +407,30 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
   "profile": "profile_full",
   "verdict": "FAIL"
+ },
+ "002202:analysis_report-glm-5.3-flash-金风科技-002202:analysis_report-金风科技-002202.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "pass",
+   "G68": "pass",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "pass"
+  },
+  "profile": "profile_quick",
+  "verdict": "PASS"
  },
  "002202:analysis_report-glm5.3-金风科技-002202-modeB-20260829:analysis_report-glm5.3-金风科技-002202-modeB-20260829.md": {
   "failed_gates": [
@@ -467,16 +554,15 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
   "profile": "profile_full",
   "verdict": "FAIL"
  },
- "002600:analysis_report-glm5.3-领益智造-002600:analysis_report-glm5.3-领益智造-002600.md": {
-  "failed_gates": [
-   "G71"
-  ],
+ "002600:analysis_report-glm-5.3-flash-领益智造-002600:analysis_report-领益智造-002600.md": {
+  "failed_gates": [],
   "gate_vector": {
    "G1": "pass",
    "G11": "pass",
@@ -488,16 +574,39 @@
    "G68": "pass",
    "G69": "pass",
    "G70": "pass",
-   "G71": "fail"
+   "G71": "pass"
   },
   "profile": "profile_quick",
   "verdict": "PASS"
+ },
+ "002600:analysis_report-glm5.3-领益智造-002600:analysis_report-glm5.3-领益智造-002600.md": {
+  "failed_gates": [
+   "G66",
+   "G68",
+   "G71"
+  ],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "fail",
+   "G67": "pass",
+   "G68": "fail",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "fail"
+  },
+  "profile": "profile_quick",
+  "verdict": "FAIL"
  },
  "002600:analysis_report-glm5.3-领益智造-002600:analysis_report.md": {
   "failed_gates": [
    "G30",
    "G65",
    "G66",
+   "G67",
    "G68",
    "G71"
   ],
@@ -508,7 +617,7 @@
    "G30": "fail",
    "G65": "fail",
    "G66": "fail",
-   "G67": "pass",
+   "G67": "fail",
    "G68": "fail",
    "G69": "pass",
    "G70": "pass",
@@ -573,6 +682,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -637,6 +747,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -722,6 +833,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -784,6 +896,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -792,82 +905,25 @@
  },
  "300408:analysis_report-glm5.3-三环集团-300408:analysis_report-glm5.3-三环集团-300408.md": {
   "failed_gates": [
-   "G15",
-   "G16",
-   "G21",
-   "G23",
    "G30",
-   "G39",
-   "G44",
-   "G49",
-   "G51",
-   "G55",
-   "G57",
-   "G58",
-   "G61",
-   "G63",
-   "G7",
-   "G8",
-   "G9"
+   "G67",
+   "G68",
+   "G71"
   ],
   "gate_vector": {
    "G1": "pass",
    "G11": "pass",
-   "G12": "pass",
    "G13": "pass",
-   "G14": "pass",
-   "G15": "fail",
-   "G16": "fail",
-   "G17": "pass",
-   "G19": "pass",
-   "G20": "pass",
-   "G21": "fail",
-   "G22": "pass",
-   "G23": "fail",
-   "G25": "pass",
-   "G26": "pass",
-   "G27": "pass",
-   "G28": "pass",
-   "G29": "pass",
    "G30": "fail",
-   "G31": "pass",
-   "G32": "pass",
-   "G33": "pass",
-   "G34": "pass",
-   "G35": "pass",
-   "G36": "pass",
-   "G37": "pass",
-   "G38": "pass",
-   "G39": "fail",
-   "G40": "pass",
-   "G41": "pass",
-   "G42": "pass",
-   "G43": "pass",
-   "G44": "fail",
-   "G45": "pass",
-   "G47": "pass",
-   "G48": "pass",
-   "G49": "fail",
-   "G51": "fail",
-   "G52": "pass",
-   "G53": "pass",
-   "G54": "pass",
-   "G55": "fail",
-   "G56": "pass",
-   "G57": "fail",
-   "G58": "fail",
-   "G59": "pass",
-   "G6": "pass",
-   "G60": "pass",
-   "G61": "fail",
-   "G62": "pass",
-   "G63": "fail",
-   "G64": "pass",
-   "G7": "fail",
-   "G8": "fail",
-   "G9": "fail"
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "fail",
+   "G68": "fail",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "fail"
   },
-  "profile": "profile_full",
+  "profile": "profile_quick",
   "verdict": "FAIL"
  },
  "300408:analysis_report-glm5.3-三环集团-300408:analysis_report.md": {
@@ -918,6 +974,24 @@
   "profile": "profile_quick",
   "verdict": "FAIL"
  },
+ "300433:analysis_report-glm-5.3-flash-蓝思科技-300433:analysis_report-蓝思科技-300433.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "pass",
+   "G68": "pass",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "pass"
+  },
+  "profile": "profile_quick",
+  "verdict": "PASS"
+ },
  "300433:analysis_report-glm5.3-蓝思科技-300433-modeB-20260826:analysis_report-glm5.3-蓝思科技-300433-modeB-20260826.md": {
   "failed_gates": [
    "G71"
@@ -960,6 +1034,8 @@
  },
  "300433:analysis_report-glm5.3-蓝思科技-300433:analysis_report-glm5.3-蓝思科技-300433.md": {
   "failed_gates": [
+   "G67",
+   "G68",
    "G71"
   ],
   "gate_vector": {
@@ -969,14 +1045,14 @@
    "G30": "pass",
    "G65": "pass",
    "G66": "pass",
-   "G67": "pass",
-   "G68": "pass",
+   "G67": "fail",
+   "G68": "fail",
    "G69": "pass",
    "G70": "pass",
    "G71": "fail"
   },
   "profile": "profile_quick",
-  "verdict": "PASS"
+  "verdict": "FAIL"
  },
  "300456:analysis_report-glm5.3-赛微电子-300456:analysis_report.md": {
   "failed_gates": [],
@@ -1034,6 +1110,70 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
+   "G8": "pass",
+   "G9": "pass"
+  },
+  "profile": "profile_full",
+  "verdict": "PASS"
+ },
+ "300661:analysis_report-cc-v22-glm5.3f-圣邦股份-300661:analysis_report.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G12": "pass",
+   "G13": "pass",
+   "G14": "pass",
+   "G15": "pass",
+   "G16": "pass",
+   "G17": "pass",
+   "G19": "pass",
+   "G20": "pass",
+   "G21": "pass",
+   "G22": "pass",
+   "G23": "pass",
+   "G25": "pass",
+   "G26": "pass",
+   "G27": "pass",
+   "G28": "pass",
+   "G29": "pass",
+   "G30": "pass",
+   "G31": "pass",
+   "G32": "pass",
+   "G33": "pass",
+   "G34": "pass",
+   "G35": "pass",
+   "G36": "pass",
+   "G37": "pass",
+   "G38": "pass",
+   "G39": "pass",
+   "G40": "pass",
+   "G41": "pass",
+   "G42": "pass",
+   "G43": "pass",
+   "G44": "pass",
+   "G45": "pass",
+   "G47": "pass",
+   "G48": "pass",
+   "G49": "pass",
+   "G51": "pass",
+   "G52": "pass",
+   "G53": "pass",
+   "G54": "pass",
+   "G55": "pass",
+   "G56": "pass",
+   "G57": "pass",
+   "G58": "pass",
+   "G59": "pass",
+   "G6": "pass",
+   "G60": "pass",
+   "G61": "pass",
+   "G62": "pass",
+   "G63": "pass",
+   "G64": "pass",
+   "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1096,6 +1236,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1158,6 +1299,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1220,6 +1362,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1282,6 +1425,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1346,6 +1490,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1411,6 +1556,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1473,6 +1619,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1535,6 +1682,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1599,11 +1747,30 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
   "profile": "profile_full",
   "verdict": "FAIL"
+ },
+ "600089:analysis_report-glm-5.3-flash-特变电工-600089:analysis_report-特变电工-600089.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "pass",
+   "G68": "pass",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "pass"
+  },
+  "profile": "profile_quick",
+  "verdict": "PASS"
  },
  "600089:analysis_report-glm5.3-特变电工-600089-modeB-20260829:analysis_report-glm5.3-特变电工-600089-modeB-20260829.md": {
   "failed_gates": [
@@ -1666,6 +1833,24 @@
    "G69": "pass",
    "G70": "pass",
    "G71": "fail"
+  },
+  "profile": "profile_quick",
+  "verdict": "PASS"
+ },
+ "603019:analysis_report-glm-5.3-flash-中科曙光-603019:analysis_report-中科曙光-603019.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "pass",
+   "G68": "pass",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "pass"
   },
   "profile": "profile_quick",
   "verdict": "PASS"
@@ -1773,11 +1958,96 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
   "profile": "profile_full",
   "verdict": "PASS"
+ },
+ "603663:analysis_report-glm5.3f-三祥新材-603663:analysis_report-glm5.3f-三祥新材-603663.md": {
+  "failed_gates": [],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G13": "pass",
+   "G30": "pass",
+   "G65": "pass",
+   "G66": "pass",
+   "G67": "pass",
+   "G68": "pass",
+   "G69": "pass",
+   "G70": "pass",
+   "G71": "pass"
+  },
+  "profile": "profile_quick",
+  "verdict": "PASS"
+ },
+ "688385:analysis_report-glm5.3f-复旦微电-688385:analysis_report-glm5.3f-复旦微电-688385.md": {
+  "failed_gates": [
+   "G21",
+   "G72"
+  ],
+  "gate_vector": {
+   "G1": "pass",
+   "G11": "pass",
+   "G12": "pass",
+   "G13": "pass",
+   "G14": "pass",
+   "G15": "pass",
+   "G16": "pass",
+   "G17": "pass",
+   "G19": "pass",
+   "G20": "pass",
+   "G21": "fail",
+   "G22": "pass",
+   "G23": "pass",
+   "G25": "pass",
+   "G26": "pass",
+   "G27": "pass",
+   "G28": "pass",
+   "G29": "pass",
+   "G30": "pass",
+   "G31": "pass",
+   "G32": "pass",
+   "G33": "pass",
+   "G34": "pass",
+   "G35": "pass",
+   "G36": "pass",
+   "G37": "pass",
+   "G38": "pass",
+   "G39": "pass",
+   "G40": "pass",
+   "G41": "pass",
+   "G42": "pass",
+   "G43": "pass",
+   "G44": "pass",
+   "G45": "pass",
+   "G47": "pass",
+   "G48": "pass",
+   "G49": "pass",
+   "G51": "pass",
+   "G52": "pass",
+   "G53": "pass",
+   "G54": "pass",
+   "G55": "pass",
+   "G56": "pass",
+   "G57": "pass",
+   "G58": "pass",
+   "G59": "pass",
+   "G6": "pass",
+   "G60": "pass",
+   "G61": "pass",
+   "G62": "pass",
+   "G63": "pass",
+   "G64": "pass",
+   "G7": "pass",
+   "G72": "fail",
+   "G8": "pass",
+   "G9": "pass"
+  },
+  "profile": "profile_full",
+  "verdict": "FAIL"
  },
  "688545:analysis_report-glm5.3-兴福电子-688545:analysis_report_688545.md": {
   "failed_gates": [
@@ -1837,6 +2107,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },
@@ -1899,6 +2170,7 @@
    "G63": "pass",
    "G64": "pass",
    "G7": "pass",
+   "G72": "pass",
    "G8": "pass",
    "G9": "pass"
   },

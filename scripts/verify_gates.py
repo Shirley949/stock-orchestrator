@@ -529,6 +529,18 @@ def main():
     # 加载输入
     report = load_report(args.report)
     data = load_data_snapshot(args.data_snapshot)
+    # F3 mtime 校验（2026-09-01，CLI 层——库函数不校验，archive 重放 import 库函数不受影响）：
+    # 报告 mtime 必须 ≥ 快照 mtime，报告早于快照 = 写错文件/陈旧拷贝（/tmp 固定路径被并行
+    # 会话互覆的形态）。仅在快照可解析后执法——坏 JSON 走上方 exit 1 硬闸，不劫持其语义。
+    if data and args.report and not args.report_only:
+        from pathlib import Path as _P
+
+        _rep, _snap = _P(args.report), _P(args.data_snapshot).expanduser()
+        if _rep.exists() and _snap.exists() and _rep.stat().st_mtime < _snap.stat().st_mtime:
+            print(f"❌ 报告 mtime 早于数据快照 mtime（report={_rep} < snapshot={_snap}）——"
+                  "报告不是从该快照写出的（错文件/陈旧拷贝，F3）。修法：核对 --report 路径是否"
+                  "run-scoped（/tmp/analysis_report_<code>.md）；确认无误后从正确快照重写报告。")
+            sys.exit(2)
     if args.report_only:
         data = {}  # 纯文本模式：禁用数据感知 Gate（等同旧 quality runner 行为）
 
