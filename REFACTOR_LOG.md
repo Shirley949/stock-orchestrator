@@ -17,6 +17,12 @@
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 
+**🔄 重开触发器（2026-09-01 裁决 D 登记；稳态非终局——任一触发 → program 重开对应轨道，逐项带响应动作）**：
+1. **引擎修复后签名复发**：landed 条目 scan 命中数回升（match 文本再现于新 sidecar）→ 对应 gate 回归 bug，按 trap_ledger 晋级流程第 3 次阻断处置（scan 自动抓，无需人工盯）。
+2. **首轮收敛率劣化**：gate_fix_rounds 首轮占比显著回落（FAIL→全过轮数中位数抬升）→ 诊断自包含性退化（reason 又变泛句），重跑 test_diag_contract 六键契约定位欠账门。
+3. **F4/mixed_caliber 新形态爆出**：语料出现既有签名覆盖不了的形态（如 mixed_caliber 出现第二信号可得的新样本、presence 门新误伤样例）→ 对应 pending 轨道重开（#3 F4b / #8 轨2）。
+4. **cron 零新签名 streak 断裂**：终局条件③ 的 2 连断 → unclassified 新签名入账流程重跑（--propose 半自动化），人判后视量决定是否系统性重开。
+
 
 ## 2026-09-01 F4a 收窄批：G49 片段级 + G16 section 级 + G67 语境锚（verdict-affecting，裁决 B）
 
