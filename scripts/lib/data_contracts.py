@@ -62,6 +62,14 @@ SCENES = {
             {"path": "data.dupont",             "confidence": CONFIRMED,
              "note": "杜邦四因子（主源 Sina vFD_DupontAnalysis；失败/空→东财 RPT_F10_FINANCE_DUPONT 单次 fallback，"
                      "source 字段分辨；data._profile=financial/normal；ROE 口径=披露加权(中报/年报)或源端自算(Q1)，闭合校验已废弃 2026-08-30）"},
+            {"path": "data.dupont.caliber_probe", "confidence": CONFIRMED,
+             "note": "轨2 mixed_caliber 探针（2026-09-02 裁决 D，runner._dupont_caliber_probe，加法式仅触发时写）："
+                     "state∈{confirmed,em_fetch_failed,em_self_broken,em_not_tracking,em_period_mismatch}+证据字段"
+                     "（sina_roe/factor_product/residual_rel/em_roe/em_selfcheck_rel/em_track_rel/thresholds）；"
+                     "残差触发 rel>5%（单值）∧ EM 独立管道自洽∧追随≤5%∧同期→confirmed"},
+            {"path": "data.dupont.caliber_note", "confidence": CONFIRMED,
+             "note": "仅 confirmed 时挂载：m2 §2.12 口径混装强制披露模板句（G28 第三臂 reason 照抄源，"
+                     "gate 自查禁荣誉制——note 在场而报告沉默=FAIL）"},
             {"path": "data.mainfinadata",       "confidence": CONFIRMED,
              "note": "东财 MAINFINADATA 指标 165 字段（wide 族，rows[0]=最新期 desc）；ZCFZL/LD/SD 偿债能力 + ROEJQ/ROIC + 同比/DJD 单季；G27③/m2§2.3"},
             {"path": "data.rd_expense",         "confidence": CONFIRMED,
@@ -90,6 +98,7 @@ SCENES = {
             "data.financial_indicators": ["m2", "G27"],
             "data.segment_composition":  ["m2:§2.2", "m25:13", "m6:Layer1", "m7:7.1", "m0", "m1", "m5:§5.2"],   # 三维 canonical v2.0（product/industry/geo + dimension_status）；m0 分类/m1 叙事/m5 同业本公司行/m6 主营构成行/m7 地缘/关税+集中度/m2 分业务表
             "data.dupont":               ["m2:291", "G28"],
+            "data.dupont.caliber_note":  ["m2:§2.12", "G28"],   # 口径混装强制披露（轨2；caliber_probe 为引擎留痕非报告直读）
             "data.mainfinadata":         ["m2:§2.3", "G27"],   # 偿债能力 ZCFZL/LD/SD（m2§2.3 空白源）+ G27③ presence
             "data.rd_expense":           ["m2:§2.3.1", "m2:§2.11"],   # 研发资本化/人员（替 PDF rd_expense）
         },

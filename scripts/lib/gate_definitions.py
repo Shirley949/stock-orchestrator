@@ -1636,7 +1636,14 @@ def check_g28(report: str, data: dict) -> bool:
     2026-08-30 废弃（实证与用户裁决见 REFACTOR_LOG），新浪/东财面板值为权威，
     本 gate 不做反算。金融股字段在场即 PASS（三因子无经济意义是模块层 N/A 事，
     m2 读 data._profile 判定，不归 gate 管）。
-    旧 snapshot 的 _closure_check 残留字段不读（加法式遗留，无害）。"""
+    旧 snapshot 的 _closure_check 残留字段不读（加法式遗留，无害）。
+    第三臂（2026-09-02 裁决 D，轨2 mixed_caliber）：dupont.caliber_probe.state==
+    "confirmed"（runner 第二信号探针：残差触发 rel>5% ∧ EM RPT_F10_FINANCE_DUPONT
+    独立管道自洽∧追随 Sina ROE≤5%∧同期）→ 报告必须含口径披露行（gate 自查禁荣誉制：
+    note 在场而报告沉默仍 FAIL，reason 照抄 caliber_note=m2 §2.12 模板披露句）。
+    残差只作触发器、FAIL 依据是「确认混装而沉默」——交叉验证≠自算，8-30 裁决不变。
+    未确认三态（em_fetch_failed/em_self_broken/em_not_tracking/em_period_mismatch）
+    一律现状 PASS（referee 失格非重跑可修；全态留痕 caliber_probe+trap_ledger 签名）。"""
     dupont = _snapshot_get(data, "s1_financial.data.dupont")
     if not isinstance(dupont, dict) or dupont.get("status") != "ok":
         # WP1b 轨1 reason 真值化：本臂只查数据源状态（不查报告，任何改稿不能过）→
@@ -1672,7 +1679,38 @@ def check_g28(report: str, data: dict) -> bool:
                  "fix": "重跑 s1_financial 拉取（勿改报告）",
                  "src": "s1_financial.data.dupont.data（四核心字段）",
                  "degraded": False})
+
+    # 第三臂（2026-09-02 裁决 D）：confirmed 探针 → 强制口径披露行。gate 自查禁荣誉制
+    # ——caliber_note 在场而报告沉默仍 FAIL；未确认三态零执行（现状 PASS，见 docstring）。
+    cp = dupont.get("caliber_probe")
+    if isinstance(cp, dict) and cp.get("state") == "confirmed":
+        hit = _contextual_presence(report, _G28_CALIBER_TRIGGERS,
+                                   anchors=_G28_CALIBER_ANCHORS, scope="line")
+        if hit is None:
+            note = dupont.get("caliber_note") or "（caliber_note 缺失——runner 写入异常，照抄 m2 §2.12 口径混装模板）"
+            roe, prod = cp.get("sina_roe"), cp.get("factor_product")
+            res, track = cp.get("residual_rel"), cp.get("em_track_rel")
+            return GateResult(passed=False, reasons=[
+                f"G28 杜邦口径混装已确认（ROE={roe} vs 三因子积={prod}，残差 rel={res}·"
+                f"容差 rel 5%；EM 独立管道追随 rel={track}）——报告缺口径披露行："
+                f"（口径/反算/闭合）与（杜邦/ROE/净资产收益率/三因子/乘积）须同行。"
+                f"照抄 m2 §2.12 模板披露句：『{note}』"
+            ], diag={"subcheck": "dupont_caliber_disclosure",
+                     "expected": "口径披露行在场：（口径|反算|闭合）×（杜邦|ROE|净资产收益率|三因子|乘积）同行",
+                     "found": f"全文 0 行口径披露（caliber_probe.state=confirmed，ROE={roe}/积={prod}/残差 rel={res}）",
+                     "fix": f"照抄 caliber_note 原句：『{note}』",
+                     "src": "s1_financial.data.dupont.caliber_note",
+                     "degraded": False})
     return True
+
+
+# G28 口径披露行检测词表（轨2 mixed_caliber，2026-09-02 裁决 D；预飞归档实证形态标定：
+# 001309「摊薄 ROE…披露口径混合」/ 000960「杜邦闭合校验…口径差」/ 江南新材「三因子闭合
+# 校验…ROE」/ 300456「加权 ROE…东财加权口径…与杜邦」——真实披露全为同行，line 窗口。
+# 锚含裸 ROE 已知偏松（晶方型「行业口径 ROE 排名」行亦命中）——presence 误伤方向=假 PASS
+# 静默方向，与 F4b② 批裁决同取舍；合同已入 m2 §2.12 / m11 语义变更表）。
+_G28_CALIBER_TRIGGERS = ("口径", "反算", "闭合")
+_G28_CALIBER_ANCHORS = ("杜邦", "ROE", "净资产收益率", "三因子", "乘积")
 
 
 # 资产安全对象词（G29 语境锚，F4b② presence 批门 3/4）：从 m2 §2.10 flags 句式合同
@@ -4540,7 +4578,7 @@ GATE_REGISTRY = {
             "fail_hint": "财务指标/同比与 snapshot 不一致或缺失"},
     "G28": {"checker": check_g28, "weight": 1, "owner": ["m2"],
             "data_dim": "s1_financial.data.dupont",
-            "requires": "dupont.status=ok（Sina 主源或东财 fallback）且核心四字段非 None；不做反算闭合",
+            "requires": "dupont.status=ok（Sina 主源或东财 fallback）且核心四字段非 None；不做反算闭合；caliber_probe.state=confirmed 时须含口径披露行（m2 §2.12 模板句）",
             "fail_hint": "杜邦数据拉取失败（双源）或核心四字段缺失"},
     "G29": {"checker": check_g29, "weight": 2, "owner": ["m2"],
             "data_dim": "computed_metrics.asset_safety",

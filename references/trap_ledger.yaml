@@ -270,6 +270,26 @@ entries:
     status: pending
     blocked: false
     fix: "（2026-09-01 首批 --propose 入账）历史 sidecar 10 处：快照 dupont 面板未生成（s1_financial 无该键）→ 真数据层缺非引擎陷阱，引擎按设计执法；G28 轨1 已真值化（reason 带 [数据层]+status 真值），此类 FAIL 修数据不修报告（重跑 s1_financial），mixed_caliber 软化政策见 pending #8 轨2"
+  # ---- 轨2 mixed_caliber（2026-09-02 裁决 D 落地；③A/②A 复核语义：未确认三态一律现状 PASS）----
+  # 未确认三态无 FAIL 面（负收益豁免同 G47 判例，入账留痕防沉默）：
+  #   caliber_probe.state=em_fetch_failed —— EM 单次拉取失败（裁决②：现状=fixture 级降级测试钉死）
+  #   caliber_probe.state=em_period_mismatch —— EM 与 Sina 报告期不齐，追随比较无效
+  #   caliber_probe.state=em_not_tracking —— EM 自洽但不追随 Sina（提取错嫌疑形态，2026-09-01 语料 0 例；
+  #     真实样本出现=REFACTOR_LOG 重开触发器 #3 素材，届时人判是否升 FAIL——不追随有良性成因
+  #     （源端披露滞后/聚合口径差）无法先验排除，预 FAIL 会重造 8-30 前假 FAIL 机器）
+  #   caliber_probe.state=em_self_broken —— EM 面板自身不自洽（实测 000960 EM 面板 rel 11.34%；
+  #     裁决③A=认证失败语义：referee 失格非重跑可修，不造 cron 清不掉的 verdict；2026-09-02 用户裁定）
+  - signature: G28#dupont_caliber:disclosure_missing
+    gate: G28
+    subcheck: dupont_caliber_disclosure
+    reason_class: disclosure_missing
+    match: "报告缺口径披露行"
+    count: 0
+    last_seen: "2026-09-02"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "口径混装确认（残差触发 rel>5% ∧ EM RPT_F10_FINANCE_DUPONT 独立管道自洽∧追随 Sina ROE≤5%∧同期，runner._dupont_caliber_probe 写 caliber_note）而报告沉默→FAIL，reason 照抄 caliber_note 原句（m2 §2.12 模板）。残差只作触发器（交叉验证≠自算，8-30 裁决不变）；容差单值 rel 5%（001309 ROE>90 abs 必错案 / 000960 残差 0.27pp=rel 3.73% 无害不触发——两侧边界钉死 trap_corpus g28_caliber_*）。预申（2026-09-01 实测语料）：3 指纹股（001309 rel 7.03%/300456 14.97%/000657 9.42%）EM 全自洽全追随→confirmed；真实报告矩阵 001309/300456 已披露 PASS、000657 沉默=唯一真翻转；25 对照股+归档 26 对零变化（冻结快照无 probe 键=结构零翻转）。裁决原文『恰好 7 只』出自 8-30 记录（abs 0.25pp 旧阈值语料），中报落定后 rel 5% 单值下收敛为 3 只——计数以实测为准（计数勿硬编码规约）"
   # ---- F4a 收窄批（2026-09-01，裁决 B：回读立项意图定作用域 + 两极用例 + pre-declare 翻转清单）----
   - signature: G49#fabrication_arm:crossline_cooccurrence
     gate: G49

@@ -773,6 +773,43 @@ class TestTrapCorpus(unittest.TestCase):
                 self.fail(f"{c['id']}：want={c['expect']} got={got}")
         self.assertEqual(hits, len(cases))
 
+    def test_g28_caliber_probe(self):
+        """裁决D（轨2 mixed_caliber）：残差触发 rel 单值两侧边界 + abs 容差必错案。
+        001309（rel 7.03% 触发→EM 追随 rel 3.11%=abs 2.87pp 须 confirmed——abs 0.25pp
+        会误判不追随）/ 000960（rel 3.73% 无害不触发零 EM 调用——abs 0.27pp 会误触发）。
+        禁 abs 容差回潮（裁决④：容差定义单值化只允许 rel）。"""
+        sys.path.insert(0, str(_HERE.parent.parent / "financial-data-routing"))
+        from unittest import mock
+        import runner
+        cases = [c for c in self.cases if c["check"] == "g28_caliber_probe"]
+        self.assertGreaterEqual(len(cases), 2, "g28_caliber 边界语料不齐")
+        for c in cases:
+            spec = json.loads(c["line"])
+            env = {"status": "ok", "source": "curl_sina_dupont", "data": dict(spec["sina"])}
+            with mock.patch("dongcai_client.fetch_em_dupont",
+                            return_value=spec.get("em") or {"status": "failed", "rows": []}) as fem:
+                runner._dupont_caliber_probe("001309", env)
+            got = (env.get("caliber_probe") or {}).get("state") or "skip"
+            self.assertEqual(got, c["expect"], f"{c['id']}：want={c['expect']} got={got}")
+            if c["expect"] == "skip":
+                self.assertEqual(fem.call_count, 0, f"{c['id']}：无指纹路径禁 EM 调用")
+                self.assertIsNone(env.get("caliber_note"), f"{c['id']}：无害路径禁写 caliber_note")
+            if c["expect"] == "confirmed":
+                self.assertIn("口径", env.get("caliber_note") or "",
+                              f"{c['id']}：confirmed 须挂 caliber_note（G28 reason 照抄源）")
+
+    def test_g28_caliber_disclosure(self):
+        """裁决D：口径披露行检测两极（trigger=口径/反算/闭合 × anchor=杜邦/ROE/…同行）。
+        真实披露形态（001309 L83 摘录）须命中；等式无口径词（000657 沉默形态，
+        预申唯一真翻转）须不命中——检测器两极各验，防单极假验证。"""
+        cases = [c for c in self.cases if c["check"] == "g28_caliber_disclosure"]
+        self.assertGreaterEqual(len(cases), 2, "g28_caliber 披露形态语料不齐")
+        for c in cases:
+            hit = gd._contextual_presence(c["line"], gd._G28_CALIBER_TRIGGERS,
+                                          anchors=gd._G28_CALIBER_ANCHORS, scope="line")
+            self.assertEqual(hit is not None, c["expect"] == "hit",
+                             f"{c['id']}：want={c['expect']} got={'hit' if hit else 'nhit'}")
+
     def test_g21_registry_hint(self):
         """批2#4：G21 坏路径第 1 层走 registry（data_contracts.SCENES）——scene 在
         注册表而快照未生成 → [数据层] 归因（非路径拼写问题）；拼写错 → 近邻建议，

@@ -105,3 +105,33 @@ cases:
     line: "valuation_snapsho.data.quote"
     expect: "registry 近邻 scene「valuation_snapshot」"
     source: "第1层拼写错且兄弟键无近邻时由 data_contracts.SCENES 权威注册表补建议"
+  # ---- G28 轨2 mixed_caliber（裁决 D，2026-09-02）：容差单值 rel 两侧边界 + abs 必错案 + 披露行形态 ----
+  # g28_caliber_probe：line = JSON（sina=Sina 杜邦面板 data；em=fetch_em_dupont 信封），
+  #   expect = 探针终态（confirmed/em_fetch_failed/em_self_broken/em_not_tracking/
+  #   em_period_mismatch）或 skip（前置短路/无指纹=零写入零 EM 调用）。
+  #   边界实测值取自 20260830 快照真面板（runner._dupont_caliber_probe 同公式复算）。
+  # g28_caliber_disclosure：line = 报告行原文；expect = hit（检测命中）/ nhit（沉默）。
+  - id: g28_caliber_trig_001309
+    gate: G28
+    check: g28_caliber_probe
+    line: '{"sina": {"period": "2026-06-30", "净资产收益率": 92.24, "归属母公司股东的销售净利率": 35.58, "资产周转率(次)": 0.77, "权益乘数": 3.13}, "em": {"status": "ok", "rows": [{"REPORT_DATE": "2026-06-30", "ROE": 89.37, "SALE_NPR": 14.0, "PARENT_NETPROFIT_RATIO": 100.0, "TOTAL_ASSETS_TR": 0.77, "EQUITY_MULTIPLIER": 8.3}]}}'
+    expect: "confirmed"
+    source: "001309 德明利 20260830 真面板：残差 rel 7.03%（6.49pp）>5% 触发；EM 追随 rel 3.11%=abs 2.87pp（≤5% rel 判追随）——abs 0.25pp 容差下 2.87pp 必误判不追随（裁决④ abs 必错案），rel 单值下 confirmed"
+  - id: g28_caliber_skip_000960
+    gate: G28
+    check: g28_caliber_probe
+    line: '{"sina": {"period": "2026-06-30", "净资产收益率": 7.29, "归属母公司股东的销售净利率": 4.76, "资产周转率(次)": 0.76, "权益乘数": 1.94}}'
+    expect: "skip"
+    source: "000960 北方稀土 20260830 真面板：残差 rel 3.73%（0.27pp）≤5% 无指纹不触发零 EM 调用——abs 0.25pp 容差下 0.27pp 必误触发（边界另一侧），rel 单值下无害路径"
+  - id: g28_caliber_disc_real_001309
+    gate: G28
+    check: g28_caliber_disclosure
+    line: "差异来自年内净资产快速扩张的披露口径混合。杜邦拆解（sina 源，逐字）：净资产收益率 92.24 ｜ 销售净利率 35.58 ｜ 资产周转率 0.77 次 ｜ 权益乘数 3.13——不作乘法闭合断言，解读以单因子为准"
+    expect: "hit"
+    source: "001309 真实分析 L83 摘录（trigger=口径+闭合 × anchor=杜邦/净资产收益率 同行）——合规披露形态锚"
+  - id: g28_caliber_disc_equation_silent
+    gate: G28
+    check: g28_caliber_disclosure
+    line: "ROE 92.24% = 归母净利率 35.58% × 资产周转率 0.77 × 权益乘数 3.13（东财交叉验证 89.37%）"
+    expect: "nhit"
+    source: "000657 模式B 沉默等式形态（预申唯一真翻转的缺口形态）：anchor 全在场但无 口径/反算/闭合 trigger → 检测不命中=须 FAIL 的沉默形态"
