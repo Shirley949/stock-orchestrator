@@ -72,6 +72,14 @@
 
 **验证链**：test_diag_contract 113/113（+3：例句/跨节/宽向三钉）；diff_engine g13 归档 56 对 flips=0（休眠真空注记）；gate_fixture_test 漏报=0 drift=0；run_regression exit 0。
 
+## 2026-09-01 F4b② G29 收窄：危险 surface 同行语境锚（presence 批门 3/4，verdict-affecting，裁决 C）
+
+- **形态**：G29 危险臂旧判定=全文 `re.search(🚨/危险/紧张/风险/爆雷/减值/资金链)` 任一即过——**近真空**：每份报告都有风险节，「估值风险/关税风险」在别节出现即满足资产安全 🚨 的 surface 义务。收窄为 `_contextual_presence(_G29_DANGER_WORDS, anchors=_G29_OBJ_WORDS, forbid=_G69_DISCLOSE_WORDS, scope="line")`；对象词表=货币资金/有息负债/商誉/现金/资金链/资产安全/cash_to_debt（m2 §2.10 flags 句式合同推导，已入 m2，条件 ② 锚表先行）。
+- **预飞前置（G25 教训制度化生效）**：落码前先扫归档 16 个 🚨 对的真实写作形态——14/16 对象词与危险词**真同行**（行级窗口预申经语料实证成立）；2 对 000657 模式B 报告×cache 全量快照配对伪影（glm5.3- 的 section 级命中经逐行检查=L118「status=degraded（cash_to_debt 不可计算）」披露行与别行风险词**节内伪共现**，非真 surface——若当时照搬 G25 先例改 section 窗口反而放走这例）。**逐门实证窗口、不跨门照搬**。
+- **重放**：flips=2（预申兑现，两对均上述配对伪影；旧 True 均系别节风险词假 PASS，新 FAIL 对该配对为正确执法）。消费臂（非 🚨 档字段词）**维持现状显式占行**（裁决 C ①「占行防默认收窄」：字段词即对象词自锚无意义）；降级披露行挂对象词由 forbid 排除（G69 同哲学）。
+
+**验证链**：test_diag_contract 117/117（+4：flags 句式/别节危险词收紧/披露行 forbid/消费臂现状）；diff_engine g29 归档 57 对 flips=2（预申兑现逐条裁决）；gate_fixture_test 漏报=0 drift=0；run_regression exit 0。
+
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
 
 > **算术对账（2026-09-01 收官裁决补）**：22 = 3（WP1a：G7/G8/G9）+ 19（WP1b：词表批 9 = G11/G12/G13/G17/G19/G22/G26/G31/G37 + legacy 批 9 = G1/G6/G14/G15/G16/G21/G34/G35/G36 + **G28 轨1 单列条目**——见下方独立条目，含 10 真实 FAIL 领跑语料与 mixed_caliber 轨2 分离，不靠算术反推完成状态）。

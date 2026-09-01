@@ -1670,6 +1670,13 @@ def check_g28(report: str, data: dict) -> bool:
     return True
 
 
+# 资产安全对象词（G29 语境锚，F4b② presence 批门 3/4）：从 m2 §2.10 flags 句式合同
+# 推导（「商誉占净资产 25%，减值风险大」/「cash_to_debt=0.30，资金链紧张」——对象词与
+# 危险词天然同行）并已入 m2。
+_G29_OBJ_WORDS = ("货币资金", "有息负债", "商誉", "现金", "资金链", "资产安全", "cash_to_debt")
+_G29_DANGER_WORDS = ("🚨", "危险", "紧张", "风险", "爆雷", "减值", "资金链")
+
+
 def check_g29(report: str, data: dict) -> bool:
     """G29: 资产安全完整性 + 危险 surface（computed_metrics.asset_safety）。
 
@@ -1687,9 +1694,28 @@ def check_g29(report: str, data: dict) -> bool:
 
     if has_data:
         if level == "🚨":
-            # 实质：危险判定已下沉，报告必须 surface 危险词（任一即满足；危险词天然覆盖资金链/商誉两端）
-            if not re.search(r"(🚨|危险|紧张|风险|爆雷|减值|资金链)", report):
-                return GateResult(passed=False, reasons=[f"asset_safety level={level}（cash_to_debt<0.5 或商誉超阈）但报告无危险词（🚨/危险/紧张/风险/爆雷/减值/资金链 任一）——机器兜底必须 surface"])
+            # 实质：危险判定已下沉，报告必须 surface 危险词。F4b② 语境锚（2026-09-01
+            # 裁决 C，presence 批门 3/4）：旧全文 re.search 危险词任一即过——「风险」
+            # 在估值/关税等别节出现即满足（近真空：每份报告都有风险节）。收窄=危险词
+            # + 资产安全对象词**同行**共现且行内无披露词（m2 §2.10 flags 句式合同；
+            # 预飞 16 个 🚨 归档对 14 对真同行，2 对 000657=模式B 报告×cache 全量
+            # 快照配对伪影——其自身快照 degraded 如实披露，非真 surface）。
+            # 消费臂（非🚨 档字段词）维持现状：字段词即对象词自锚无意义，不收窄。
+            hit = _contextual_presence(report, _G29_DANGER_WORDS,
+                                       anchors=_G29_OBJ_WORDS,
+                                       forbid=_G69_DISCLOSE_WORDS, scope="line")
+            if hit is None:
+                c2d = am.get("cash_to_debt")
+                fix = ("照抄 flags 句式：『cash_to_debt=0.30，资金链紧张』/"
+                       "『商誉占净资产 25%，减值风险大』（对象词与危险词同行）")
+                return GateResult(passed=False, reasons=[
+                    f"asset_safety level=🚨（cash_to_debt={c2d}，<0.5 或商誉超阈）但报告无"
+                    f"「危险词+资产安全对象词（{'/'.join(_G29_OBJ_WORDS)}）」同行 surface——"
+                    f"别节『估值/关税风险』等危险词不算（跨行拼不算，降级披露行不算）；{fix}"],
+                    diag=_diag("asset_safety_danger_surface",
+                               "level=🚨 → 危险词与资产安全对象词同行（m2 §2.10 flags 句式）",
+                               f"cash_to_debt={c2d}；对象词同行危险 surface 0 处", fix,
+                               "computed_metrics.asset_safety（m2 §2.10）"))
         else:
             # 消费：非危险档，报告须提具体字段词（去掉漏判词 资产负债率/资产负债结构，商誉占比?→商誉）
             if not re.search(r"(货币资金|有息负债|商誉|cash_to_debt)", report):

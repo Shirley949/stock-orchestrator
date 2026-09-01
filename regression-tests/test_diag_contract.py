@@ -1516,6 +1516,44 @@ class TestF4bPresenceBatch(unittest.TestCase):
             "## 二、公司治理\n董事会决策程序规范；营业成本上升压缩毛利。",
             {"holding_status": "成本12.5"}))
 
+    # ---- G29（门 3/4；预飞 16 个 🚨 归档对 14 对真同行，2 对 000657=配对伪影）----
+    _G29_SNAP = {"computed_metrics": {"asset_safety": {
+        "status": "ok", "level": "🚨", "cash_to_debt": 0.30}}}
+
+    def test_g29_flags_sentence_pass(self):
+        # m2 §2.10 flags 句式合同：对象词与危险词同行
+        self.assertTrue(self._v(gd.check_g29,
+            "资产安全体检：cash_to_debt=0.30，资金链紧张；商誉占净资产 25%，减值风险大。",
+            self._G29_SNAP))
+
+    def test_g29_foreign_danger_word_now_fails(self):
+        # 预申翻转形态（近真空收紧）：危险词在别节（估值/关税风险）、对象词在财务节
+        # ——旧全文 re.search 任一危险词即过
+        r = gd.check_g29(
+            "## 七、风险提示\n估值风险偏高，关税是主要风险源。\n\n"
+            "## 二、财务体检\n货币资金 3.2 亿，有息负债 10.7 亿，商誉 0.8 亿。",
+            self._G29_SNAP)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("同行", "".join(r["reasons"]))
+        for k in ("subcheck", "expected", "found", "fix", "src", "degraded"):
+            self.assertIn(k, r["diag"])
+
+    def test_g29_disclosure_row_not_counted(self):
+        # 降级披露行挂对象词+危险词不算 surface（forbid 守卫，G69 同哲学）
+        self.assertFalse(self._v(gd.check_g29,
+            "资产安全 status=degraded（模式 B 未拉取三表，cash_to_debt/商誉不可计算），存在风险。",
+            self._G29_SNAP))
+
+    def test_g29_consume_arm_unchanged(self):
+        # 消费臂维持现状（预申显式）：非 🚨 档字段词全文扫描不收窄（字段词即对象词自锚无意义）
+        snap = {"computed_metrics": {"asset_safety": {"status": "ok", "level": "⚠️"}}}
+        self.assertTrue(self._v(gd.check_g29, "商誉很低，资产干净。", snap))
+        r = gd.check_g29("盈利能力稳定。", snap)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("字段词", "".join(r["reasons"]))
+
     def test_g25_bare_word_no_src_now_fails(self):
         # 旧臂 1 只要「事件」词任意处在即过（high=0+medium>0 时不查 src）——纯词散落
         snap = {"s5_events": {"data": {"news": {
