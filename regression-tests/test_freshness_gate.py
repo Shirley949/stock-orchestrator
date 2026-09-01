@@ -259,42 +259,42 @@ class TestG39Classification(unittest.TestCase):
         """#2 周期股 forbidden=PE做主要 → 须引 PB/EV-EBITDA/股息率（非只 PE）。"""
         c = _cls("周期股", forbidden_metric="PE做主要", macro_sensitivity="high")
         # 引 PB → PASS（含类型词+PPI）
-        self.assertTrue(gd.check_g39("周期股 PB 1.2倍，PPI -2%", c))
+        self.assertTrue(gd.check_g39("标的属周期股，PB 1.2倍，PPI -2%", c))
         # 只引 PE 不引推荐框架 → FAIL
-        self.assertFalse(gd.check_g39("周期股 PE 15倍，PPI -2%", c))
+        self.assertFalse(gd.check_g39("标的属周期股，PE 15倍，PPI -2%", c))
 
     def test_check2_valuation_framework_growth(self):
         """#2 成长股 forbidden=PB做主要 → 须引 PS/PEG/DCF。"""
         c = _cls("成长股", forbidden_metric="PB做主要", macro_sensitivity="medium")
         # 成长 macro=medium → #3 不触发；引 PS → PASS
-        self.assertTrue(gd.check_g39("成长股 PS 8倍，高增长", c))
+        self.assertTrue(gd.check_g39("标的属成长股，PS 8倍，高增长", c))
         # 只引 PB → FAIL
-        self.assertFalse(gd.check_g39("成长股 PB 3倍，高增长", c))
+        self.assertFalse(gd.check_g39("标的属成长股，PB 3倍，高增长", c))
 
     def test_check2_mixed(self):
         """#2 混合型 is_mixed → 须引 PS/远期PE（混合框架词）。"""
         c = _cls("成长股", is_mixed=True, secondary_type="周期股",
                  forbidden_metric="PB做主要", macro_sensitivity="high", preferred_macro="PPI")
         # 引 远期PE + PPI → PASS（类型词"成长"在）
-        self.assertTrue(gd.check_g39("成长+周期混合，远期PE 25倍，PPI -2%", c))
+        self.assertTrue(gd.check_g39("标的属成长+周期混合，远期PE 25倍，PPI -2%", c))
         # 只引 PB → FAIL（#2 框架）
-        self.assertFalse(gd.check_g39("成长混合 PB 3倍，PPI -2%", c))
+        self.assertFalse(gd.check_g39("标的属成长混合，PB 3倍，PPI -2%", c))
 
     def test_check2_skipped_when_no_forbidden(self):
         """#2 消费/防御 forbidden=None → 跳过框架查（无硬禁）。"""
         consume = _cls("消费股", macro_sensitivity="low")  # forbidden=None, macro=low
         # 消费股无框架要求、无宏观要求 → 任意（含类型词即可）
-        self.assertTrue(gd.check_g39("消费股 茅台酒营收增长", consume))
+        self.assertTrue(gd.check_g39("标的属消费股，茅台酒营收增长", consume))
         defend = _cls("防御股", macro_sensitivity="low")
-        self.assertTrue(gd.check_g39("防御股 高股息现金流稳定", defend))
+        self.assertTrue(gd.check_g39("标的属防御股，高股息现金流稳定", defend))
 
     def test_check3_macro_citation(self):
         """#3 macro_sensitivity==high（周期/金融/混合）→ 须引 ≥1 宏观。"""
         c = _cls("金融股", forbidden_metric="PE做主要", macro_sensitivity="high", preferred_macro="M2")
         # 引 PB(框架) + M2(宏观) → PASS
-        self.assertTrue(gd.check_g39("金融股 PB 1.5倍，不良率 1.2%，M2 同比+8%", c))
+        self.assertTrue(gd.check_g39("标的属金融股，PB 1.5倍，不良率 1.2%，M2 同比+8%", c))
         # 缺宏观 → FAIL（#3 反片面）
-        self.assertFalse(gd.check_g39("金融股 PB 1.5倍，不良率 1.2%，业绩稳健", c))
+        self.assertFalse(gd.check_g39("标的属金融股，PB 1.5倍，不良率 1.2%，业绩稳健", c))
 
     def test_realcase_301217_mixed(self):
         """301217 铜冠铜箔（成长→混合）真实 classification：须引 PS/远期PE + PPI。"""
@@ -303,7 +303,7 @@ class TestG39Classification(unittest.TestCase):
                                 "valuation_framework": "PS/远期PE", "forbidden_metric": "PB做主要"}}
         self.assertTrue(gd.check_g39("标的属成长+周期混合股，远期PE 30倍，PPI 当月同比-2.3%", c))
         # 缺宏观 → FAIL
-        self.assertFalse(gd.check_g39("成长混合股，远期PE 30倍，PCB铜箔放量", c))
+        self.assertFalse(gd.check_g39("标的属成长混合股，远期PE 30倍，PCB铜箔放量", c))
 
 
 if __name__ == "__main__":

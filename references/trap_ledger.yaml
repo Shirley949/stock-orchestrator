@@ -341,6 +341,17 @@ entries:
     root_cause: engine
     blocked: false
     fix: "危险 surface 改语境锚同行共现+披露守卫（_contextual_presence scope=line，presence 批门 3/4）：旧全文 re.search 危险词（🚨/危险/紧张/风险/爆雷/减值/资金链）任一即过——近真空（每份报告都有风险节，「估值/关税风险」即可满足资产安全危险 surface）。收窄=危险词+资产安全对象词（货币资金/有息负债/商誉/现金/资金链/资产安全/cash_to_debt）**同行**且行内无披露词（m2 §2.10 flags 句式合同「cash_to_debt=0.30，资金链紧张」，已入 m2）。预飞 16 个 🚨 归档对 14 对真同行（行级窗口预申经语料实证成立，G25 教训前置预飞奏效）；重放 flips=2 全=000657 两模式B 报告×cache 全量快照配对伪影（其自身快照 degraded 如实披露「cash_to_debt 不可计算」，旧 True 系别节风险词假 PASS）。消费臂维持现状显式占行（字段词即对象词自锚无意义）；降级披露行挂对象词由 forbid 守卫排除"
+  - signature: G39#type_sentence:morpheme_leak
+    gate: G39
+    subcheck: type_sentence_context
+    reason_class: morpheme_leak
+    match: "类型结论未落语境"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "#1 类型词改语境锚同行共现（_contextual_presence scope=line，presence 批门 4/4）：旧 `core not in report` 全文裸词根扫描——词根（周期/成长）泄漏面极广：「多周期共振/周期状态表」（技术面）、「成长性/成长风格」（质量维度/市场语境）、「gap：成长性未拉取」（披露行）皆假 PASS；预飞 54 活跃对 16 对旧判全靠词根散落（15/16 全词「成长股/周期股」压根未出现，1/16 全词仅在「高位成长股有牵制」市场语境行）。收窄=类型词（primary 全词+词根混合触发）+分类陈述词（属/框架/类型/分类/classification，m1 开篇句合同+688502 语料变体「本文按成长股框架分析」推导，已入 m1）**同行**。重放 verdict flips=0（16 对子检查收紧全落在既有 #2/#3 FAIL 之下——模式B 报告本就缺框架词，G39 不在其生产 gate 集）；保护面=「框架词在场但类型句靠词根」的假形态。#2 框架词/#3 宏观词维持现状显式占行：触发词自锚（PB/PS/PPI 本身即语境），否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL"
   - signature: G25#news_consumption:crossline_join
     gate: G25
     subcheck: news_consumption

@@ -80,6 +80,17 @@
 
 **验证链**：test_diag_contract 117/117（+4：flags 句式/别节危险词收紧/披露行 forbid/消费臂现状）；diff_engine g29 归档 57 对 flips=2（预申兑现逐条裁决）；gate_fixture_test 漏报=0 drift=0；run_regression exit 0。
 
+## 2026-09-01 F4b② G39#1 收窄：类型句同行语境锚（presence 批门 4/4，verdict-affecting，裁决 C）——**presence 批收官**
+
+- **形态**：G39#1 旧判定=`core not in report` 全文裸词根扫描——词根（周期/成长）泄漏面极广：「多周期共振/周期状态表」（技术面）、「成长性/成长风格/高位成长股牵制」（质量维度/市场语境）、「gap：成长性未拉取」（披露行）皆假 PASS。收窄为 `_contextual_presence((primary, core), anchors=_G39_TYPE_ANCHORS, scope="line")`；分类陈述词表=属/框架/类型/分类/classification（m1 开篇句合同 + 688502 语料实锤变体「本文按成长股框架分析（classification 置信度 0.95）」推导，已入 m1，条件 ② 锚表先行）。
+- **预飞否决了初版锚表**：预申锚表（属/类型/分类）漏「框架」——688502 的合规句式即 miss；预飞后补「框架/classification」两锚并换全词触发。**G25/G29 两门教训（先预飞后落码）第三次生效。**
+- **重放 verdict flips=0**（预飞预测 16 对子检查翻转，全部落在既有 #2/#3 FAIL 之下——模式B 报告本就缺框架词，且 G39 不在其生产 gate 集）：verdict 稳定 + #1 漏洞闭合，保护面=「框架词在场但类型句靠词根」的假形态。#1 reason 升级 diag 六键（全词计数+照抄 m1 骨架含混合型/估值框架）。
+- **#2 框架词/#3 宏观词维持现状显式占行**（裁决 C ①）：触发词自锚（PB/PS/PEG/PPI/M2 本身即语境，只在估值/宏观讨论出现），否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL；单测钉原语义（否定句过/#2 缺词 FAIL/#3 缺宏观 FAIL）。
+- **基线刷新（test_freshness_gate.py，11 处）**：TestG39Classification 的 #2/#3 最小夹具（「周期股 PB 1.2倍」形）在新 #1 臂下先行 FAIL——**正反两分支同补分类陈述词（属）**，保持各测试对自身臂（#2 框架词/#3 宏观）的判别力，防止「断言碰巧过但臂已漂移」的假验证（规则 4：有意行为变更→外科式刷新基线，禁回退修复换绿）。
+- **presence 批四门全落地**：G25（section）/G13（section，休眠门）/G29 危险臂（line+forbid）/G39#1（line）——共享 `_contextual_presence` 单一实现，逐门独立 commit；G47 负收益豁免已占行（trap_ledger F4b② 节注释）。
+
+**验证链**：test_diag_contract 122/122（+5：合同句/语料变体/词根收紧/混合型/#2#3 现状）；diff_engine g39 归档 57 对 verdict flips=0（16 子检查收紧逐条裁决如上）；gate_fixture_test 漏报=0 drift=0；run_regression exit 0。
+
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
 
 > **算术对账（2026-09-01 收官裁决补）**：22 = 3（WP1a：G7/G8/G9）+ 19（WP1b：词表批 9 = G11/G12/G13/G17/G19/G22/G26/G31/G37 + legacy 批 9 = G1/G6/G14/G15/G16/G21/G34/G35/G36 + **G28 轨1 单列条目**——见下方独立条目，含 10 真实 FAIL 领跑语料与 mixed_caliber 轨2 分离，不靠算术反推完成状态）。

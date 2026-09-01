@@ -2556,6 +2556,10 @@ _G39_TYPE_CORE = {
     "周期股": "周期", "成长股": "成长", "消费股": "消费",
     "金融股": "金融", "防御股": "防御", "多元化控股": "多元化",
 }
+# 分类陈述词（G39#1 语境锚，F4b② presence 批门 4/4）：从 m1 开篇句合同
+# 「标的属 {primary_type}…{valuation_framework} 估值框架 [src: snapshot.classification]」
+# 及语料变体「本文按 {type} 框架分析（classification 置信度…）」推导，已入 m1。
+_G39_TYPE_ANCHORS = ("属", "框架", "类型", "分类", "classification")
 # valuation_framework 推荐词（forbidden_metric 间接执法：不引推荐框架 ≈ 误用 forbidden 指标做主要）
 _G39_FW_KW = {
     "周期股": ("PB", "EV/EBITDA", "EV-EBITDA", "股息率", "市净率"),
@@ -2587,10 +2591,30 @@ def check_g39(report: str, data: dict) -> bool:
     if not primary:
         return True   # 分类不可得（LLM 兜底），不强执法
 
-    # #1 类型词
+    # #1 类型词。F4b② 语境锚（2026-09-01 裁决 C，presence 批门 4/4）：旧 `core not in report`
+    # 全文裸词根扫描——词根（周期/成长）泄漏面极广：「多周期共振/周期状态表」（技术面）、
+    # 「成长性/成长风格」（质量维度/市场语境）、「gap：成长性未拉取」（披露行）皆可假 PASS，
+    # 预飞 54 活跃对 16 对旧判全靠词根散落（15/16 全词「成长股/周期股」压根未出现）。
+    # 收窄=类型词+分类陈述词（_G39_TYPE_ANCHORS）**同行**（m1 开篇句合同句式天然满足）。
+    # #2 框架词/#3 宏观词维持现状（预申显式占行）：触发词自锚——PB/PS/PEG/PPI/M2 本身
+    # 即语境（只在估值/宏观讨论出现），否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL。
     core = _G39_TYPE_CORE.get(primary)
-    if core and core not in report:
-        return GateResult(passed=False, reasons=[f"primary_type={primary} 类型词「{core}」未出现在报告——m1 类型结论须与分类器一致"])
+    if core and _contextual_presence(report, (primary, core),
+                                    anchors=_G39_TYPE_ANCHORS, scope="line") is None:
+        n_full = report.count(primary)
+        mix = f"+{cls['secondary_type']} 混合" if cls.get("is_mixed") else ""
+        fw = cls.get("valuation_framework") or ""
+        fix = (f"照抄 m1 开篇骨架：『标的属 {primary}{mix}，{fw} 估值框架』[src: snapshot.classification]"
+               if fw else
+               f"照抄 m1 开篇骨架：『标的属 {primary}{mix}』[src: snapshot.classification]")
+        return GateResult(passed=False, reasons=[
+            f"primary_type={primary} 类型结论未落语境：全词「{primary}」全文 {n_full} 处、"
+            f"词根「{core}」与分类陈述词（{'/'.join(_G39_TYPE_ANCHORS)}）同行 0 处——"
+            f"「多周期共振/成长性」等技术面/维度词根不算类型结论（跨行拼不算）；{fix}"],
+            diag=_diag("type_sentence_context",
+                       f"类型词与分类陈述词同行（m1 开篇句「标的属 {primary}…」）",
+                       f"全词「{primary}」{n_full} 处；分类陈述词同行 0 处", fix,
+                       "snapshot.classification（m1 单一真相源）"))
 
     # #2 估值框架（forbidden_metric 间接执法）
     forbidden = cls.get("forbidden_metric")

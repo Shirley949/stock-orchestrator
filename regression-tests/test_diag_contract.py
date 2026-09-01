@@ -1554,6 +1554,59 @@ class TestF4bPresenceBatch(unittest.TestCase):
         self.assertFalse(r["passed"])
         self.assertIn("字段词", "".join(r["reasons"]))
 
+    # ---- G39（门 4/4；预飞 54 活跃对：#1 词根泄漏 16 对旧判全靠散落词根，
+    #      15/16 全词压根未出现；#2/#3 维持现状显式占行）----
+    _G39_SNAP = {"classification": {
+        "primary_type": "成长股", "valuation_framework": "PS",
+        "forbidden_metric": "PB", "macro_sensitivity": "medium"}}
+    _G39_CYC_SNAP = {"classification": {
+        "primary_type": "周期股", "valuation_framework": "PB",
+        "forbidden_metric": "PE", "macro_sensitivity": "high"}}
+
+    def test_g39_contract_sentence_pass(self):
+        self.assertTrue(self._v(gd.check_g39,
+            "标的属周期股，PB 估值框架（股息率辅助）[src: snapshot.classification]；"
+            "PPI 同比回落利好成本端。", self._G39_CYC_SNAP))
+
+    def test_g39_corpus_variant_sentence_pass(self):
+        # 语料实锤变体（688502）：「本文按成长股框架分析（classification 置信度…）」
+        self.assertTrue(self._v(gd.check_g39,
+            "本文按成长股框架分析（classification 置信度 0.95）：PS 估值为主。", self._G39_SNAP))
+
+    def test_g39_morpheme_leak_now_fails(self):
+        # 预申收紧形态：词根散落（技术面多周期/gap 行成长性）+ 框架词在场——
+        # 旧 `core in report` 全文扫描即过 #1
+        r = gd.check_g39(
+            "## 三、技术面\n多周期共振与方向预测；周期状态表显示 RSI 中性。\n\n"
+            "## 估值\nPS 估值为主（PB 不作主要锚）。", self._G39_SNAP)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("类型结论", "".join(r["reasons"]))
+        for k in ("subcheck", "expected", "found", "fix", "src", "degraded"):
+            self.assertIn(k, r["diag"])
+
+    def test_g39_mixed_type_sentence_pass(self):
+        snap = {"classification": {
+            "primary_type": "周期股", "is_mixed": True, "secondary_type": "成长股",
+            "valuation_framework": "PS", "forbidden_metric": "PE",
+            "macro_sensitivity": "high"}}
+        self.assertTrue(self._v(gd.check_g39,
+            "标的属周期股+成长股混合，PS 估值；PPI 回落。", snap))
+
+    def test_g39_fw_macro_arms_unchanged(self):
+        # #2/#3 维持现状占行（裁决 C ①）：否定句「PB 不作主要锚」是合法内容，
+        # 框架词/宏观词自锚不加语境锚——本测试钉 #2 缺框架词 FAIL / #3 缺宏观 FAIL 原语义
+        snap2 = {"classification": {
+            "primary_type": "消费股", "macro_sensitivity": "medium"}}  # forbidden=None → 跳过#2
+        self.assertTrue(self._v(gd.check_g39, "标的属消费股，估值合理。", snap2))
+        snap3 = {"classification": {
+            "primary_type": "周期股", "valuation_framework": "PB",
+            "forbidden_metric": "PE", "macro_sensitivity": "high"}}
+        r = gd.check_g39("标的属周期股，PB 估值。", snap3)  # #3 macro 缺
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("宏观", "".join(r["reasons"]))
+
     def test_g25_bare_word_no_src_now_fails(self):
         # 旧臂 1 只要「事件」词任意处在即过（high=0+medium>0 时不查 src）——纯词散落
         snap = {"s5_events": {"data": {"news": {

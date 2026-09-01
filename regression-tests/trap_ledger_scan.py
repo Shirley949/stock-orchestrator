@@ -240,6 +240,8 @@ def main() -> int:
                     help="现场验收簿记（cron 收尾跑）：窗口/暴露/关闭/warn 翻转自动落账并写回")
     ap.add_argument("--propose", action="store_true",
                     help="半自动化入账（pending #5）：unclassified 按 gate×reasons 聚簇出签名提案草稿，人判后入 ledger")
+    ap.add_argument("--inspect", action="store_true",
+                    help="只读模式（审计专用）：--field-acceptance 只打印不写回——簿记写回仅限 cron 运行态")
     args = ap.parse_args()
 
     # 晋级欠账（裁决⑤ 2026-08-31）：root_cause=engine 未修存量——与扫哪个 root 无关，
@@ -262,8 +264,11 @@ def main() -> int:
     if args.field_acceptance:
         for ln in field_acceptance(root, ledger, state):
             print(ln)
-        save_acceptance(state, args.acceptance)
-        print(f"📝 验收簿记已写回: {args.acceptance or 'repo references/trap_ledger_acceptance.yaml'}")
+        if args.inspect:
+            print("🔍 --inspect 只读：簿记未写回（写回仅限 cron 运行态，审计跑数一律带 --inspect）")
+        else:
+            save_acceptance(state, args.acceptance)
+            print(f"📝 验收簿记已写回: {args.acceptance or 'repo references/trap_ledger_acceptance.yaml'}")
 
     print(f"扫描 {root}（{len(list(root.glob('**/*.verified.json')))} 份 sidecar，"
           f"{len(ledger)} 条 ledger）")
