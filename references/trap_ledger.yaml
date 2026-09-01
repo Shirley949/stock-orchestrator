@@ -304,3 +304,14 @@ entries:
     root_cause: engine
     blocked: false
     fix: "量价数值对拍挂语境锚（量比|成交|倍数|放量|缩量|换手|量能|量价|5日|20日|周成交 同行）：旧 `_nums_in(report)` 全文对拍——归档实锤 4 票假 PASS 全为异语境撞数（fib 回撤 0.786 vs vol_ratio 0.817、TD9 均值 -1.02 vs 1.048、EPS/股息行撞数）。4 票翻转已逐条裁决=预期收紧非误伤（报告须把量比/成交倍数写进量价语境行）；G49/G16 零翻转"
+  - signature: G69#dim_consumption:crossline_join
+    gate: G69
+    subcheck: dim_consumption
+    reason_class: crossline_join
+    match: "同行"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "消费判定改同行共现+否定披露守卫（F4b① 裁决 B landed，_contextual_presence forbid 首用）：旧『src_token in report AND 维度词 in report』两独立全文条件可跨行拼「消费」——降级披露行如实挂 [src:] 反被计入维度（R7 观察档实证，8-27 暂缓、9-01 回读 m37 四维表合同=行级意图后落码）。披露词表（未消费/未拉取/降级/不可得）从 m37 披露措辞合同推导并已入 m37；暴露计数（守卫命中维度）进 diag.found；值对拍缺口登记 pending #10；归档 56 对 0 翻转=预申③兑现；watch 探针 True 不变仅注记更新（预申①）"

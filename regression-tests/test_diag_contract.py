@@ -1346,5 +1346,87 @@ class TestF4aScopeNarrow(unittest.TestCase):
             "量价：5日量比 2.3；amplified=false", self._G67_SNAP)
         self.assertIn("amplified", r)
 
+
+class TestF4bG69Narrow(unittest.TestCase):
+    """F4b① G69 收窄（2026-09-01 裁决 B，F4a 待遇）：消费=维度词+src_token 同行 且
+    行内无披露词（_contextual_presence forbid 首用；词表从 m37 披露措辞合同推导）。
+
+    pre-declare 对账（裁决 B 条件 3 三件套）：
+      ① 探针判决保持 True（3 真消费 + 1 披露行，need=3）——仅注记更新；
+      ② 真实翻转形态=2 真+1 假票（披露行挂 [src:] 被计入）旧 PASS→FAIL；
+      ③ 跨行拼「消费」票（src 与维度词分散两行）旧 PASS→FAIL。
+    """
+
+    _SNAP = {"mode": "B",
+             "s3_fund_flow": {"data": {"fund_flow": {"status": "ok", "net_flow": -0.5}}},
+             "s_margin": {"data": {"status": "ok", "finance_value_yi": 3.2}},
+             "valuation_snapshot": {"data": {"valuation_percentile":
+                 {"status": "ok", "pe_ttm": {"pct_5y": 50}}}},
+             "s4_technical": {"data": {"chip": {"status": "ok", "chipProfitRate": 0.6}}}}
+
+    def _v(self, rpt):
+        r = gd.check_g69(rpt, self._SNAP)
+        return bool(r.get("passed")) if isinstance(r, dict) else bool(r)
+
+    def test_honest_full_consumption_pass(self):
+        self.assertTrue(self._v(
+            "| 当日资金流 | 主力净流出 [src: snapshot.s3_fund_flow.data.fund_flow] |\n"
+            "| 融资杠杆 | 余额 3.2 亿 [src: snapshot.s_margin.data] |\n"
+            "| 估值分位 | pe pct_5y 50 [src: snapshot.valuation_snapshot.data.valuation_percentile] |\n"
+            "| 获利盘 | 获利 60% [src: snapshot.s4_technical.data.chip] |"))
+
+    def test_crossline_join_now_fails(self):
+        # pre-declare ③：src 与维度词分散两行，旧两独立全文条件可拼出「消费」
+        self.assertFalse(self._v(
+            "杠杆资金温和 [src: snapshot.s_margin.data]。\n"
+            "估值不贵 [src: snapshot.valuation_snapshot.data.valuation_percentile]。\n"
+            "另节提到主力动向与获利情况、资金流（叙述，无 src）。"))
+
+    def test_disclosure_line_not_counted_2true_1fake(self):
+        # pre-declare ②（真实翻转形态）：披露行挂 [src:] 旧被计入 → 旧 PASS 现 FAIL
+        r = gd.check_g69(
+            "| 当日资金流 | 数据降级如实披露 [src: snapshot.s3_fund_flow.data.fund_flow]（本维未消费）|\n"
+            "| 融资杠杆 | 余额 3.2 亿 [src: snapshot.s_margin.data] |\n"
+            "| 估值分位 | pe pct_5y 50 [src: snapshot.valuation_snapshot.data.valuation_percentile] |",
+            self._SNAP)
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("不计入", "".join(r["reasons"]))
+        self.assertIn("披露行不计入", r["diag"]["found"])
+        self.assertIn("2/3", r["diag"]["found"])
+        for k in ("subcheck", "expected", "found", "fix", "src", "degraded"):
+            self.assertIn(k, r["diag"])
+
+    def test_three_true_one_disclosure_pass(self):
+        # pre-declare ①（REAL_WATCH G69 探针语义）：3 真消费 + 1 披露行 → True 不变
+        self.assertTrue(self._v(
+            "| 当日资金流 | 数据降级如实披露 [src: snapshot.s3_fund_flow.data.fund_flow]（本维未消费）|\n"
+            "| 融资杠杆 | 余额 3.2 亿 [src: snapshot.s_margin.data] |\n"
+            "| 估值分位 | pe pct_5y 50 [src: snapshot.valuation_snapshot.data.valuation_percentile] |\n"
+            "| 获利盘 | 获利 60% [src: snapshot.s4_technical.data.chip] |"))
+
+    def test_degraded_dim_shrinks_denominator(self):
+        snap = dict(self._SNAP)
+        snap["s4_technical"] = {"data": {"chip": {"status": "failed"}}}
+        snap["valuation_snapshot"] = {"data": {}}  # 估值维缺席 → 分母=2
+        r = gd.check_g69(
+            "| 当日资金流 | 主力净流出 [src: snapshot.s3_fund_flow.data.fund_flow] |\n"
+            "| 融资杠杆 | 余额 3.2 亿 [src: snapshot.s_margin.data] |", snap)
+        self.assertTrue(bool(r.get("passed")) if isinstance(r, dict) else bool(r))
+
+    def test_contextual_presence_scope_contract(self):
+        # 共享 API 三 scope 语义钉死（presence 批消费同一实现，裁决 B：一次设计到位）
+        rpt = "## 节A\n持仓 30%。\n- 决策：维持不动。\n## 节B\n行业政策讨论。"
+        self.assertIsNotNone(gd._contextual_presence(  # section：同节跨行合法（002138 型）
+            rpt, ("决策",), anchors=("持仓", "仓位"), scope="section"))
+        self.assertIsNone(gd._contextual_presence(  # line：跨行不命中
+            rpt, ("决策",), anchors=("持仓", "仓位"), scope="line"))
+        self.assertIsNone(gd._contextual_presence(  # forbid：披露单元被否决
+            "主力净流出 [src: x]（本维未消费）", ("主力",), anchors=("src",),
+            forbid=("未消费",)))
+        self.assertIsNotNone(gd._contextual_presence(  # 干净行正常命中
+            "主力净流出 [src: x]", ("主力",), anchors=("src",),
+            forbid=("未消费",), scope="line"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

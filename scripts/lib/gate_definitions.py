@@ -4077,9 +4077,60 @@ def check_g68(report: str, data: dict) -> bool:
     return True
 
 
+def _units_of(report: str, scope: str):
+    """语境锚作用域单元切分（F4b 共享地基，2026-09-01 裁决 B/C）。
+
+    scope 三选一（逐门显式预申，禁默认）：
+      line     = 同行（m37 四维表合同：词/值/src 同表格行）
+      sentence = 片段（G48 R5 切法：句号/分号/换行/表格竖线，逗号不切）
+      section  = 标题分块（每块=标题行起至下一标题行止，任意级；preamble 自成块——
+                 G16 002138 教训：合法消费会跨行散在节内正文）
+    """
+    if scope == "line":
+        return report.split("\n")
+    if scope == "sentence":
+        return re.split(r"[|。；;\n]", report)
+    if scope == "section":
+        blocks, cur = [], []
+        for ln in report.split("\n"):
+            if re.match(r"^#{1,6}\s", ln):
+                if cur:
+                    blocks.append("\n".join(cur))
+                cur = [ln]
+            else:
+                cur.append(ln)
+        if cur:
+            blocks.append("\n".join(cur))
+        return blocks
+    raise ValueError(f"unknown scope: {scope}")
+
+
+def _contextual_presence(report, triggers, anchors=(), forbid=(), scope="line"):
+    """语境锚 presence（F4b 单一实现，G69 forbid 首用；presence 批 G25/G13/G29/G39 消费同一 API）。
+
+    语义：任一 trigger 词与任一 anchor 词须在**同一作用域单元**共现，且该单元不含 forbid 词
+    （forbid=否定披露守卫：如实挂 [src:] 的降级披露行不算消费——G30#5 否定语义同哲学）。
+    返回首个命中单元原文（供 reason 摘录）；未命中返回 None。纯函数。
+    """
+    for unit in _units_of(report, scope):
+        if any(f in unit for f in forbid):
+            continue
+        if any(t in unit for t in triggers) and any(a in unit for a in anchors):
+            return unit
+    return None
+
+
+# 披露词（G69 否定守卫）：从 m37 披露措辞合同推导（「如实写降级」「如实标注」「本维未消费」）
+_G69_DISCLOSE_WORDS = ("未消费", "未拉取", "降级", "不可得")
+
+
 def check_g69(report: str, data: dict) -> bool:
     """G69: 筹码/资金结构 ≥3 维 [src:] 消费（四维：资金流/融资/估值分位/获利盘）。SOFT(weight1)。
-    真相源：s3_fund_flow / s_margin / valuation_snapshot.valuation_percentile / s4 chip。"""
+    真相源：s3_fund_flow / s_margin / valuation_snapshot.valuation_percentile / s4 chip。
+    F4b① 收窄（2026-09-01 裁决 B 落码，F4a 待遇）：消费=维度词+src_token **同行**共现且
+    行内无披露词（_contextual_presence forbid）——旧实现两独立全文条件可跨行拼「消费」
+    （降级披露行如实挂 [src:] 反被计入维度；R7 观察档实证，8-27 暂缓、9-01 回读 m37
+    四维表合同=行级意图后落码）。m37 合同的「值对拍」**未执法**（登记 pending + m37 注记）。"""
     if not _b_gate_active(data):
         return True
     dims = [
@@ -4088,18 +4139,34 @@ def check_g69(report: str, data: dict) -> bool:
         ("valuation_snapshot.data.valuation_percentile", ("估值分位", "分位"), "valuation_snapshot"),
         ("s4_technical.data.chip", ("获利", "筹码", "平均成本"), "s4_technical"),
     ]
-    ok_dims, consumed = [], []
+    ok_dims, consumed, negated = [], [], []
     for path, kws, src_token in dims:
         if not _scene_has_data(_snapshot_get(data, path)):
             continue  # 缺席/failed 维不计分母（如实降级不算消费失败）
         ok_dims.append(path)
-        if (src_token in report) and any(k in report for k in kws):
+        hit = _contextual_presence(report, kws, anchors=(src_token,),
+                                   forbid=_G69_DISCLOSE_WORDS, scope="line")
+        if hit is not None:
             consumed.append(path)
+        elif any(src_token in ln and any(k in ln for k in kws)
+                 for ln in report.split("\n")):
+            negated.append(path)  # 同行共现存在但全被披露词否决（暴露计数：守卫命中）
     need = min(3, len(ok_dims))
     if len(consumed) < need:
         miss = [d for d in ok_dims if d not in consumed]
+        fix = ("照抄骨架（m37 四维表行，词/值/src 同行）："
+               "| 当日资金流 | 净额+趋势 | [src: snapshot.s3_fund_flow.data.fund_flow] |；"
+               "| 融资杠杆 | 余额+环比 | [src: snapshot.s_margin.data] |")
+        neg_note = (f"{negated} 仅为披露行（挂 [src:] 但行内含 未消费/降级 等披露词，不计入）；"
+                    if negated else "")
         return GateResult(passed=False, reasons=[
-            f"筹码/资金结构消费不足：{miss} 有数据未消费（四维须 ≥{need} 维 [src:] 锚 + 维度关键词）"])
+            f"筹码/资金结构消费不足：{miss} 有数据未消费（已真实消费 {len(consumed)}/{need} 维）——"
+            f"维度词+src 锚须**同行**（跨行拼不算）；{neg_note}{fix}"],
+            diag={"subcheck": "dim_consumption",
+                  "expected": f"≥{need} 维：维度词+src_token 同行且行内无披露词（未消费/未拉取/降级/不可得）",
+                  "found": f"{len(consumed)}/{need} 维真实消费"
+                           + (f"；披露行不计入：{negated}" if negated else ""),
+                  "fix": fix, "src": "m37 四维表输出合同（词/值/src 同行）", "degraded": False})
     return True
 
 

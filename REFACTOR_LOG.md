@@ -13,6 +13,7 @@
 | 7 | **WP-M memory 结构审计**（2026-09-01 复核改判据：**结构病优先，尺寸只是代理**——达标即结项不追 KB） | 2026-09-01 | 结构审计三条：① memory 内确定性合同=0（合同唯一真相源在 code/repo，memory 只存跨票根因——发现即迁出）② 未裁决矛盾对=0（两份 memory 对同一 gate/机制记载冲突）③ 索引 gate 号覆盖率达标（族文件 description 含最锋利 gate 号，见 memory-writing-conventions）。基线证据（2026-09-01 实测）：MEMORY.md 6.4KB/body 50 份 154KB；**8-31 治理批重写 42/51 份（mtime 实证）**——裁决引数 21KB/156 无实体对应（全库唯一 memory 目录 51 份 .md，156 应为治理前旧计数对象，无从复现），基线以实测为准 | ✅ 2026-09-01 结项（三条全达标，未追 KB）：①确定性合同=0——3 组「memory 唯一 home」API 合同迁 routing references（东财杜邦 fallback 端点/indicator 布局/baidu 估值衍生链/qt.gtimg 下标，live 247a6aa + 父仓库指针 8741df3），其余机器数字属设计记录（事实本体在引擎+REFACTOR_LOG，memory 只余 why）；②矛盾对=0——4 对交叉记载全以引擎实证裁决（g30 bool 契约过时论断改写/newlisted G21 workaround 标过时/p9 description 状态矛盾修复/staleness-120 与事件豁免判互补），零待裁决；③覆盖率 31/34，3 缺口合法豁免（工作纪律类 G 号仅举例，强制加号违「禁无语境堆砌」规约）。附带：memory 悬链 4→0、19 文件+索引 17 行补锋利 gate 号、行号引用改函数名防漂移；主会话独立复验（回归 exit 0/指针推送/矛盾修复与引擎一致/零悬链）后收口 |
 | 8 | **G28 双轨**（延后≠登记，2026-09-01 补登记——防 8-30 capstone 劫持同剧本游离） | 2026-09-01 | **轨1 reason-only**：收编 WP1b（10 真实 FAIL 实例领跑 lossy 语料；reason 带闭合差值+「混装形态下本 FAIL 不代表提取错误」提示；FAIL 仍 FAIL，verdict 政策无关）。**轨2 mixed_caliber 政策**：单列 verdict-affecting 批**待用户拍板**（软化与否；2027 中报季前须有结论，否则 7 只闭合 FAIL 股处置仍是「路径 a 靠自觉披露」） | ⏳ 轨1 已并入 #2；轨2 待拍板 |
 | 9 | **测试清册批次**（清理是小批次非顺手 rm；时机=WP1b 落地后一次清） | 2026-09-01 | 四层清册：① 永久层**永不清**（trap_corpus+TestTrapCorpus+test_diag_contract 全家+每批行为测试+gate_fixture_test+test_archive_replay+run_regression.sh）② 升格层 脚本→命名工具（diff_engine ✅已升格 2026-09-01）③ 归档层 工作区清除（批2 淘汰原型/研究电池/plan 文件——结论已沉淀 REFACTOR_LOG，manifest 记一行）④ 即删层 /tmp 临时物。闸：grep 全库引用确认无 load-bearing 依赖 → 回归 exit 0 → 单提交 → manifest 更新 | ✅ 2026-09-01 执行（WP1b 落地后）：即删层清 /tmp/gd_wp1{,b_old,b2_old} 三引擎副本（零悬挂引用；差分结论 49/51/53 对已录三条目；重建法=diff_engine docstring 一行 git show）；归档层盘点**零删除**——cleanup_stale_cache.sh load-bearing（routing REFACTOR_LOG 白名单+test_full_archive 语义）、_research/b2_prototype.py 保级待批2（F4 留位）；升格层 diff_engine 已入 scripts/。永久层未动 |
+| 10 | **G69 值对拍缺口**（m37 合同写了「[src:] 锚 + 值对拍」，引擎只执法同行共现+披露守卫，值口径不查） | 2026-09-01 | **设计会标记 + 低优先级**：四维值形态异构（净额/余额亿/分位 %/获利比例），值对拍须逐维定义提取式与容差；落地判据=逐维两极用例+归档重放零误伤。m37 已加执法状态注记（合同-引擎差距显性化，勿依赖引擎兜底值口径） | ⏳ 登记（裁决 B 条件 1：值对拍缺口不许沉默丢弃——「合同写了、引擎不查、写作者以为被执法」= 虚假安全感） |
 
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
@@ -37,6 +38,20 @@
 - **ledger**：三门各入 1 签名（landed, root_cause=engine），G67 条目记录 4 票实锤形态；scan unclassified=0、--strict 通过。
 
 **验证链**：test_diag_contract 97/97（97=96+1 补锚）；diff_engine g16/g49/g67 三门 165 求值 4 翻转全裁决 0 crash；run_regression exit 0；REAL_WATCH G49 探针刷新显性注记。
+
+> **纪律 ROI 实证（2026-09-01 裁决 A 记）**：本批重放抓到的不是实现 bug 而是**设计初版本身的错误**（G16 行级作用域 → 002138 合法语境消费被拒 → 收正 section 级）——pre-declare+重放纪律首次证明它能**在提交前否决设计**，不止「验证翻转符合预期」。未来嫌重放麻烦时引用本条。
+>
+> **三标注随批补（连续两轮缺席后恢复，裁决 A）**：① 本批**零 crash-fix**（三臂均「正常返回改造」，全在判定等价定理罩内，无定理域外改动）；② 本批**零 rows=0 面**（三门均 presence/数值语境门，非时序空表面，rows=0 细分规则不适用）；③ 归档 55 对 = 批2 基线 44 → WP1a 49 → 词表批 51 → legacy 批 53 → 本批 55，配对法不变（目录内 runner_snapshot 优先），增量为 8-31/9-01 新增报告目录自然入档。**4 条新 G67 FAIL reason 六键/数据层/degraded 一致性过检**（4/4 实测，002600 须钉 `analysis_report.md` 配对——同码 flash 目录是诱饵）。
+
+## 2026-09-01 F4b① G69 收窄：同行共现 + 否定披露守卫（verdict-affecting，裁决 B）
+
+- **R7 悬空事实补证（设计会）**：R7=8-30 审计「观察档」finding 类（REAL_WATCH 冻结探针）；G69 条目实证漏洞=「src_token 与维度词两独立全文条件跨行拼『消费』」，降级披露行如实挂 [src:] 反被计入维度；原调研「方向相反见 R7」的「方向相反」四字**案卷无支撑**（实际与 F4a 三门同向：松拼→假 PASS），8-27 曾以「窗口脆弱」暂缓。
+- **立项意图回读**：m37 输出合同=四维表（维度/值/解读/[src:] 锚同行）→ 行级意图直接证据 → 走裁决树「同句→F4a 待遇」分支。
+- **落码**：`_contextual_presence(report, triggers, anchors, forbid, scope)` 共享 API **一次设计到位**（裁决 B：否定守卫=forbid 参数，presence 批 G25/G13/G29/G39 消费同一实现；scope 三态 line/sentence/section 语义由单测钉死）+ `_G69_DISCLOSE_WORDS`（未消费/未拉取/降级/不可得，从 m37 披露措辞合同推导，已回写 m37）。消费=维度词+src_token **同行** 且行内无披露词；FAIL reason 带已消费 N/need 计数+披露行不计入清单+可照抄四维表骨架；diag 六键。
+- **预申三件套兑现**：① watch 探针 True 不变（实测判决复核 ✓，仅注记从「拼出来的」改「真消费的」——3 维同行真消费 need=3）；② 真实翻转形态=2 真+1 假票（`test_disclosure_line_not_counted_2true_1fake` 冻结）；③ 归档 56 对 **0 翻转**（B 门报告要么真同行消费要么本就 FAIL，无一票坐在跨行拼洞里）。
+- **值对拍缺口登记**（裁决 B 条件 1）：pending #10（设计会标记+低优先级）+ m37 执法状态注记（合同-引擎差距显性化）。
+
+**验证链**：test_diag_contract 103/103（+6：TestF4bG69Narrow 含共享 API scope 契约）；diff_engine g69 归档 56 对 0 翻转 0 crash；REAL_WATCH G69 判决复核 True 不变；trap_ledger unclassified=0。
 
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
 

@@ -247,8 +247,11 @@ REAL_WATCH = [
      "融资 [src: snapshot.s_margin.data] 杠杆温和；估值分位 50% "
      "[src: snapshot.valuation_snapshot.data.valuation_percentile]；获利 "
      "[src: snapshot.s4_technical.data.chip] 筹码稳定。\n另注：主力动向中性（叙述语）。",
-     "漏洞形态：src_token 与维度词为两个独立全文条件，可跨行拼出「消费」——降级行如实"
-     "标 [src:] 反而计入消费维度（F4 同构面；根治须行级邻近判定，8-27 裁定窗口脆弱暂缓）"),
+     "F4b① 已修（2026-09-01 同行+否定披露守卫）：降级披露行（挂 [src:] 但行内含"
+     "未消费/降级）不再计入消费维度——判决仍 True 但理由已从「拼出来的」变为"
+     "「真消费的」（融资/估值分位/获利 3 维同行真消费，need=3）；真实翻转形态="
+     "2 真+1 假票（TestF4bG69Narrow.test_disclosure_line_not_counted_2true_1fake "
+     "冻结）；条目保留作回归锚防再漂移"),
 ]
 
 
