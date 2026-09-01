@@ -106,6 +106,41 @@ def scan(root: Path, ledger: list) -> tuple:
     return counts, unclassified
 
 
+def propose(root: Path, ledger: list) -> int:
+    """unclassified 半自动化入账（pending #5）：按 gate×reasons 首例聚簇出签名提案草稿。
+
+    人判流程：本输出 → 判「陷阱 vs 真错/环境态」→ 填 status/root_cause → 粘入
+    trap_ledger.yaml entries → 重跑 scan 验证 unclassified=0。聚簇键=gate+reasons 原文
+    （历史 sidecar 无 diag.subcheck 时靠原文分桶；新 sidecar 有 diag 时 reason 自带
+    [数据层]/真值前缀，天然分桶）。
+    """
+    by_gate = _by_gate_index(ledger)
+    clusters = {}   # (gate, reasons原文[:80]) -> count
+    for sc, doc in _iter_sidecars(root):
+        for d in doc.get("details") or []:
+            if d.get("status") != "fail":
+                continue
+            reasons = "".join(d.get("reasons") or [])
+            if _match_signature(by_gate, d.get("gate"), reasons):
+                continue
+            key = (d.get("gate"), reasons[:80])
+            clusters[key] = clusters.get(key, 0) + 1
+    if not clusters:
+        print("✅ 无 unclassified，无需提案")
+        return 0
+    print(f"🔧 unclassified 聚簇提案（{len(clusters)} 簇）——人判后粘入 ledger entries：\n")
+    for (gate, reasons), cnt in sorted(clusters.items(), key=lambda x: -x[1]):
+        print(f"  - signature: {gate}#<subcheck>:<reason_class>   # {cnt} 处")
+        print(f"    gate: {gate}")
+        print(f"    match: {json.dumps(reasons[:24], ensure_ascii=False)}   # ← 首例前缀，人判改稳定子串")
+        print(f"    count: {cnt}")
+        print(f"    status: <landed|inflight|pending>   # 人判：陷阱=landed/inflight；环境态/真错=pending")
+        print(f"    fix: \"<根因与修法一句话>\"")
+        print(f"    # reasons 首例: {reasons[:110]}")
+        print()
+    return len(clusters)
+
+
 def field_acceptance(root: Path, ledger: list, state: dict) -> list:
     """C-4 簿记核心：当窗新 sidecar → 暴露探针/复现计数 + 窗口递减 + 关闭/展期/降级
     + warn 翻转。state 原地更新（调用方 save_acceptance 落盘）；返回输出行。
@@ -203,6 +238,8 @@ def main() -> int:
                     help="增量拦截：任一 signature 当前计数 > ledger count 基线 → exit 1")
     ap.add_argument("--field-acceptance", action="store_true",
                     help="现场验收簿记（cron 收尾跑）：窗口/暴露/关闭/warn 翻转自动落账并写回")
+    ap.add_argument("--propose", action="store_true",
+                    help="半自动化入账（pending #5）：unclassified 按 gate×reasons 聚簇出签名提案草稿，人判后入 ledger")
     args = ap.parse_args()
 
     # 晋级欠账（裁决⑤ 2026-08-31）：root_cause=engine 未修存量——与扫哪个 root 无关，
@@ -214,6 +251,8 @@ def main() -> int:
     ledger = load_ledger(args.ledger)
     root = Path(args.root).expanduser()
     state = load_acceptance(args.acceptance)
+    if args.propose:
+        return 1 if propose(root, ledger) else 0
     for ln in acceptance_status(state):
         print(ln)
     if not ledger:

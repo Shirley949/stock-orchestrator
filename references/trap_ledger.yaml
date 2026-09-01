@@ -260,3 +260,13 @@ entries:
     root_cause: engine
     blocked: false
     fix: "_explain_bad_path 第 1 层断键挂 data_contracts.SCENES registry（批2#4 landed，reason-only verdict 恒不变）：scene 在注册表而快照未生成 → [数据层] 归因（查快照生成/重跑拉取，非路径拼写）；拼写错且兄弟键无近邻 → registry difflib 近邻，禁退化裸路径报错。guard=TestTrapCorpus.test_g21_registry_hint 两形态断言；归档44对0翻转。**计数语义**：match『近邻』命中=报告侧又引用了坏路径（合法 FAIL，写作纪律信号）；引擎回归面=建议缺失，由 guard 测试把守——delta 勿按引擎回归处置"
+  - signature: G28#dupont_panel:data_layer_missing
+    gate: G28
+    subcheck: dupont_panel
+    reason_class: data_layer_missing
+    match: "杜邦"
+    count: 10
+    last_seen: "2026-09-01"
+    status: pending
+    blocked: false
+    fix: "（2026-09-01 首批 --propose 入账）历史 sidecar 10 处：快照 dupont 面板未生成（s1_financial 无该键）→ 真数据层缺非引擎陷阱，引擎按设计执法；G28 轨1 已真值化（reason 带 [数据层]+status 真值），此类 FAIL 修数据不修报告（重跑 s1_financial），mixed_caliber 软化政策见 pending #8 轨2"
