@@ -1014,7 +1014,9 @@ class TestWP1bWordGates(unittest.TestCase):
         d = self._fail_truth(gd.check_g13, "建议持有", {"holding_status": {"cost": 12.3}},
                              ["holding_status={'cost': 12.3}", "持仓语境"], no_l_anchor=True)
         self.assertIs(gd.check_g13("无词", {}), True)            # auto_pass
-        self.assertIs(gd.check_g13("决策：持有", {"holding_status": "x"}), True)
+        # F4b② 预申翻转形态：裸决策句（零持仓语境词）旧全文单词条件过、现 FAIL——
+        # 「决策：持有」不引用用户持仓（成本/仓位）= 忽略持仓语境的通用建议
+        self.assertNotEqual(gd.check_g13("决策：持有", {"holding_status": "x"}), True)
 
     def test_g17_tariff_disclosure(self):
         tv = {"computed_metrics": {"tariff_vulnerability": {"level": "fatal"}}}
@@ -1485,6 +1487,34 @@ class TestF4bPresenceBatch(unittest.TestCase):
             "## 五、技术面\n离散事件（缺口高频反复）：8 月以来跳空缺口交替。\n\n"
             "## 九、全景表\nrisk [src: snapshot.s5_events.data.risk_signals.processed.timeline]",
             self._G25_SNAP))
+
+    # ---- G13（门 2/4；休眠门：holding_status 管道无 producer，归档 56 对 0 在场，
+    #      锚表按 m11 WP1b 骨架合同推导，单测钉双向）----
+
+    def test_g13_ruling_example_crossline_pass(self):
+        # 裁决 C 例句：「操作决策如下：\n- 维持现有仓位」跨行同节合法（行级锚假 FAIL）
+        self.assertTrue(self._v(gd.check_g13,
+            "## 八、操作建议\n操作决策如下：\n- 维持现有仓位，不加仓不减仓。",
+            {"holding_status": "成本12.5/仓位50%"}))
+
+    def test_g13_governance_word_cross_section_fails(self):
+        # 预申翻转形态：治理叙事词（董事会决策）+ 持仓词散在不同节——跨节拼不算
+        r = gd.check_g13(
+            "## 二、公司治理\n董事会决策程序规范，重大事项集体审议。\n\n"
+            "## 八、操作建议\n当前仓位较重者可考虑持有。",
+            {"holding_status": "成本12.5"})
+        self.assertIsInstance(r, dict)
+        self.assertFalse(r["passed"])
+        self.assertIn("同节", "".join(r["reasons"]))
+        for k in ("subcheck", "expected", "found", "fix", "src", "degraded"):
+            self.assertIn(k, r["diag"])
+
+    def test_g13_same_section_governance_passes_known_loose(self):
+        # 已知宽向（预申显式）：bare「成本」锚覆盖营业成本语境——治理节「董事会决策」
+        # 与「营业成本」同节会过（假 PASS 方向，weight-2 容忍；收紧须新证据走 F4 预申报）
+        self.assertTrue(self._v(gd.check_g13,
+            "## 二、公司治理\n董事会决策程序规范；营业成本上升压缩毛利。",
+            {"holding_status": "成本12.5"}))
 
     def test_g25_bare_word_no_src_now_fails(self):
         # 旧臂 1 只要「事件」词任意处在即过（high=0+medium>0 时不查 src）——纯词散落

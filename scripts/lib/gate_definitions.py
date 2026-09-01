@@ -747,23 +747,36 @@ def check_g12(report: str, data: dict) -> bool:
                   f"命中 {limitation_items} 处", fix, "m11 局限性披露段（报告侧）"))
 
 
+# 持仓语境词（G13 语境锚，F4b② presence 批门 2/4）：从 m11 WP1b 补写骨架
+# 「结合当前持仓〈买入成本/仓位〉，决策建议〈持有/加仓/减仓〉」推导并已入 m6
+_G13_HOLD_WORDS = ("持仓", "仓位", "成本", "买入价", "底仓", "现价")
+
+
 def check_g13(report: str, data: dict) -> bool:
     """G13: 持仓↔决策一致（若用户提供持仓信息，操作建议应考虑持仓语境）"""
     # 无持仓信息时 auto_pass
     if data.get("holding_status") is None:
         return True
-    if "决策" in report:
+    # F4b② 语境锚（2026-09-01 裁决 C，presence 批门 2/4）：旧 `if "决策" in report` 全文
+    # 单词条件——「董事会决策/决策层」等治理叙事词即可过（持仓语境零校验）。消费=决策词
+    # + 持仓语境词**同节**共现（裁决例句「操作决策如下：\n- 维持现有仓位」跨行同节合法，
+    # 行级锚假 FAIL——G25 line→section 同款窗口语义）。归档 56 对 0 翻转 = holding_status
+    # 无一在场（管道无 producer，gate 休眠态；锚表按 m11 WP1b 骨架合同推导，单测钉双向）。
+    if _contextual_presence(report, ("决策",), anchors=_G13_HOLD_WORDS,
+                            scope="section") is not None:
         return True
-    # FAIL → reason 真值化（WP1b；词表门）
+    # FAIL → reason 真值化（WP1b；词表门）+ 语境锚 found
     hs = data.get("holding_status")
     hs_txt = hs[:80] if isinstance(hs, str) else str(hs)[:80]
+    n_dec = report.count("决策")
     fix = "补写持仓语境决策句（照抄骨架：结合当前持仓〈买入成本/仓位〉，决策建议〈持有/加仓/减仓〉）"
     return GateResult(passed=False, reasons=[
-        f"G13 持仓↔决策脱节：快照持有持仓信息（holding_status={hs_txt}）但报告全文 0 处『决策』"
-        f"——操作建议未考虑持仓语境；{fix}"
+        f"G13 持仓↔决策脱节：快照持有持仓信息（holding_status={hs_txt}）但『决策』全文 {n_dec} 处"
+        f"与持仓语境词（{'/'.join(_G13_HOLD_WORDS)}）同节共现 0 处——治理叙事词散落别节不算持仓语境决策；{fix}"
     ], diag=_diag("holding_decision_context",
-                  "holding_status 在场 → 全文含『决策』（持仓语境的操作建议）",
-                  "全文 0 处『决策』", fix, "snapshot.holding_status（真值源）"))
+                  "holding_status 在场 → 决策词与持仓语境词同节（m6 操作建议节）",
+                  f"『决策』全文 {n_dec} 处，持仓语境词同节共现 0 处", fix,
+                  "snapshot.holding_status（真值源）"))
 
 
 def check_g14(report: str, data: dict) -> bool:

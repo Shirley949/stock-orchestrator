@@ -319,6 +319,17 @@ entries:
   # G47 负收益豁免不入 entries（裁决 C 条件 ④，无引擎改动无 FAIL 面）：唯一已知碰撞形态「北向增持」
   # 本属股东面真内容（northbound processed summary 的合法 surface 词），给 G47 触发词加语境锚反而对
   # 合法北向行制造假 FAIL——负收益，显式豁免维持现状。若日后归档/语料出现 G47 真·跨节拼消费实证再复议。
+  - signature: G13#holding_decision:fulltext_word
+    gate: G13
+    subcheck: holding_decision_context
+    reason_class: fulltext_word
+    match: "同节共现"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "消费判定改语境锚同节共现（_contextual_presence scope=section，presence 批门 2/4）：旧 `if 决策 in report` 全文单词条件——「董事会决策/决策层」等治理叙事词即可过（持仓语境零校验）。锚表=持仓/仓位/成本/买入价/底仓/现价（m11 WP1b 骨架合同推导，已入 m6）。⚠️ 休眠门注记：holding_status 全管道无 producer（仅 gate+测试引用），归档 56 对 0 在场、重放 0 翻转为结构性真空非证据；锚表正确性由单测双向钉死（裁决例句跨行同节=PASS/治理词跨节=FAIL/裸决策句=FAIL 预申翻转）。已知宽向：bare 成本 锚覆盖营业成本语境（同节治理词+营业成本会假 PASS，weight-2 容忍，收紧须新证据走预申报）"
   - signature: G25#news_consumption:crossline_join
     gate: G25
     subcheck: news_consumption

@@ -63,6 +63,15 @@
 
 **验证链**：test_diag_contract 110/110（+2：section 跨行正例 + 跨节拼反例；预申表窗口行同步裁决结果）；diff_engine g25 归档 56 对 flips=1（000657 伪影，逐条裁决如上）；gate_fixture_test 漏报=0 drift=0 watch=5；run_regression exit 0。
 
+## 2026-09-01 F4b② G13 收窄：同节语境锚（presence 批门 2/4，verdict-affecting，裁决 C）
+
+- **形态**：G13 旧消费判定=`if "决策" in report` 全文单词条件——「董事会决策/决策层」等治理叙事词即可过，持仓语境零校验。收窄为 `_contextual_presence(("决策",), anchors=_G13_HOLD_WORDS, scope="section")`；锚表=持仓/仓位/成本/买入价/底仓/现价（m11 WP1b 骨架「结合当前持仓〈买入成本/仓位〉，决策建议〈持有/加仓/减仓〉」合同推导，已入 m6 设计哲学块，裁决 C 条件 ② 锚表先行）。
+- **⚠️ 休眠门发现（本批最重要产出）**：`holding_status` **全管道无 producer**（gate_definitions+测试之外零引用）——归档 56 对 0 在场、重放 0 翻转是**结构性真空而非证据**；锚表正确性完全由单测双向钉死（裁决例句跨行同节=PASS / 治理词跨节=FAIL / 裸决策句=FAIL 预申翻转形态，TestWP1bWordGates 旧 True 钉同步改判）。管道若引入交互式持仓输入（mode B 候选），此门即活。
+- **已知宽向（预申显式）**：bare「成本」锚覆盖营业成本语境——治理节「董事会决策+营业成本」同节会假 PASS（静默方向，weight-2 容忍；收紧须新证据走 F4 预申报，勿静默改）。
+- G25 重放差分复查：dist 行语义=旧树判决（False×1→×2 系对比基线从 line-scope HEAD 换到 section-scope HEAD，非漂移）。
+
+**验证链**：test_diag_contract 113/113（+3：例句/跨节/宽向三钉）；diff_engine g13 归档 56 对 flips=0（休眠真空注记）；gate_fixture_test 漏报=0 drift=0；run_regression exit 0。
+
 ## 2026-09-01 WP1b legacy+真值批：G1/G14 + G6/G15/G16/G21/G34/G35/G36 reason 真值化（reason-only）——**22 门 lossy 清零**
 
 > **算术对账（2026-09-01 收官裁决补）**：22 = 3（WP1a：G7/G8/G9）+ 19（WP1b：词表批 9 = G11/G12/G13/G17/G19/G22/G26/G31/G37 + legacy 批 9 = G1/G6/G14/G15/G16/G21/G34/G35/G36 + **G28 轨1 单列条目**——见下方独立条目，含 10 真实 FAIL 领跑语料与 mixed_caliber 轨2 分离，不靠算术反推完成状态）。
