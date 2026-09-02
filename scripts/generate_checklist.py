@@ -114,6 +114,7 @@ PHASE_STEPS = {
             {"id": "c02", "desc": "用户问题映射表已生成（见下方）"},
             {"id": "c03", "desc": "必须加载文件清单已确认"},
             {"id": "c04", "desc": "运行 routing/runner.py A <stock_code> → 拉取全量数据 snapshot（⚠️ 必须 > file 重定向，禁止 | head/tail pipe截断）"},
+            {"id": "c04b", "desc": "错码前置核对：runner stderr 的 [verify] stock_code=…→stock_name=… × 任务书代码/公司名逐一比对；snapshot --list 头部 code= 同比——不一致立即停（错码会跑完全量拉取落盘后才暴露，白跑一次）"},
             {"id": "c05", "desc": "订单数据：snapshot 已含合同负债(balance_sheet)+分地区(segment_composition)+中标事件(s5 contract)，见 m25"},
             {"id": "c06", "desc": "检查 runner._warnings → 处理降级/失败项"},
         ],
@@ -139,6 +140,7 @@ PHASE_STEPS = {
         ],
         "phase_2": [
             {"id": "c50", "desc": "收单清单 12 项全部勾选（来自 runner s10_checklist）"},
+            {"id": "c50b", "desc": "视图认知重建：snapshot_view --list（合法视图以 --list 输出为准——❌未挂载视图勿引用；凭记忆写视图名/写非法视图名 exit 2 是 fumble 主源，命令见下方 Runner 调用命令块）"},
             {"id": "c51", "desc": "缺失项已在'分析局限性'标注"},
         ],
         "phase_3": [
@@ -151,7 +153,7 @@ PHASE_STEPS = {
             {"id": "c63", "desc": "m3 技术（TD 4 步 + 多指标交叉）"},
             {"id": "c64", "desc": "m4.1.1 事件扫描结果"},
             {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比 + 机构一致预期）"},
-            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景研判 + 情景-动作矩阵）"},
+            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景研判 + 情景-动作矩阵）；写作第一步跑 helper 抽证据全景草稿（只抽值不打分）：python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot /tmp/runner_snapshot_<code>.json（m6:18）"},
             {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性）"},
             {"id": "c_d5_governance", "desc": "m9.2 股东结构与治理（控股股东 + 质押 + 关联交易）"},
             {"id": "c67", "desc": "m7 风险 + 反转假设"},
@@ -159,6 +161,7 @@ PHASE_STEPS = {
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）"},
+            {"id": "c70b", "desc": "失败轮关闭且引擎侧未修 → 落 ledger/memory 后再开下一股（写侧纪律：修完即走 = 教训不落笔，下批同法再撞）"},
         ],
         "phase_5": [
             {"id": "c80", "desc": "报告写入腾讯文档"},
@@ -169,6 +172,7 @@ PHASE_STEPS = {
             {"id": "c01", "desc": "Skills 加载（orchestrator + routing + registry）"},
             {"id": "c02", "desc": "用户问题映射表已生成"},
             {"id": "c04", "desc": "运行 routing/runner.py B <stock_code> → 拉取行情+K线+资金流+技术面（⚠️ 必须 > file 重定向，禁止 | head/tail pipe截断）"},
+            {"id": "c04b", "desc": "错码前置核对：runner stderr 的 [verify] stock_code=…→stock_name=… × 任务书代码/公司名逐一比对；snapshot --list 头部 code= 同比——不一致立即停（错码会跑完全量拉取落盘后才暴露，白跑一次）"},
             {"id": "c06", "desc": "检查 runner._warnings → 处理降级/失败项"},
         ],
         "phase_1": [
@@ -179,6 +183,7 @@ PHASE_STEPS = {
         ],
         "phase_2": [
             {"id": "c50", "desc": "数据收单完成（来自 runner s10_checklist）"},
+            {"id": "c50b", "desc": "视图认知重建：snapshot_view --list（合法视图以 --list 输出为准——❌未挂载视图勿引用；凭记忆写视图名/写非法视图名 exit 2 是 fumble 主源，命令见下方 Runner 调用命令块）"},
         ],
         "phase_3": [
             {"id": "c59", "desc": "m38 核心结论头块（G11 声明后、首章节前；整块照抄 b_head 视图 head_draft_md，数字禁改）"},
@@ -188,6 +193,7 @@ PHASE_STEPS = {
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）产出 sidecar，用其路径打勾"},
+            {"id": "c70b", "desc": "失败轮关闭且引擎侧未修 → 落 ledger/memory 后再开下一股（写侧纪律：修完即走 = 教训不落笔，下批同法再撞）"},
         ],
         "phase_5": [
             {"id": "c80", "desc": "报告输出"},
@@ -324,6 +330,10 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
             lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
             lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
+        # Step 2: 错码核对 + 视图认知（P1c 2026-09-03，内联产生真相的命令、拒绝视图计数）
+        lines.append(f"# Step 2: 错码核对（不一致立即停——错码跑完全量拉取落盘后才在 [verify] 行暴露，白跑一次）")
+        lines.append(f"grep '\\[verify\\]' /tmp/runner_stderr_{sc}.log   # stock_code=…→stock_name=… × 任务书代码/公司名逐一比对")
+        lines.append(f"python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}.json --list   # 头部 code= 复核 + 全部视图挂载状态（合法视图以 --list 输出为准）")
         lines.append("```")
         lines.append("")
 

@@ -27,13 +27,18 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
-## 2026-09-03 v4 收口批：发布链退役归档（tdx_publish.py 代码化落地；pending #15 关闭）
+## 2026-09-03 P1c 批：checklist 硬化 + 文档去硬编码（retrospective_audit_20260902 提案⑤/议程 E·F·D2·D3）
 
-- **为什么**：pending #15（发布链 mdx 红字泄漏）由 `tdx_publish.py`（/home/ubuntu/tdx-publish-v4/，v4.1.0）整体承接——四轮审计知识代码化为 prepare/verify/read-all/self-test（fence 状态机 + ADR-A~F；规则真相源=其 rules.md 归位表 32 条零悬空）。词汇翻案：EXP-Q + RECHECK-v4 一档五探针证 bold/red/grey Mark 在段落/列表/表格单元格/blockquote 均为真组件，历史「color 全形态泄漏」实为 D2 转换器非法注入（fence 体内注入 + 列表行整行包裹吞 `- ` 记号）+ 判别器误用（先剥全部 `\` 再计数）；红字功能保留不降级（ADR-D 显式否决 color→bold 降级）。
-- **改动**：`scripts/md_to_smartcanvas.py` / `scripts/strip_src_for_publish.py` → `git mv` 至 `_research/retired/`（retain deprecated，实战发布通过后另行清理）；`test_src_hidden_style.py` strip 节随退役移交 tdx_publish self-test `n11_strip_adrb`（[verified:] 指针保留→整段剥离、行数不变断言→ADR-B 内容断言，旧契约不再成立勿按史恢复）；SKILL.md 步骤 6 改指向 `tdx_publish.py prepare`；用户侧 CLAUDE.md「股票报告发布管线」节整体替换为「腾讯文档发布 SOP」五步流程（memory publish-chain-gotchas 同步降级为档案并标注词汇翻案）。
-- **兼容证明**：`run_regression.sh` exit 0（test_src_hidden_style 修订后 gate 免疫 + roundtrip 节原样 5/5）；tdx_publish self-test 15/15；Tier A 复跑 vs v4.0.0 存档逐字节一致（零翻转）；Tier B 在线彩排全链 PASS（create→read-all→verify 8/8→trash）。遗留：`regression-tests/fixtures/strip_publish_sample.md` 暂留（mirror clone 旧版测试仍引用，双仓同步时一并处置）。
+> 病类 P（程序性）→ 消费层（checklist/文档），全部「内联产生真相的命令，不内联真相的当前值」。
+
+- **checklist 硬化**（`generate_checklist.py` PHASE_STEPS + Runner 命令块，A/B 双模式）：①`c04b` 错码前置核对——runner stderr `[verify] stock_code=→stock_name=` × 任务书逐一比对 + `--list` 头部 code= 复核（evidence D2：错码跑完 18 场景落盘 201KB 后才暴露，~15 分钟白跑）；②`c50b` 视图认知重建——合法视图以 --list 输出为准（evidence：批1 4 个非法视图名 exit 2 + fund_flow 未挂载共 ~6 次 fumble）；③`c66`（A）内联 capstone lib/ 全路径命令（evidence C3：两批各 fumble 一次路径猜成 scripts/，m6:18 本有——修法=内联非新文档）；④`c70b` 写侧纪律——失败轮关闭且引擎侧未修 → 落 ledger/memory 后再开下一股（议程 F 写侧采纳）；⑤Runner 命令块加 Step 2（grep [verify] + snapshot_view --list 全路径）。
+- **去硬编码（G4）**：SKILL.md 三处「14 视图」→ 计数无关措辞（--list 所列/全部视图 + 以 --list 输出为准）；CLAUDE.md compact 节同款。**拒绝 14→18**——改成 18 是给下一轮腐烂下订单。范围外挂账：`token_audit.py:57` 注释「14 视图挂载点前缀」同类 stale 计数，未在本批命名范围内，pending 下批。
+- **宪法②③ + 门槛句成文**（CLAUDE.md）：宪法② 规避条款注册纪律（工单号+失效条件+landed 批删除；⑧ 内重复行改指针）；宪法③ memory 路由三分（引擎缺陷→ledger / 跨票根因族→白名单 / 单票→不落盘）+ 白名单升级触发器（当日 ≥2 或跨会话复发 → 升 CLAUDE.md 硬规约）+ retro 记分卡改写（白名单合规增改不计违规，作废「memory 增量=0」口径）；A 类机制化门槛（当日 ≥2 或跨会话复发 → 加机械化前置，n=1 不机制化）。
+- **corpus**（`test_checklist_hardening.py`，红先绿后）：红 = A/B 生成清单 0 命中 --list/capstone/stock_name + SKILL.md 3 处计数硬编码（红证 /tmp/p1c_red_{A,B}.md、/tmp/p1c_red_test.log）；绿 = 5/5（错码核对/–list 内联/capstone 全路径/写侧行/计数禁令 A+B 模式 + SKILL.md）。
+- **回执**：test_checklist_consistency 2/2（新 c-tag 分母对齐）；全量回归 exit 0。消费方盘点：update_checklist 正则 `<!--c[\w]+-->` 天然覆盖新 id（c04b/c50b/c70b）。
 
 ## 2026-09-03 P1b 批：G30#1 三桶语义 + 披露义务臂（retrospective_audit_20260902 处置④）
+
 
 > 病类 B 引擎侧（`G30#1:scene_bucket_blacklist_misfire` → landed）；与 P0/P1a 分批独立 commit。
 
@@ -44,6 +49,12 @@
 - **预申报翻转实测（12 份首写 A/B vs P0 引擎）**：verdict/failed-set **零变化**；reason 面 002202 `真片面[资产安全,主营构成]` → `披露义务[资产安全[computed_metrics.asset_safety:degraded]]`（主营构成首写自带「SEGMENTSV 拉取失败…仅披露」行——引擎只要求缺的，正向兼容既有诚实实践）、300408 豁免清单增两维（display-only）、603993 不变。未来执法增强面（预申报方向）：未披露 degraded/missing/failed 的报告由新臂 FAIL。
 - **回执**：全量回归 exit 0；gate_fixture 63 门漏报=0 误伤=0（新臂未伤冻结池）；engine_pending 1 不变（G58 #11）。gate_definitions 孪生 `_scene_has_data`（:4870，服务 self_score/G26 分母）**未统一**——范围锁挂账：语义同源两实现，后续批裁决统一或注记分工。
 
+
+## 2026-09-03 v4 收口批：发布链退役归档（tdx_publish.py 代码化落地；pending #15 关闭）
+
+- **为什么**：pending #15（发布链 mdx 红字泄漏）由 `tdx_publish.py`（/home/ubuntu/tdx-publish-v4/，v4.1.0）整体承接——四轮审计知识代码化为 prepare/verify/read-all/self-test（fence 状态机 + ADR-A~F；规则真相源=其 rules.md 归位表 32 条零悬空）。词汇翻案：EXP-Q + RECHECK-v4 一档五探针证 bold/red/grey Mark 在段落/列表/表格单元格/blockquote 均为真组件，历史「color 全形态泄漏」实为 D2 转换器非法注入（fence 体内注入 + 列表行整行包裹吞 `- ` 记号）+ 判别器误用（先剥全部 `\` 再计数）；红字功能保留不降级（ADR-D 显式否决 color→bold 降级）。
+- **改动**：`scripts/md_to_smartcanvas.py` / `scripts/strip_src_for_publish.py` → `git mv` 至 `_research/retired/`（retain deprecated，实战发布通过后另行清理）；`test_src_hidden_style.py` strip 节随退役移交 tdx_publish self-test `n11_strip_adrb`（[verified:] 指针保留→整段剥离、行数不变断言→ADR-B 内容断言，旧契约不再成立勿按史恢复）；SKILL.md 步骤 6 改指向 `tdx_publish.py prepare`；用户侧 CLAUDE.md「股票报告发布管线」节整体替换为「腾讯文档发布 SOP」五步流程（memory publish-chain-gotchas 同步降级为档案并标注词汇翻案）。
+- **兼容证明**：`run_regression.sh` exit 0（test_src_hidden_style 修订后 gate 免疫 + roundtrip 节原样 5/5）；tdx_publish self-test 15/15；Tier A 复跑 vs v4.0.0 存档逐字节一致（零翻转）；Tier B 在线彩排全链 PASS（create→read-all→verify 8/8→trash）。遗留：`regression-tests/fixtures/strip_publish_sample.md` 暂留（mirror clone 旧版测试仍引用，双仓同步时一并处置）。
 
 ## 2026-09-03 P1a 批：G11 字面锚配对锁（活文档投影 fixture；retrospective_audit_20260902 处置）
 
