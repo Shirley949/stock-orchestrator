@@ -398,3 +398,13 @@ entries:
     root_cause: engine
     blocked: false
     fix: "消费判定改语境锚同节共现（_contextual_presence scope=section）：旧两独立全文条件（『事件』词任意处 + 任意 [src:] 计数）与 G69 R7 同构——事件词散在技术面叙事（『离散事件』）+ s5_events src 挂全景表即可拼出「消费」（000657 形态）。窗口裁决过程=纪律 ROI 第二实证：初申 line 被 56 对重放证伪（6 翻转中 5 对=002130/300223/688195/000960/300835 合法消费全为『节标题带事件词+src 挂节内明细行』跨行同节形态，行级锚全假 FAIL）→ 按制度化规则改锚表（line→section）不改报告；仅存 000657 一对翻转=B 模式报告×cache 全量快照配对伪影（报告自身管道未拉 news，旧 True 系『离散事件』叙事词侥幸命中）。REAL_WATCH 双向探针：同节跨行=True（防回退行级）+跨节拼=False（防松动回全文级）；锚表已入 m4 §4.1.1 gate 锚点块"
+  - signature: G71#projection:panorama_pct_misread
+    gate: G71
+    subcheck: head_capstone_probability
+    reason_class: panorama_pct_misread
+    match: "漂移"
+    count: 0
+    last_seen: "2026-09-02"
+    status: pending
+    blocked: false
+    fix: "（铜冠铜箔 301217 实锤）G71④ 头表概率=capstone 投影对拍的扫描器把 capstone 切片内**非情景表**（4.0 证据全景表，含裸方向词列）中性行里的裸 % 数（『买入 100%』）误读为该情景概率 → {'中性': ('60','100')} 假漂移 FAIL。修法（写作侧）：capstone 切片内全景/四维等非情景表的任何行禁裸 % 记法——分位写『82 分位』、比例写『不足三成』、评级写『评级买入』（本报告已按此修，G71 转 PASS）。引擎侧可收窄锚定：投影表只认表头含「概率」列的表（未立项，复发再议）"
