@@ -43,30 +43,46 @@ def _snapshot_get(data: dict, path: str):
     return cur
 
 
-def _scene_has_data(val) -> bool:
-    """判断 scene 值是否真有数据（envelope status / data·data_full / 空数组）。与 gate_definitions 同语义。"""
+def _scene_bucket(val) -> str:
+    """三桶判定（P1b 2026-09-03，retrospective_audit_20260902 处置④）：
+    present（有数据→G30#1 覆盖义务）/ gap（到场未出货→披露义务）/ failed（拉取失败→
+    披露义务+点名源）；"absent"（None/空 str/list：模式作用域外结构性缺席）不承担
+    披露义务（mode B 不拉 s1 属设计非数据洞），显示层并入 gap。
+
+    旧 `_scene_has_data` 黑名单语义的病：status=degraded/missing 的非空信封
+    （002202 实证：asset_safety={status:'degraded'} 无 data 键、segment 富 dict
+    status='missing'）落到 `bool(val)` 兜底 → 判 present → gate 把从未到货的
+    维度当 present 强制覆盖（「真片面」假 FAIL）。改判独立桶后豁免覆盖但
+    强制披露——防 Goodhart 回流（豁免≠静默免单）。"""
     if val is None:
-        return False
+        return "absent"
     if isinstance(val, str):
-        return val.strip() != ""
-    if isinstance(val, dict):
-        if val.get("status") in ("failed", "error", "throttled"):
-            return False
-        dd = val.get("data", val.get("data_full"))
-        if isinstance(dd, dict):
-            if dd.get("status") in ("failed", "error", "throttled"):
-                return False
-            return bool(dd)
-        if isinstance(dd, list):
-            return len(dd) > 0
-        if val.get("status") in ("ok", "partial"):
-            return True
-        if "error" in val and "status" not in val and "data" not in val:
-            return False
-        return bool(val)
+        return "present" if val.strip() else "absent"
     if isinstance(val, list):
-        return len(val) > 0
-    return bool(val)
+        return "present" if val else "absent"
+    if isinstance(val, dict):
+        dd = val.get("data", val.get("data_full"))
+        for env in (val, dd if isinstance(dd, dict) else {}):
+            if env.get("status") in ("failed", "error", "throttled"):
+                return "failed"
+        if (isinstance(dd, (dict, list)) and dd):
+            return "present"
+        if val.get("status") is not None:
+            return "gap"               # 有信封无数据 → 到场未出货
+        return "present" if val else "absent"
+    return "present" if val else "absent"
+
+
+def _envelope_status(val) -> str:
+    """读信封 status（顶层优先，嵌套 data.status 兜底；缺席返回 ''）。"""
+    if isinstance(val, dict):
+        st = val.get("status")
+        if st is None:
+            dd = val.get("data", val.get("data_full"))
+            if isinstance(dd, dict):
+                st = dd.get("status")
+        return str(st) if st else ""
+    return ""
 
 
 def _rows(section):
@@ -340,6 +356,7 @@ def panorama(data: dict) -> dict:
     _themes = QUAL_THEMES_B if _is_b else QUAL_THEMES
     out = {
         "present_quant": [], "gap_quant": [],
+        "failed_quant": [], "disclose_quant": [],
         "qual_required": [t for t, _ in _themes],
         "values": {}, "interpretation_flags": [], "draft_lines": [],
         "present_signals": [],
@@ -349,8 +366,18 @@ def panorama(data: dict) -> dict:
         out["mode"] = "B"   # 消费方可读（m6 B 收口叙事锚）
 
     for theme, paths, _ in QUANT_THEMES:
-        present = any(_scene_has_data(_snapshot_get(data, p)) for p in paths)
-        (out["present_quant"] if present else out["gap_quant"]).append(theme)
+        probes = [(p, _snapshot_get(data, p)) for p in paths]
+        if any(_scene_bucket(v) == "present" for _, v in probes):
+            out["present_quant"].append(theme)
+            continue
+        out["gap_quant"].append(theme)
+        # 披露义务集（P1b 三桶）：failed 或 degraded/missing 信封——到场未出货≠静默豁免
+        for p, v in probes:
+            st = _envelope_status(v)
+            if _scene_bucket(v) == "failed" or st in ("degraded", "missing"):
+                out["disclose_quant"].append({"theme": theme, "path": p, "status": st or "failed"})
+        if any(_scene_bucket(v) == "failed" for _, v in probes):
+            out["failed_quant"].append(theme)
 
     # ---- 抽关键值 + 适用性/解读 flag（供 LLM 正确解读，非打分）----
     inc = _snapshot_get(data, "s1_financial.data.income_statement")
@@ -1217,6 +1244,10 @@ def _render_draft(out: dict, data: dict) -> None:
         renderer(L, v)
     if out["gap_quant"]:
         L.append(f"- ⚠️ 数据 gap（m8 须披露；反片面 gate 豁免）：{out['gap_quant']} 无 snapshot 数据。")
+    if out.get("disclose_quant"):
+        ds = "、".join(f"{d['theme']}[{d['status']}]" for d in out["disclose_quant"])
+        L.append(f"- ⚠️ 到场未出货/拉取失败（G30#1 披露义务，各维须一行〈维度名+降级/缺失/失败〉，"
+                 f"照抄 002202 §4.0 维表形态）：{ds}。")
     # 🆕 Part G G-D2：定性锚点（helper 抽值，Layer1 ⑪⑫⑬ 行挂 🔒锚点用）
     _rd, _pl, _sg = v.get("rd_intensity"), v.get("pledge_pct"), v.get("seg_growth_dim")
     _anchors = []
@@ -1294,6 +1325,7 @@ def main():
     pan = panorama(data)
     print("\n".join(pan["draft_lines"]))
     print(f"\n[present 维度须全覆盖: {pan['present_quant']}; gap 已豁免: {pan['gap_quant']}; "
+          f"披露义务: {[(d['theme'], d['status']) for d in pan.get('disclose_quant', [])] or '无'}; "
           f"定性须覆盖: {pan['qual_required']}]")
     _tl = pan.get("tally")
     if isinstance(_tl, dict):

@@ -33,6 +33,18 @@
 - **改动**：`scripts/md_to_smartcanvas.py` / `scripts/strip_src_for_publish.py` → `git mv` 至 `_research/retired/`（retain deprecated，实战发布通过后另行清理）；`test_src_hidden_style.py` strip 节随退役移交 tdx_publish self-test `n11_strip_adrb`（[verified:] 指针保留→整段剥离、行数不变断言→ADR-B 内容断言，旧契约不再成立勿按史恢复）；SKILL.md 步骤 6 改指向 `tdx_publish.py prepare`；用户侧 CLAUDE.md「股票报告发布管线」节整体替换为「腾讯文档发布 SOP」五步流程（memory publish-chain-gotchas 同步降级为档案并标注词汇翻案）。
 - **兼容证明**：`run_regression.sh` exit 0（test_src_hidden_style 修订后 gate 免疫 + roundtrip 节原样 5/5）；tdx_publish self-test 15/15；Tier A 复跑 vs v4.0.0 存档逐字节一致（零翻转）；Tier B 在线彩排全链 PASS（create→read-all→verify 8/8→trash）。遗留：`regression-tests/fixtures/strip_publish_sample.md` 暂留（mirror clone 旧版测试仍引用，双仓同步时一并处置）。
 
+## 2026-09-03 P1b 批：G30#1 三桶语义 + 披露义务臂（retrospective_audit_20260902 处置④）
+
+> 病类 B 引擎侧（`G30#1:scene_bucket_blacklist_misfire` → landed）；与 P0/P1a 分批独立 commit。
+
+- **病灶（源头重验）**：旧 `_scene_has_data` 黑名单语义仅 failed/error/throttled 判无——status=degraded/missing 的非空信封（002202 实证：`asset_safety={status:'degraded'}` 无 data 键、segment 富 dict status='missing'）落 `bool(val)` 兜底 → 判 present → gate 把从未到货的维度当 present 强制覆盖（「真片面」假 FAIL）。
+- **三桶落地**：`_scene_bucket` → present（有数据→覆盖义务）/ gap（到场未出货→披露义务）/ failed（拉取失败→披露义务+点名源）/ absent（None=模式作用域外，不担披露义务）。`panorama()` 加法式新增 `failed_quant` + `disclose_quant`（theme+path+status 全枚举）；draft 行新增「⚠️ 到场未出货/拉取失败（G30#1 披露义务）」写作面提示；gap_quant 语义=非 present 显示集合不变。
+- **G30#1 披露义务臂**：`disclose_quant` 各维须一行〈维度名或关键词+降级/缺失/失败词〉同行共现（全文行级，词表 14 个含 failed/missing/degraded 引擎态回显）；缺失 → FAIL 点名 `theme[path:status]` + 照抄修法（002202 §4.0 维表形态）。**防 Goodhart**：豁免覆盖≠静默免单。真·空（status=ok+空 data）与结构性缺席不触发——执法面恰为审计点名的 degraded/missing/failed 子集。
+- **corpus 四段**（`test_g30_disclose_bucket.py`，已挂载）：FLIP（002202 形态无披露 → 真片面面退役、披露义务面点名双维）/ PROTECTION（§4.0 维表 verbatim → 披露臂静默、G30 转 PASS——正外部性路线不回退）/ INVARIANT（lhb present 未覆盖 → 真片面照旧 FAIL）/ NEGATIVE（全缺席 → 零义务 PASS）+ `_scene_bucket` 12 形态两极。途中自抓：`check_g30` 返回**普通 dict**（非 GateResult）——`bool(out)` 恒 True，测试 helper 必须读 `out["passed"]`（GateResult docstring 警告的裸 dict 坑）。
+- **预申报翻转实测（12 份首写 A/B vs P0 引擎）**：verdict/failed-set **零变化**；reason 面 002202 `真片面[资产安全,主营构成]` → `披露义务[资产安全[computed_metrics.asset_safety:degraded]]`（主营构成首写自带「SEGMENTSV 拉取失败…仅披露」行——引擎只要求缺的，正向兼容既有诚实实践）、300408 豁免清单增两维（display-only）、603993 不变。未来执法增强面（预申报方向）：未披露 degraded/missing/failed 的报告由新臂 FAIL。
+- **回执**：全量回归 exit 0；gate_fixture 63 门漏报=0 误伤=0（新臂未伤冻结池）；engine_pending 1 不变（G58 #11）。gate_definitions 孪生 `_scene_has_data`（:4870，服务 self_score/G26 分母）**未统一**——范围锁挂账：语义同源两实现，后续批裁决统一或注记分工。
+
+
 ## 2026-09-03 P1a 批：G11 字面锚配对锁（活文档投影 fixture；retrospective_audit_20260902 处置）
 
 > 病类 B（模板⇄gate 双源漂移）；与 P0 分批独立 commit。文档侧统一（m38/m12/m8 + SKILL 范式节）在 stock-analysis-quality 仓同批落地。

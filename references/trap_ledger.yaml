@@ -408,3 +408,13 @@ entries:
     status: landed
     blocked: false
     fix: "G71④ 假漂移（E类：词法概率误读，2026-09-02 双批+第三会话共 5 轮实锤）：旧 _prob_by_root 对切片内所有 | 行做「词根+首个%」共现抽取，证据全景表（无概率列）中性行的裸 %（买入 100%/获利盘 10.89%/TD9 66.7%）被误读为情景概率。引擎收窄已落地（P0 批）：只扫表头含「概率」列的表、按列名取概率列数值、同词根多表实例 reason 全枚举（防修一轮暴露下一个）；corpus=FLIP×5+INVARIANT+ENUMERATION（test_b_head_g71.TestG71ProbTableGate，红先绿后已演示）。写作侧规避条款（非情景表禁裸 %）自 landed 批失效（宪法②）。显式盲区声明（NEGATIVE-CONTROL 裁决）：散文概率主张（非表格行）从未在④执法面（旧版仅扫 | 行，先在盲区非本次收窄造成）；归档抽样 3 处散文概率主张均与各自表格值一致，未发现漂移实例；观察签名——若出现「散文概率主张与头表冲突」漏报实锤 → 立案扩锚评审（扩锚须结构锚，禁止词法叠加词法）"
+  - signature: G30#1:scene_bucket_blacklist_misfire
+    gate: G30
+    subcheck: panorama_coverage
+    reason_class: scene_bucket_blacklist_misfire
+    match: "有数据未纳入"
+    count: 1
+    last_seen: "2026-09-02"
+    status: landed
+    blocked: false
+    fix: "G30#1 真片面假 FAIL（B类引擎侧，retrospective_audit_20260902 处置④）：旧 _scene_has_data 黑名单语义仅 failed/error/throttled 判无，status=degraded/missing 的非空信封（002202 实证：asset_safety={status:degraded} 无 data 键、segment 富 dict status=missing）落 bool(val) 兜底判 present → 把从未到货的维度当 present 强制覆盖。已落地三桶（P1b 批）：_scene_bucket 判 present/gap/failed/absent，panorama 增 disclose_quant（failed 或 degraded/missing 信封，theme+path+status）；G30#1 新增披露义务臂——豁免覆盖≠静默免单（防 Goodhart），各维须一行〈维度名或关键词+降级/缺失/失败〉（002202 §4.0 维表形态=合规样例）；结构性缺席（mode B 不拉 s1）不担披露义务。corpus 四段=FLIP/PROTECTION(正外部性保护)/INVARIANT/NEGATIVE（test_g30_disclose_bucket.py）。预申报翻转实测：12 份首写 verdict/failed-set 零变化，仅 reason 面——002202 真片面[资产安全,主营构成]→披露义务[资产安全[path:degraded]]（主营构成首写自带披露行）、300408 豁免清单增两维（display-only）"

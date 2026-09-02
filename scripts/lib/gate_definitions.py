@@ -68,7 +68,7 @@ GATE_DESCS = {
     "G27": "财务指标+同比预计算一致性（financial_indicators 最新期有ROE；income 最新期有预计算同比键）",
     "G28": "杜邦数据链路完整性（dupont.status=ok + 核心四字段非 None；拉到+存对；硬校验）",
     "G29": "资产安全完整性（computed_metrics.asset_safety 可用+报告已消费；缺失不许编造）",
-    "G30": "综合研判完整性（证据全景全维+反方诚实+概率闭合+情景-动作一致）",
+    "G30": "综合研判完整性（证据全景全维+反方诚实+概率闭合+情景-动作一致+降级/失败维披露义务）",
     "G31": "估值数据有效性（quote.peTtm/pbRatio/totalMarketCap 覆盖率≥2/3；负值计'有数据'）",
     "G32": "龙虎榜信号完整性（lhb.data.processed 存在且 status=ok；真·空 never_listed 仍 PASS）",
     "G33": "北向资金信号完整性（northbound.data.processed 存在且 status=ok；真·非标的 no_northbound_data 仍 PASS）",
@@ -2257,6 +2257,25 @@ def _g30_run(report: str, data: dict) -> dict:
             parts.append(f"定性主题未覆盖: {miss_qual}")
         reasons.append("#1 完整性 FAIL — " + "; ".join(parts)
                        + (f"  [已豁免 gap 维度: {pan['gap_quant']}]" if pan["gap_quant"] else ""))
+
+    # ---- #1 披露义务（P1b 三桶 2026-09-03，retrospective_audit_20260902 处置④）----
+    # 到场未出货（degraded/missing 信封）/拉取失败（failed/error/throttled）维度：
+    # 豁免覆盖≠静默免单（防 Goodhart）——各维须一行〈维度名或关键词 + 降级/缺失/失败〉
+    # 披露（002202 §4.0 维表形态即合规样例：正外部性保护用例）。
+    _DISC_WORDS = ("降级", "缺失", "失败", "failed", "missing", "degraded", "未获取",
+                   "未产出", "无数据", "未拉到", "留待", "补齐", "暂缺", "限流")
+    undisclosed = []
+    for _d in pan.get("disclose_quant", []):
+        _names = (_d["theme"],) + tuple(_CAP_QUANT_KW.get(_d["theme"], ()))
+        if not any((_n in _ln and _w in _ln)
+                   for _ln in report.splitlines() for _n in _names for _w in _DISC_WORDS):
+            undisclosed.append(f"{_d['theme']}[{_d['path']}:{_d['status']}]")
+    if undisclosed:
+        failed.append(1)
+        reasons.append("#1 披露义务 FAIL — 到场未出货/拉取失败维度未披露（豁免覆盖≠静默免单）："
+                       + "、".join(undisclosed)
+                       + "——各维补一行〈维度名+降级/缺失/失败〉（照抄：「资产安全 | status=degraded（…）"
+                         "| 本维数据降级，留待模式A补齐」形态）")
 
     # ---- #1 数值新鲜度（plan Step 5.2 升级，反 stale-value）----
     # 报告提及户数词但 latest_period 值未 grounded（多精度/src 豁免）→ #1 FAIL。

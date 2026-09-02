@@ -65,6 +65,8 @@ echo "[① 契约层] test_verify_banner.py（横幅三分 ✅iff零失败 + get
 python3 "$HERE/test_verify_banner.py" 2>&1 | tail -3
 echo "[① 契约层] test_g11_pairing_lock.py（G11 字面锚配对锁：m38/m12/m8 活文档投影喂真 gate + 冻结红极，P1a 2026-09-03）"
 python3 "$HERE/test_g11_pairing_lock.py" 2>&1 | tail -3
+echo "[① 契约层] test_g30_disclose_bucket.py（P1b 三桶：_scene_bucket 两极 + G30#1 披露义务 FLIP/PROTECTION/INVARIANT/NEGATIVE）"
+python3 "$HERE/test_g30_disclose_bucket.py" 2>&1 | tail -3
 echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+切片验签 劫持免疫+零回归边界）"
 python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
