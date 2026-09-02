@@ -59,8 +59,10 @@ echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术�
 python3 "$HERE/test_g1_g14_dual_segment.py" 2>&1 | tail -3
 echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径对齐+#2/#3/#6 拦截）"
 python3 "$HERE/test_g30_label_format.py" 2>&1 | tail -3
-echo "[① 契约层] test_b_head_g71.py（b_head 头块视图：18 票语料回放+分支/幂等 + G71 两极四项）"
+echo "[① 契约层] test_b_head_g71.py（b_head 头块视图：18 票语料回放+分支/幂等 + G71 两极四项 + ④收窄 corpus FLIP/INVARIANT/ENUMERATION）"
 python3 "$HERE/test_b_head_g71.py" 2>&1 | tail -3
+echo "[① 契约层] test_verify_banner.py（横幅三分 ✅iff零失败 + get_profile fail-loud，P0 2026-09-03）"
+python3 "$HERE/test_verify_banner.py" 2>&1 | tail -3
 echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+切片验签 劫持免疫+零回归边界）"
 python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"

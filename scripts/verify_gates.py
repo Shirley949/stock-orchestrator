@@ -329,6 +329,20 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     return base_result
 
 
+def _banner_line(verdict: str, n_fail: int, threshold: int) -> str:
+    """横幅前缀三分（P0 2026-09-03）：✅ 当且仅当 verdict=PASS 且失败+错误=0。
+
+    软过（verdict=PASS 但残留未过 gate）打 ⚠️——✅ 前缀会中和紧随的未过清单，
+    致会话只计硬 FAIL（retrospective_audit_20260902 批2「只有 G71」误报根因）。
+    仅改前缀渲染；verdict/exit code/sidecar 字段语义不动（发布链消费 verdict）。"""
+    if verdict == "PASS":
+        if n_fail == 0:
+            return f"✅ 校验通过（失败 0，阈值 {threshold}）"
+        return (f"⚠️ 校验软过：verdict=PASS 但残留 {n_fail} 个未过 gate"
+                f"（阈值 {threshold}，硬阻断=权重≥3）——须在『分析局限性』标注")
+    return f"🔴 校验失败（失败 {n_fail}，超出阈值 {threshold}）"
+
+
 def print_report(result: dict):
     """打印校验报告"""
     print("=" * 60)
@@ -371,16 +385,14 @@ def print_report(result: dict):
               f"溯源 {src['score']}% (snap={src['snapshot_tags']} web={src['websearch_tags']})]")
     print()
 
+    print(_banner_line(result["verdict"],
+                       result["failed"] + result["errors"], result["threshold"]))
     if result["verdict"] == "PASS":
-        print(f"✅ 校验通过（失败 {result['failed'] + result['errors']}，"
-              f"阈值 {result['threshold']}）")
         if result["failed_gates"]:
             print("⚠️  以下 Gate 未通过，请在'分析局限性'中标注：")
             for action in result["action_required"]:
                 print(f"  - {action}")
     else:
-        print(f"🔴 校验失败（失败 {result['failed'] + result['errors']}，"
-              f"超出阈值 {result['threshold']}）")
         print("报告必须重做或补全以下项后再输出：")
         for action in result["action_required"]:
             print(f"  - {action}")

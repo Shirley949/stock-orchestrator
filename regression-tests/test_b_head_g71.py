@@ -8,6 +8,8 @@
 - TestBHeadNoop      C11/C12：A 快照 no-op + 截断残骸不崩
 - TestBHeadCorpus    C1：~/.cache/skill-snapshots/full 全部 B 快照金票回放（无语料则 skip）
 - TestG71            C13/C14：四极反例 + 已失守变体正例 + v2 金票正例（归档在则跑）
+- TestG71ProbTableGate P0(2026-09-03)：④收窄 corpus——FLIP/INVARIANT/ENUMERATION
+  （trap_ledger G71#projection:panorama_pct_misread；证据=retrospective_audit_20260902）
 
 跑：python3 test_b_head_g71.py
 """
@@ -493,6 +495,86 @@ class TestG71(unittest.TestCase):
         self.assertEqual(len(reasons), 1, reasons)  # 收敛：仅槽位一项
         self.assertIn("现价", reasons[0])
         self.assertIn("分时", reasons[0])
+
+
+# ---------------------------------------------------------------------------
+# P0（2026-09-03）：G71④ 概率表收窄 corpus —— FLIP / INVARIANT / ENUMERATION
+# 证据源：~/retrospective_audit_20260902/evidence/{batch1,batch2}_edits.json
+# 修前 old 原文 verbatim 入 fixture；「-R」后缀 = trap_ledger 自记形态重建（非 verbatim）。
+# 红先绿后：FLIP/ENUMERATION 在收窄落码前必红（旧引擎假漂移/首实例即止），
+# 落码后转绿；INVARIANT 收窄前后都必须 FAIL（执法面不得缩过真漂移）。
+# ---------------------------------------------------------------------------
+
+_PANORAMA_ROWS_FLIP = [
+    # 300054（①偏空行不在词根面，保留 verbatim 证形态；④中性行=④臂事件行）
+    ("300054",
+     "| ①估值 | 偏空 | PE(TTM) 73.74（近五年 76% 分位）/ PB 12.31（近五年 96% 分位）；"
+     "机构目标价 86.68（买入 100%，2 家） | `[src: snapshot.valuation_snapshot.data.valuation_percentile]` |\n"
+     "| ④前瞻预期 | 中性 | westock 目标价 86.68 元（买入 100%，机构 2 家）——机构预期与短线趋势背离"
+     " | `[src: snapshot.valuation_snapshot.data.targetPrice]` |"),
+    ("002407",
+     "| ③技术·资金·筹码 | 中性 | 趋势偏空（均线空头排列+60m MA60 下方）vs 量能偏多（OBV 积累、"
+     "RS 全面跑赢）；获利盘 10.89% 出清后期 | `[src: snapshot.s4_technical.data.volume_price]` "
+     "`[src: snapshot.s4_technical.data.chip_behavior]` |"),
+    ("002851-r1",
+     "| ③技术·资金·筹码 | 中性 | 破位整理（短中期均线失守+纪律位双失守）vs TD9 买向有效（66.7%）"
+     "+20 日主力净流入 9.5 亿；获利盘 19.48% 出清较充分 | `[src: snapshot.s4_technical.data.volume_price]` "
+     "`[src: snapshot.s4_technical.data.chip_behavior]` |"),
+    ("002851-r2",
+     "| ③技术·资金·筹码 | 中性 | 破位整理（短中期均线失守+纪律位双失守）vs TD9 买向历史有效档"
+     "+20 日主力净流入 9.5 亿；获利盘 19.48% 出清较充分 | `[src: snapshot.s4_technical.data.volume_price]` "
+     "`[src: snapshot.s4_technical.data.chip_behavior]` |"),
+    ("301217-R",
+     "| ④前瞻预期 | 中性 | 机构覆盖 2 家（买入 100%）；估值处近五年 82% 分位——预期与短线趋势背离"
+     " | `[src: snapshot.valuation_snapshot.data.targetPrice]` |"),
+]
+
+
+def _panorama_report(rows):
+    """金票头块 + §5 内插入证据全景表（表头无「概率」列，含裸 % 事件行）。"""
+    return _HEAD_OK.replace(
+        "## 5. 综合研判与操作建议\n\n### 情景-动作矩阵",
+        "## 5. 综合研判与操作建议\n\n### 证据全景（非概率表）\n\n"
+        "| 维度 | 方向 | 证据 | 数据锚点 |\n|------|------|------|---------|\n"
+        + rows + "\n\n### 情景-动作矩阵")
+
+
+class TestG71ProbTableGate(unittest.TestCase):
+    """G71④ 收窄锚：概率执法面 = 表头含「概率」列的表（m38 §38.1 表头合同）。
+
+    FLIP：非概率表（证据全景）中性行的裸 % 不入④执法面——收窄前 FAIL、收窄后 PASS。
+    INVARIANT：带概率表头的表内数值漂移，收窄前后都必须 FAIL（防收窄缩过真漂移）。
+    ENUMERATION：cap 切片内多张概率表同词根冲突 → reason 全枚举
+    （旧引擎首实例即止，修一轮暴露下一个——两轮教训的结构性修复）。
+    """
+
+    def setUp(self):
+        self.check = GATE_CHECKERS["G71"]
+        self.snap = _b_snapshot()
+
+    def test_flip_panorama_rows_pass(self):
+        for label, rows in _PANORAMA_ROWS_FLIP:
+            with self.subTest(label):
+                ok, reasons = _res(self.check, _panorama_report(rows), self.snap)
+                self.assertTrue(ok, f"{label}: {reasons}")
+
+    def test_invariant_cap_matrix_drift_still_fails(self):
+        rep = _panorama_report(_PANORAMA_ROWS_FLIP[0][1]).replace(
+            "| 中性（主推） | 60% |", "| 中性（主推） | 55% |")
+        ok, reasons = _res(self.check, rep, self.snap)
+        self.assertFalse(ok)
+        self.assertTrue(any("漂移" in r for r in reasons), reasons)
+
+    def test_enumeration_multi_prob_table_conflict(self):
+        extra = ("\n### 复核表（第二张概率表）\n\n"
+                 "| 情景 | 概率 | 目标价 | 动作 |\n|------|------|--------|------|\n"
+                 "| 中性（复核） | 50% | 33.123~43.337 | 区间思路 |\n")
+        rep = _panorama_report(_PANORAMA_ROWS_FLIP[0][1]) + extra
+        ok, reasons = _res(self.check, rep, self.snap)
+        self.assertFalse(ok)
+        r = next(x for x in reasons if "漂移" in x)
+        self.assertIn("60", r)   # 两张概率表的冲突值须同轮全数上桌
+        self.assertIn("50", r)
 
 
 if __name__ == "__main__":

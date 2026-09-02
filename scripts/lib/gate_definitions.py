@@ -4392,16 +4392,35 @@ def _fmt_label(lv):
 
 
 def _prob_by_root(sec):
-    """情景表行按 乐观/中性/悲观 词根取首个百分数（词根消歧，列序无关）。"""
+    """情景概率提取（G71④）：只扫「表头含『概率』列」的表，取概率列数值（列序无关）。
+
+    收窄锚（trap_ledger G71#projection:panorama_pct_misread，2026-09-02 双批 5 事件）：
+    旧版对切片内所有 | 行做「词根+首个%」共现抽取——证据全景表（| 维度 | 方向 | 证据 |
+    无概率列）中性行的裸 %（买入 100%/获利盘 10.89%）被误读为情景概率 → 假漂移。
+    表头合同 = m38 §38.1 情景表首行（含「概率」列名）。同词根多表实例全收集
+    （list，reason 全枚举——防修一轮暴露下一个的多轮修复）。散文概率主张不在
+    执法面（先在盲区，ledger 观察签名，勿在此扩词法散文锚）。"""
     out = {}
+    prob_col = None
     for ln in sec.splitlines():
-        if not (ln.strip().startswith("|") and re.search(r"\d+(?:\.\d+)?\s*%", ln)):
+        s = ln.strip()
+        if not s.startswith("|"):
+            prob_col = None                     # 出表即失效
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if cells and all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
+            continue                            # 表分隔行
+        if not any(re.search(r"[%\d]", c) for c in cells):
+            prob_col = next((i for i, c in enumerate(cells) if "概率" in c), None)
+            continue                            # 表头行：按「概率」列名切换执法面
+        if prob_col is None or prob_col >= len(cells):
+            continue                            # 非概率表的数据行 → 不入④执法面
+        m = re.search(r"(\d+(?:\.\d+)?)\s*%", cells[prob_col])
+        if not m:
             continue
         for root in ("乐观", "中性", "悲观"):
-            if root in ln and root not in out:
-                m = re.search(r"(\d+(?:\.\d+)?)\s*%", ln)
-                if m:
-                    out[root] = m.group(1)
+            if root in s:
+                out.setdefault(root, []).append(m.group(1))
     return out
 
 
@@ -4790,10 +4809,14 @@ for _g, _row in GATE_REGISTRY.items():
 
 
 def get_profile(profile_name: str) -> dict:
-    """获取 Profile 配置"""
+    """获取 Profile 配置（fail-loud：未知名直接终止，不静默 fallback profile_full）。
+
+    静默 fallback 会让执法面悄悄变脸（quick→full 门数膨胀）且 sidecar 的 profile
+    字段随之失真（retrospective_audit_20260902 潜伏雷；调用方仅 verify_gates CLI，
+    两处均已做 profile_{name} 前缀翻译后传入）。"""
     if profile_name not in PROFILES:
-        print(f"⚠️  未知 Profile: {profile_name}，使用 profile_full")
-        return PROFILES["profile_full"]
+        raise SystemExit(f"❌ 未知 Profile: {profile_name}（可用: {sorted(PROFILES)}）"
+                         "——fail-loud，不静默 fallback；检查 --profile 拼写")
     return PROFILES[profile_name]
 
 
