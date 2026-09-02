@@ -287,11 +287,11 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
    c50 同款在场证明：`update_checklist.py --check c50 --file <清单> --evidence-from /tmp/runner_snapshot_<code>.json`
    （映射叶子 `s10_checklist.completed`，snapshot 在场即过——凭空打勾会 exit 1）。
-6. **发布到外部文档（腾讯文档等）前，先剥离 src 标记**（gate 执法用的溯源标记，读者不需要）：
+6. **发布到外部文档（腾讯文档等）前，先过发布闸门**（清洗/转换/lint 一体；规则真相源=tdx_publish.py rules 表）：
    ```bash
-   python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/strip_src_for_publish.py \
-     /tmp/analysis_report_<code>.md /tmp/analysis_report_<code>_publish.md
-   # → 写入腾讯文档用 publish 副本；原报告 md 永不剥离（verify_gates 扫的就是它）
+   python3 /home/ubuntu/tdx-publish-v4/tdx_publish.py prepare /tmp/analysis_report_<code>.md -o /tmp/tdx_out/
+   # → 产出 publish.mdx（[src:] 剥净 + [verified:] 整段剥离；非零退出=禁止上传）
+   #   原报告 md 永不修改（verify_gates 扫的就是它）；后续五步见 CLAUDE.md「腾讯文档发布 SOP」
    ```
 
 ### Gate Profile 对应关系

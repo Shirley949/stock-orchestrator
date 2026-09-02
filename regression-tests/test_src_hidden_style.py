@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """src 标记写法与发布层剥离回归（2026-08-18 视认修订后契约）。
 
-三组断言：
+两组断言（2026-09-03 修订：strip_for_publish 节随脚本退役移交 tdx_publish.py
+self-test `n11_strip_adrb`——[verified:] 由指针保留改为整段剥离、行数不变断言由
+ADR-B 内容断言取代，旧契约不再成立，勿按本文件历史恢复）：
 1. gate 对注释包裹 `<!-- [src: ...] -->` 的等价性（历史写法兼容：引擎免疫，但规范已否决
-   该写法——smartcanvas 前台原样显示注释文本，发布层改用 strip_src_for_publish.py）
+   该写法——smartcanvas 前台原样显示注释文本，发布层剥离由 tdx_publish.py prepare 承担）
    · G21 提取正则 / G45 行级豁免 / _check_value_freshness 行级豁免 / G60 Layer1 锚
    · tally 表第 2 列方向词格放注释 = G62 禁区（漏数，防误用）
-2. strip_for_publish：明文+注释两式全剥、[verified:] 指针保留、行数/表格结构不变
-3. 转换器口径：明文→注释包裹往返无损（负向环视防双包裹）
+2. 转换器口径：明文→注释包裹往返无损（负向环视防双包裹）
 
 mirror test_m6_gates 范式：sys.path.insert lib + from gate_definitions import ...
 """
@@ -19,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from gate_definitions import check_g45, check_g60, _tally_table_counts, _check_value_freshness
-from strip_src_for_publish import strip_for_publish
 
 
 def _ok(r):
@@ -77,39 +77,6 @@ class GateImmunityPlainVsHidden(unittest.TestCase):
         # 非方向词格（第 3 列）放注释安全
         safe = _tally_table_counts(HDR + "| 证据A | 偏多 | 1.2 <!-- [src: snapshot.s2_quote_kline.data] --> |")
         self.assertEqual(safe["多"], 1)
-
-
-class StripForPublish(unittest.TestCase):
-    """② 发布层剥离：两式全剥、指针保留、结构不变。"""
-
-    def test_strips_both_forms_and_keeps_pointer(self):
-        t = ("[verified: self_score=95 profile=full | see analysis_report.verified.json]\n"
-             "现价 1590 [src: snapshot.s2_quote_kline.data.realtime_quote] 元\n"
-             "PE <!-- [src: snapshot.valuation_snapshot.data.quote] --> TTM 558")
-        out = strip_for_publish(t)
-        self.assertNotIn("[src:", out)
-        self.assertNotIn("<!--", out)
-        self.assertIn("[verified:", out)          # 指针保留
-        self.assertEqual(out.count("\n"), t.count("\n"))
-
-    def test_fixture_structure_invariant(self):
-        """固化语料剥离不变性：行数/表格行数不变，[src:] 两式零残留，指针保留。
-
-        断言收窄说明（2026-08-27）：旧版曾全局断言零 `<!--` 并采样公共路径
-        /tmp/analysis_report.md——该路径被任意会话复写后，非 src 的模板占位注释
-        （如中科曙光样本的 `<!-- PART-B -->`）造成脆断。strip 职责只剥 src 隐藏
-        注记，不属其职责面的注释不再纳入契约；语料改用仓库内 fixture（消除环境耦合）。
-        """
-        path = Path(__file__).resolve().parent / "fixtures" / "strip_publish_sample.md"
-        t = path.read_text(encoding="utf-8")
-        out = strip_for_publish(t)
-        self.assertEqual(out.count("\n"), t.count("\n"))
-        self.assertNotIn("[src:", out)
-        # 模板类注释（无 src 标记）原样保留 = 职责边界自证
-        self.assertIn("<!-- PART-B -->", out)
-        pipes = lambda s: sum(1 for l in s.splitlines() if l.strip().startswith("|"))
-        self.assertEqual(pipes(t), pipes(out))
-        self.assertIn("[verified:", out)
 
 
 class ConverterRoundtrip(unittest.TestCase):
