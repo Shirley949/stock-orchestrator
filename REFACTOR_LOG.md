@@ -18,13 +18,31 @@
 | 12 | **E 批·回归防线 fail-loud**：run_regression.sh 对已挂载但不存在的测试文件显式报错（现 `if [ -f ]` 静默跳过——test_gate_throttled.py 从未存在=防线假存活实证，宪法③连带） | 2026-09-02 | 死守卫删除或改 fail-loud；两极验证（文件在场/缺失各一）+ 回归 exit 0 | ✅ 2026-09-02 收口：死守卫删除 + 挂载完整性预检（脚本自提取清单零双源维护，缺失 1s 显式 exit 1）+ README/CLAUDE.md 幻影行删除；两极实测 37/37 在场静默通过 / pole B 移走挂载文件 exit 1 响铃（见 dated 条目） |
 | 13 | **E 批·findings 契约面**：web_research_findings items 14/14 URL-only（value/topic/provider 全空=「发现层」产出未入契约）。第一步 dump 实证 schema（断空必验）再定执法面（契约属 routing 仓） | 2026-09-02 | URL-only 形态显性化（degraded 三态或契约测试钉死）+ 报告侧「未核实」标注的执法归属裁定 + 回归 exit 0 | ✅ 2026-09-02 收口：`_url_only` 逐条拦截标记 + `data.substantive` + fetch_log url_only 记日志 + `_warnings` 规范化 WARN；执法归属裁定=既有通道（G72 m8 点名 + precheck exit 3）零新 gate；拦截=标记+记日志非丢弃（URL 快照保 G21 溯源）；真实极=688270 生产快照 14 items 回放恒等（见 dated 条目） |
 | 14 | **E 批·token_audit ≤5 定性 + sidecar engine_commit + 688385 降级重估** | 2026-09-02 | ≤5 二选一定性（记录态+规范化 WARN 行 或 SOFT gate，禁仪式态——RCA 模块 6 裁决）；verify_gates sidecar 头部记 engine_commit+gate 文件指纹（并行环境完整性最小档）；688385「机制存活」按本批证据降级重估 | ✅ 2026-09-02 收口：≤5 定性=记录态（新检查行+超线规范化 WARN 行，零阻断）；真实 A/B（HEAD 旧版 vs 新版同 transcript）diff 恰 2 新增行零口径漂移；sidecar `engine_receipt`（commit 8hex+gate sha256 16hex 双 None 容忍）两极入 test_r8；**688385 重估=「机制存活」维持**（live 8/8 结构化+G21 重放 PASS），裁决引「14/14 有形无实」系 688270 张冠李戴（见 dated 条目） |
-| 15 | **发布链 mdx 红字泄漏**（peer 会话 clear-conversation 2026-09-02 报）：md_to_smartcanvas「风险→红字」规则产 `<Mark bold color="red">`，mdx2record 仅 `<Mark bold>` 安全、color 形态全字面泄漏 | 2026-09-02 | 转换层后处理或红字降级方案落码 + 发布链读回验证 + 两极；发现层真相源=peer memory publish-chain-gotchas | ⏳ |
+| 15 | **发布链 mdx 红字泄漏**（peer 会话 clear-conversation 2026-09-02 报）：md_to_smartcanvas「风险→红字」规则产 `<Mark bold color="red">`，mdx2record 仅 `<Mark bold>` 安全、color 形态全字面泄漏 | 2026-09-02 | 转换层后处理或红字降级方案落码 + 发布链读回验证 + 两极；发现层真相源=peer memory publish-chain-gotchas | ✅ 2026-09-03 关闭：`tdx_publish.py`（/home/ubuntu/tdx-publish-v4/）代码化承接——fence 状态机根修 + verify 读回对拍 + self-test 两极 15/15；词汇翻案=color 形态系真组件非泄漏（EXP-Q + RECHECK-v4 探针），历史泄漏=D2 非法注入+判别器误用，红字保留不降级（ADR-D）；旧转换器/剥离器退役归档 `_research/retired/`（见 2026-09-03 v4 收口批条目） |
 | 16 | **full/ 存档漏 web_research_findings scene**（688385 实测：live runner 快照有 8 items、full/ 档零该 scene）→ 用归档档重放会 G21 假 FAIL（10 处锚解析失败） | 2026-09-02 | web_research 写入与 save_full_archive 时序/合并面核查 + 契约测试钉死 full/ 场景完整性 + 回归 exit 0 | ⏳ |
 
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 > **⏳ 累积状态（2026-09-01 收官批重置申报，用户裁决 E）**：收官批（G72/F3/F8/宪法）落地即四条件**自本日起重新累积**——③ 的「连续 2 次 cron」从 9-01 起算；④ 的收敛判据按记分卡条款 D 只在累计 n≥10 后判定。四条齐 → 写闭合条目，四触发器转值守。
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
+
+
+## 2026-09-03 v4 收口批：发布链退役归档（tdx_publish.py 代码化落地；pending #15 关闭）
+
+- **为什么**：pending #15（发布链 mdx 红字泄漏）由 `tdx_publish.py`（/home/ubuntu/tdx-publish-v4/，v4.1.0）整体承接——四轮审计知识代码化为 prepare/verify/read-all/self-test（fence 状态机 + ADR-A~F；规则真相源=其 rules.md 归位表 32 条零悬空）。词汇翻案：EXP-Q + RECHECK-v4 一档五探针证 bold/red/grey Mark 在段落/列表/表格单元格/blockquote 均为真组件，历史「color 全形态泄漏」实为 D2 转换器非法注入（fence 体内注入 + 列表行整行包裹吞 `- ` 记号）+ 判别器误用（先剥全部 `\` 再计数）；红字功能保留不降级（ADR-D 显式否决 color→bold 降级）。
+- **改动**：`scripts/md_to_smartcanvas.py` / `scripts/strip_src_for_publish.py` → `git mv` 至 `_research/retired/`（retain deprecated，实战发布通过后另行清理）；`test_src_hidden_style.py` strip 节随退役移交 tdx_publish self-test `n11_strip_adrb`（[verified:] 指针保留→整段剥离、行数不变断言→ADR-B 内容断言，旧契约不再成立勿按史恢复）；SKILL.md 步骤 6 改指向 `tdx_publish.py prepare`；用户侧 CLAUDE.md「股票报告发布管线」节整体替换为「腾讯文档发布 SOP」五步流程（memory publish-chain-gotchas 同步降级为档案并标注词汇翻案）。
+- **兼容证明**：`run_regression.sh` exit 0（test_src_hidden_style 修订后 gate 免疫 + roundtrip 节原样 5/5）；tdx_publish self-test 15/15；Tier A 复跑 vs v4.0.0 存档逐字节一致（零翻转）；Tier B 在线彩排全链 PASS（create→read-all→verify 8/8→trash）。遗留：`regression-tests/fixtures/strip_publish_sample.md` 暂留（mirror clone 旧版测试仍引用，双仓同步时一并处置）。
+
+## 2026-09-03 P1a 批：G11 字面锚配对锁（活文档投影 fixture；retrospective_audit_20260902 处置）
+
+> 病类 B（模板⇄gate 双源漂移）；与 P0 分批独立 commit。文档侧统一（m38/m12/m8 + SKILL 范式节）在 stock-analysis-quality 仓同批落地。
+
+- **病灶（源头重验）**：m38/m12 只用名词短语「📅 数据截止声明（G11）」描述位置、从未给字面行，模式 B 不加载 m8（唯一有字面行的文档）→ 写作侧自造 `**数据截止声明**：`+冒号后散文 → `check_g11` 正则 `数据[截止至]+[：:]\s*(日期)` 三重不匹配（名词插入/加粗星号/日期不相邻）→ 2026-09-02 双批 G11×2 复发；终稿 workaround 两种形态（`｜数据截止：…**` / `：数据截止：…。`）= 漂移实证。
+- **红演示（落码前）**：首写 b1/b2 verbatim + 名词极简 `数据截止声明：2026-09-02` 三形态喂现行 check_g11 全 FAIL；统一目标 `📅 数据截止：2026-09-02` 与 m8 现行形态 PASS（对照）。
+- **锁体 `test_g11_pairing_lock.py`（活文档投影，禁第三份拷贝）**：①运行时读 quality 仓 m38/m12/m8 原文，提取 backtick 内含「数据截/至」的字面锚，填日期喂**真 check_g11** 必 PASS，且每文档 ≥1 锚（丢锚=红）；②冻结红极 `_BROKEN_FORMS`（双批首写 verbatim+名词极简）必须 FAIL——防正则放宽到「什么都吃」（锁的放宽方向）；③`_LEGACY_FINALS` 双批终稿 workaround 形态（含合规子串）保持 PASS——归档不回溯翻红。提取器反例两极验证：旧名词短语文档 = 0 锚（锁会在文档回退时响铃）。
+- **挂载**：run_regression.sh 契约层新增（挂载完整性预检自提取覆盖）。
+- **回执**：fixture 4/4 绿；全量回归 exit 0；engine_pending 1（G58 #11 范围外不变）。002202/300054 首写仍 G11 FAIL=正确维持态（修复面向下批首写：写作侧照抄模板字面行即首过）。
+- **范式入 SKILL**（quality 仓）：字面锚配对锁 = rot-one-when-it-rots，只锁烂过的锚不预锁；同病灶（模板名词化→自造→当日复发 ≥2）再出现时照此加锁。
 
 
 ## 2026-09-03 P0 批：G71④ 概率表收窄 + 横幅三分 + fail-loud（retrospective_audit_20260902 处置；宪法⑧ 首次适用）

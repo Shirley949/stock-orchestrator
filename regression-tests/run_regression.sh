@@ -63,6 +63,8 @@ echo "[① 契约层] test_b_head_g71.py（b_head 头块视图：18 票语料回
 python3 "$HERE/test_b_head_g71.py" 2>&1 | tail -3
 echo "[① 契约层] test_verify_banner.py（横幅三分 ✅iff零失败 + get_profile fail-loud，P0 2026-09-03）"
 python3 "$HERE/test_verify_banner.py" 2>&1 | tail -3
+echo "[① 契约层] test_g11_pairing_lock.py（G11 字面锚配对锁：m38/m12/m8 活文档投影喂真 gate + 冻结红极，P1a 2026-09-03）"
+python3 "$HERE/test_g11_pairing_lock.py" 2>&1 | tail -3
 echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+切片验签 劫持免疫+零回归边界）"
 python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
