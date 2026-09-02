@@ -49,8 +49,9 @@ class VerifyGatesSnapshotHardFail(unittest.TestCase):
             rep = os.path.join(td, "r.md")
             snap = os.path.join(td, "s.json")
             out = os.path.join(td, "o.json")
-            open(rep, "w", encoding="utf-8").write("# 报告\n正文。\n")
+            # F3 mtime 闸要求报告 mtime ≥ 快照：先写快照后写报告（写序即合同）
             json.dump(OK_SNAP, open(snap, "w"))
+            open(rep, "w", encoding="utf-8").write("# 报告\n正文。\n")
             base = [sys.executable, str(SCRIPTS / "verify_gates.py"), "--report", rep,
                     "--quiet", "--no-sidecar", "--output", out]
             # 正例：快照可读 → 不触发硬闸（产出判决 JSON；报告本身 FAIL 与否不是本测对象）
