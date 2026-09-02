@@ -14,11 +14,30 @@
 | 8 | **G28 双轨**（延后≠登记，2026-09-01 补登记——防 8-30 capstone 劫持同剧本游离） | 2026-09-01 | **轨1 reason-only**：收编 WP1b（10 真实 FAIL 实例领跑 lossy 语料；reason 带闭合差值+「混装形态下本 FAIL 不代表提取错误」提示；FAIL 仍 FAIL，verdict 政策无关）。**轨2 mixed_caliber 政策**：单列 verdict-affecting 批**待用户拍板**（软化与否；2027 中报季前须有结论，否则 7 只闭合 FAIL 股处置仍是「路径 a 靠自觉披露」） | ✅ 2026-09-02 裁决 D 落地（轨2 mixed_caliber 第二信号：runner 探针五态 + G28 第三臂强制披露，见 dated 条目）；残留形态归重开触发器 #3 |
 | 9 | **测试清册批次**（清理是小批次非顺手 rm；时机=WP1b 落地后一次清） | 2026-09-01 | 四层清册：① 永久层**永不清**（trap_corpus+TestTrapCorpus+test_diag_contract 全家+每批行为测试+gate_fixture_test+test_archive_replay+run_regression.sh）② 升格层 脚本→命名工具（diff_engine ✅已升格 2026-09-01）③ 归档层 工作区清除（批2 淘汰原型/研究电池/plan 文件——结论已沉淀 REFACTOR_LOG，manifest 记一行）④ 即删层 /tmp 临时物。闸：grep 全库引用确认无 load-bearing 依赖 → 回归 exit 0 → 单提交 → manifest 更新 | ✅ 2026-09-01 执行（WP1b 落地后）：即删层清 /tmp/gd_wp1{,b_old,b2_old} 三引擎副本（零悬挂引用；差分结论 49/51/53 对已录三条目；重建法=diff_engine docstring 一行 git show）；归档层盘点**零删除**——cleanup_stale_cache.sh load-bearing（routing REFACTOR_LOG 白名单+test_full_archive 语义）、_research/b2_prototype.py 保级待批2（F4 留位）；升格层 diff_engine 已入 scripts/。永久层未动 |
 | 10 | **G69 值对拍缺口**（m37 合同写了「[src:] 锚 + 值对拍」，引擎只执法同行共现+披露守卫，值口径不查） | 2026-09-01 | **设计会标记 + 低优先级**：四维值形态异构（净额/余额亿/分位 %/获利比例），值对拍须逐维定义提取式与容差；落地判据=逐维两极用例+归档重放零误伤。m37 已加执法状态注记（合同-引擎差距显性化，勿依赖引擎兜底值口径） | 🔒 守候（2026-09-02 裁决 E 收口：m37 差距注记已落=虚假安全感已拆除；值对拍落地无排期，新误伤样本出现归重开触发器 #3 流程） |
+| 11 | **G58 定位器劫持修复批①-⑤**（ledger `G58#valuation_pct:locator_hijack_title_anchor` pending；生产票 3/4 复发实证） | 2026-09-02 | ①定位诊断入 reason（`[定位层 {diag}@{len}ch]` 前缀）②head_re 收 `^#{2,4}` 排除 level-1 ③fallback fail-loud ④multi-match fail-loud ⑤scan 诊断失效信号（同 gate+reason_class 连续 ≥3 轮 FAIL → DIAGNOSIS_STALLED，签名哑火兜底）。完成判据=trap_corpus 语料 (a)688270 估值变体/(b)001270 原样 必 FAIL（预声明翻转——两票终稿数字合规，翻转属 checker 开始真核，禁当回归修回）、(c)300548 终稿/(d)603757 PASS 锚、test_diag_contract 零裸 False、回归 exit 0。**落地前一切 G58 PASS 视为未验证状态** | ⏳ |
+| 12 | **E 批·回归防线 fail-loud**：run_regression.sh 对已挂载但不存在的测试文件显式报错（现 `if [ -f ]` 静默跳过——test_gate_throttled.py 从未存在=防线假存活实证，宪法③连带） | 2026-09-02 | 死守卫删除或改 fail-loud；两极验证（文件在场/缺失各一）+ 回归 exit 0 | ⏳ |
+| 13 | **E 批·findings 契约面**：web_research_findings items 14/14 URL-only（value/topic/provider 全空=「发现层」产出未入契约）。第一步 dump 实证 schema（断空必验）再定执法面（契约属 routing 仓） | 2026-09-02 | URL-only 形态显性化（degraded 三态或契约测试钉死）+ 报告侧「未核实」标注的执法归属裁定 + 回归 exit 0 | ⏳ |
+| 14 | **E 批·token_audit ≤5 定性 + sidecar engine_commit + 688385 降级重估** | 2026-09-02 | ≤5 二选一定性（记录态+规范化 WARN 行 或 SOFT gate，禁仪式态——RCA 模块 6 裁决）；verify_gates sidecar 头部记 engine_commit+gate 文件指纹（并行环境完整性最小档）；688385「机制存活」按本批证据降级重估 | ⏳ |
 
 **终局条件（program 关闭判据，2026-09-01 登记——防无限加固；四条齐 → REFACTOR_LOG pending 段清空，体系进稳态：ledger/scan/lint 常驻）**：
 ① pending 人工项清零；② C-4 两个现场窗口自动关闭（closed_pass 或 closed_downgraded，scan 自报）；③ 连续 2 次 cron 零新签名（trap_ledger 无新增 unclassified）；④ 诊断税指标显示首轮收敛（gate_fix_rounds 不升）。
 > **⏳ 累积状态（2026-09-01 收官批重置申报，用户裁决 E）**：收官批（G72/F3/F8/宪法）落地即四条件**自本日起重新累积**——③ 的「连续 2 次 cron」从 9-01 起算；④ 的收敛判据按记分卡条款 D 只在累计 n≥10 后判定。四条齐 → 写闭合条目，四触发器转值守。
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
+
+
+## 2026-09-02 P0 红闸解除 + G58 定位器劫持 RCA 处置批（双轨复盘收口；宪法③当场诞生并首次执行）
+
+触发：688270 全量 run 双轨复盘（审计 fork 9 模块 + RCA fork G58 专项、主会话独立复验）发现两项 P0：① HEAD @419db0b 自带回归红闸（test_r8_mechanism 写序 × F3 mtime 闸结构性冲突，全量回归必 EXIT=1——7f52e98 落闸未跑全量回归=中段提交绕过回归纪律）；② G58 定位器劫持当夜生产票 3/4 复发且晋级机器三次哑火。**宪法③（用户裁决，当场生效）：落地必带闸回执——提交必须绑定回归 exit 0 证据，热修不豁免。**
+
+- **红闸热修**（e4a16d2）：test_r8_mechanism 写序对调（先 json.dump 快照后写报告，注释钉「写序即合同」）。worktree 教训：兄弟仓相对路径在 worktree 失配（test_overseas_derivation ModuleNotFoundError），worktree 只宜单测；权威回执=live 树全量回归（本条目尾部）。
+- **G58 劫持定性（RCA 机械实证 + 主会话复验双向收敛）**：`_locate_section` head_re `^#{1,4}` 不排除 level-1 → H1 含「估值」即切片=H1+G11+TL;DR（882ch，§5 正文零进入）；verify_re 可被 TL;DR 序言满足 + `_check_value_freshness` 15% 容差跨值代偿（001270「PB 82 分位」代偿 ev_ebitda 真值 78.16%）→ 双缺陷叠乘出「checker 零读 §5 却 PASS」的**空转 PASS 活体**（001270，内容合规但未验证）。内容修复实证无效（300548 05:09:01 补分位行 → 05:09:15 仍 FAIL，14 秒）；唯一收敛动作=改 H1（688270「估值不便宜」→「定价不便宜」/300548「高估值」→「高定价」，两票同构）。三选一裁决=**迎合对象是定位器非数据**（诊断后知情绕行；四票终稿数字 vs 快照全对齐零造假 → 不触发三票重发，责任判定全在引擎，修复批=强制项）。
+- **晋级哑火闭环**：ledger 唯一 G58 签名 match「估值分位无中生有」只编码反编造臂，劫持臂 reason 永不命中 → count 恒 0 → 「同形态第 2 次落引擎」扳机结构性失明 ×3；标记环（「引擎缺陷-勿改稿」生产窗口 0 次）与读源码环（688270×4 + 300548×5，每次复发重缴诊断税）为伴生症状。旧签名已补注「仅覆盖反编造臂」。
+- **ledger 新签名**：`G58#valuation_pct:locator_hijack_title_anchor`（match=`定位层|m5 未 surface .*（applicable）`，已两极验证 3/3 生产臂命中+反编造臂不误中；count=7 人工回填——688270 verify×3 轮 5 条 + 300548 ×2 条，sidecar 已被终态 PASS 覆盖 scan 不可考；S5 实验语料与 600961 历史候选不入账；基线照片=/tmp/rca_preserve_688270/LEDGER_BASELINE_20260902.txt）。**engine_pending 0→1**（真实引擎欠账显性化）。
+- **修复批①-⑤ 立项**（pending #11）：①定位诊断入 reason ②head_re `^#{2,4}` ③fallback fail-loud（no_anchor 不再伪装成漏报）④multi-match fail-loud ⑤scan DIAGNOSIS_STALLED（同 gate+reason_class 连续 ≥3 轮 FAIL 无条件上报——对签名编错臂的兜底）。预声明翻转清单见 pending #11。
+- **证据修正（诚实记账，含主会话自我纠错）**：「圣邦 600961 当夜 verify 60/1」系转录考古二手数据（34f29483=8-31 诊断契约实验会话 slug wiggly-moseying-spring，回放他人 transcript 所致；其 G58 FAIL=实验语料、111 次读源码=实验装置，均不入账；初版复发表误记 3/3 生产票已降级为 3/4 票·2 票 FAIL 实锤）；当夜真实队列=001270/603757/688270/300548，600961 实跑产物 mtime=08-24。出口缝隙现行实例=0（带伤 PASS 未发现；空转 PASS 活体=001270）。
+- **E 批挂账不夹带**（pending #12-14）：执法面改动各自须两极+回执，本批只收红闸与 RCA 处置；run_regression.sh 死守卫 fail-loud / findings 契约面 / token_audit ≤5 定性 + sidecar engine_commit + 688385 降级重估，全部入队立即排期。**终局条件①因本批挂账重新打开，累积重置。**
+
+验证：test_r8_mechanism 3 passed；run_regression.sh exit 0（live @e4a16d2+本批，engine_pending 1=真实欠账非异常）。
 
 
 ## 2026-09-02 裁决 D：G28 轨2 mixed_caliber 口径混装第二信号（verdict-affecting；程序最后一轮人工裁决批）

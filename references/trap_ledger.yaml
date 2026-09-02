@@ -214,6 +214,21 @@ entries:
     root_cause: engine
     blocked: false
     fix: "reason 带违规行号——删具体分位数改「分位数据缺失」，或补拉后按 pct_5y×100 口径照抄"
+    # 2026-09-02 RCA 注：本签名仅覆盖反编造臂 reason 字面；劫持/漏报臂（m5 未 surface…）不含该子串 →
+    # 劫持形态复发不计数 = 晋级三次哑火根因（688270×5 + 300548×2 FAIL 事件账面 0 计）。劫持面移交下行签名。
+  # 2026-09-02 RCA 落盘（match 已两极验证：3/3 生产臂 reason 命中、反编造臂不误中；count 为人工回填——
+  # sidecar 已被终态 PASS 覆盖 scan 不可考，回填证据=/tmp/rca_preserve_688270/LEDGER_BASELINE_20260902.txt）
+  - signature: G58#valuation_pct:locator_hijack_title_anchor
+    gate: G58
+    subcheck: valuation_pct
+    reason_class: locator_hijack
+    match: "定位层|m5 未 surface .*（applicable）"
+    count: 7
+    last_seen: "2026-09-02"
+    status: pending
+    root_cause: engine
+    blocked: false
+    fix: "H1 含「估值」劫持 m5 切片（_locate_section head_re ^#{1,4} 未排除 level-1 + verify_re 可被 TL;DR 序言满足 + 15% 容差跨值代偿）——引擎修 head_re ^#{2,4} + fallback fail-loud + 定位诊断入 reason（修复批①-⑤，REFACTOR_LOG 2026-09-02 条目）；落地前 G58 PASS 一律视为未验证状态，禁以改标题规避"
   # ---- 批2 五条引擎根因立项（2026-08-31，plan wiggly-moseying-spring 裁决C；inflight→各条落地时翻 landed）----
   # #3 G62 列合同文档化不入 entries：engine E4 表头签名已 landed（见上 G62#tally），#3 为 m6 文档侧补线，无独立 FAIL 面。
   - signature: G63#percentile_variant:bai_percentile_leak
