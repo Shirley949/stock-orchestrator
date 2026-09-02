@@ -534,10 +534,11 @@ class DataSnapshot:
                 f"fetch_web_research items 必须是 list[dict]，收到 {type(items).__name__}"
                 "（dict 包裹请传 items['items']）")
         norm = []
+        url_only = 0
         for it in items:
             if not isinstance(it, dict):
                 continue
-            norm.append({
+            row = {
                 "topic": str(it.get("topic", "")),
                 "value": it.get("value"),
                 "provider": str(it.get("provider", "")),   # exa / web_reader / tavily
@@ -545,16 +546,29 @@ class DataSnapshot:
                 "query": str(it.get("query", "")),
                 "_source": "llm_web_research",
                 "_verified": False,
-            })
+            }
+            # URL-only 拦截标记：value/topic/provider 全空=仅存 URL 快照，非实质发现——
+            # 标记+记日志（_warnings 进 G72/precheck 既有披露通道），不丢弃（URL 快照保 G21 溯源价值）
+            row["_url_only"] = not (row["value"] or row["topic"] or row["provider"])
+            url_only += row["_url_only"]
+            norm.append(row)
         status = "ok" if norm else "missing"
         self._fetch_log.append({
-            "api": "llm_web_research", "params": {"topic_hint": topic_hint, "items": len(norm)},
+            "api": "llm_web_research",
+            "params": {"topic_hint": topic_hint, "items": len(norm),
+                       "url_only": url_only, "substantive": len(norm) - url_only},
             "status": status, "source": "llm_web_research", "time": datetime.now().isoformat(),
         })
+        warnings = [] if norm else ["[web_research] 空 items——LLM 未提供 websearch 发现"]
+        if url_only:
+            warnings.append(
+                f"[web_research] URL-only {url_only}/{len(norm)} 条（value/topic/provider 全空，仅存 URL 快照）"
+                "——发现层产出未结构化，报告引用须标「未核实」")
         return {
             "scene": "web_research_findings",
-            "data": {"status": "ok" if norm else "missing", "source": "llm_web_research", "items": norm},
-            "_warnings": [] if norm else ["[web_research] 空 items——LLM 未提供 websearch 发现"],
+            "data": {"status": "ok" if norm else "missing", "source": "llm_web_research",
+                     "substantive": len(norm) - url_only, "items": norm},
+            "_warnings": warnings,
         }
 
     def log_fetch(self, source: str, api: str, status: str,

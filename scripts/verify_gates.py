@@ -23,8 +23,10 @@ verify_gates.py — Gate 硬关卡校验脚本（单一引擎，单一报告出�
 """
 
 import argparse
+import hashlib
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +57,25 @@ def _acceptance_flipped() -> bool:
     flipped = bool(((load_acceptance(p) or {}).get("warn_upgrade") or {}).get("flipped"))
     _ACC_STATE.update(path=p, mtime=mtime, flipped=flipped)
     return flipped
+
+
+def _engine_receipt():
+    """sidecar 并行环境完整性回执（E批 pending #14）：engine_commit + gate 文件指纹。
+    取证字段非执法闸——非 git 树/文件缺失容忍为 None，零异常零阻断。"""
+    receipt = {"engine_commit": None, "gate_sha256": None}
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short=8", "HEAD"],
+                           cwd=Path(SCRIPT_DIR).parent, capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            receipt["engine_commit"] = r.stdout.strip()
+    except Exception:
+        pass
+    try:
+        receipt["gate_sha256"] = hashlib.sha256(
+            (SCRIPT_DIR / "lib" / "gate_definitions.py").read_bytes()).hexdigest()[:16]
+    except Exception:
+        pass
+    return receipt
 
 
 def load_report(report_path: str) -> str:
@@ -561,11 +582,15 @@ def main():
     # sidecar（默认写）：单一出口的核心产物，c70 打勾与 --check-pointer 都依赖它
     if not args.no_sidecar:
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
+        result["engine_receipt"] = _engine_receipt()
         sidecar_path = Path(args.report).with_suffix(".verified.json")
         sidecar_path.write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         if not args.quiet:
             print(f"\n📝 sidecar 已写入: {sidecar_path}")
+            er = result["engine_receipt"]
+            print(f"🔧 engine_receipt: commit={er['engine_commit']} "
+                  f"gate_sha256={er['gate_sha256']}")
             # E：指针行直接可复制——消除「为格式提前读 m11-gates.md」的预读，
             # 用 args.profile（="full"）非 profile_name，与 SKILL 模板及 check_pointer 双匹配
             if result["verdict"] == "PASS":

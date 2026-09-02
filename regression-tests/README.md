@@ -37,7 +37,6 @@ westock_client + fetcher reshape 形状回归在 `financial-data-routing/test_we
 
 | 那套 fixture | 管什么 |
 |---|---|
-| `test_gate_throttled.py` | 10 份冻结 snapshot self_score delta |
 | `gate_fixture_test.py` | 29-gate verdict 0 漏报总闸 |
 
 ## 设计备忘

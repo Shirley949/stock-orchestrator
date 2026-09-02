@@ -612,6 +612,8 @@ def main():
          f"（视图内 {ext_in_n} / 视图外 {ext_out_n}）+ gate 调试 {len(hw_gate)} "
          f"+ fetch 补救 {len(hw_fetch)}；验收线 ≤5 量真提取桶"
          if handwrite_hits else "0 处（stdout 节省基线 ~20%）"),
+        ("真提取 ≤5（记录态·非阻断）", len(hw_extract) <= 5,
+         f"{len(hw_extract)} 处（超线=❌ 留痕不阻断出口；定性=记录态，禁仪式态）"),
         ("无快照写回", not writeback_hits,
          f"{len(writeback_hits)} 处 json.dump/open(w/a) 写快照（runner.py 除外）"
          if writeback_hits else "0 处（快照只读）"),
@@ -628,6 +630,9 @@ def main():
     ]
     for name, ok, detail in checks:
         L.append(f"- {'✅' if ok else '❌'} **{name}**：{detail}")
+    if len(hw_extract) > 5:
+        L.append(f"- ⚠️ **WARN：真提取 {len(hw_extract)} 处超验收线 ≤5（记录态·非阻断）**"
+                 f"——取数纪律欠账留痕，明细见 ② 手写全列")
     L.append(f"- ℹ️ gate 源码 Bash 侧访问（sed/grep/cat/awk 撞 gate_definitions，sanctioned "
              f"fallback 透明度）：**{gate_src_bash_n} 次 / {gate_src_bash_chars:,}c**"
              f"（vs Read 全文 178K）")

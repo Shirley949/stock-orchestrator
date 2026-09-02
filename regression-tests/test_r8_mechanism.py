@@ -3,6 +3,7 @@
 exit 1 / update_checklist 未知 cid 硬闸。三处共同主题=「静默降级通道」改 fail-fast，
 每处正例（正常流不受影响）反例（错误流必拦）各一。
 """
+import importlib.util
 import json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
@@ -91,6 +92,35 @@ class UpdateChecklistUnknownCid(unittest.TestCase):
             r2 = _run(base + ["--check", "c05"])
             self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
             self.assertIn("[x] <!--c05-->", open(cl, encoding="utf-8").read())
+
+
+class EngineReceiptSidecar(unittest.TestCase):
+    """E批 pending #14：sidecar engine_commit+gate_sha256（并行环境完整性最小档）。
+    两极：真实仓 sidecar 带格式合法回执；非 git 树+无 gate 文件 → 双 None 零异常
+    （取证字段非执法闸，零阻断）。"""
+    def test_poles(self):
+        with tempfile.TemporaryDirectory() as td:
+            rep = os.path.join(td, "r.md")
+            snap = os.path.join(td, "s.json")
+            # F3 mtime 闸：先写快照后写报告（写序即合同）
+            json.dump(OK_SNAP, open(snap, "w"))
+            open(rep, "w", encoding="utf-8").write("# 报告\n正文。\n")
+            # 正例：sidecar（默认写，verdict 无关）带 engine_receipt，commit 8 hex / gate 指纹 16 hex
+            _run([sys.executable, str(SCRIPTS / "verify_gates.py"), "--report", rep,
+                  "--data-snapshot", snap, "--quiet"])
+            side = json.load(open(rep.replace(".md", ".verified.json"), encoding="utf-8"))
+            er = side.get("engine_receipt") or {}
+            self.assertRegex(er.get("engine_commit") or "", r"^[0-9a-f]{8}$")
+            self.assertRegex(er.get("gate_sha256") or "", r"^[0-9a-f]{16}$")
+            # 反例：非 git 树 + 无 lib/gate_definitions.py → 双 None 零异常（容忍不炸）
+            spec = importlib.util.spec_from_file_location(
+                "vg_poleb", str(SCRIPTS / "verify_gates.py"))
+            vg = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(vg)
+            vg.SCRIPT_DIR = Path(td)
+            er2 = vg._engine_receipt()
+            self.assertIsNone(er2["engine_commit"])
+            self.assertIsNone(er2["gate_sha256"])
 
 
 if __name__ == "__main__":

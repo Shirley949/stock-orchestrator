@@ -24,6 +24,13 @@ SCRIPTS="$HERE/../scripts"
 ROUTING="$HERE/../../financial-data-routing"
 GATE_FIXTURES="$HERE/fixtures"
 
+# 挂载完整性预检（#12 fail-loud）：从本脚本自提取挂载测试清单验存在——缺失 1s 内显式报错。
+# 防「文档记为防线而文件从未存在」的假存活（test_gate_throttled 实证）；set -e 中段兜底，预检前置响铃。
+while IFS= read -r mt; do
+  [ -f "$mt" ] || { echo "❌ 挂载测试缺失: $mt（挂载即承诺必跑）"; exit 1; }
+done < <(grep -E 'python3 ' "$0" | grep -oE '\$(HERE|ROUTING)/[A-Za-z0-9_/]*test_[A-Za-z0-9_]*\.py' \
+         | sed -E "s|^\\\$HERE|$HERE|; s|^\\\$ROUTING|$ROUTING|" | sort -u)
+
 echo "==================== stock-analysis 回归 ===================="
 
 echo "[① 契约层] verify_data_contracts.py"
@@ -108,6 +115,8 @@ echo "[① 契约层] test_s10_checklist_cached.py（收单三态语义两极：
 python3 "$HERE/test_s10_checklist_cached.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_market_context_order.py（market_context 排序契约两极：desc存储→最新消费+board键必挂载+统一信封）"
 python3 "$HERE/test_market_context_order.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_web_research_envelope.py（E批#13：web_research URL-only 拦截标记 两极+真实形态冻结）"
+python3 "$HERE/test_web_research_envelope.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
 python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
@@ -116,10 +125,6 @@ if [ -d "$GATE_FIXTURES" ]; then
   echo "[② 运行时层] D3 surfacing fixtures 在线，串跑："
   echo "  · gate_fixture_test (P6-D3 全 Gate 漏报=0 总闸；冻结池=parity/corpus scene 键输出)"
   python3 "$GATE_FIXTURES/gate_fixture_test.py" 2>&1 | grep -E "漏报.*共" | tail -1
-  if [ -f "$GATE_FIXTURES/test_gate_throttled.py" ]; then
-    echo "  · test_gate_throttled"
-    (cd "$GATE_FIXTURES/.." && python3 -m unittest fixtures.test_gate_throttled 2>&1 | tail -2)
-  fi
 else
   echo
   echo "[② 运行时层] 跳过：$GATE_FIXTURES 不存在（仅跑契约层）"
