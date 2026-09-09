@@ -54,6 +54,9 @@ VIEW_PATHS = {
     "peer":      ("s11_peer", "data", "report_view"),
     "annual":    ("s36_annual_analysis", "data", "report_view"),
     "holder":    ("s8_a_share", "data", "shareholder_count", "report_view"),
+    # 雪球站内声量（2026-09-09 原型）：直连 scene 根（fund_flow/b_head 同款），printer 自渲染
+    "xqvoice":    ("xq_market_voice",),
+    "xqcheck":    ("xq_conclusion_check",),
 }
 
 # 各视图表格列（列名, 取值键/取值函数）
@@ -451,6 +454,36 @@ def _print_b_head(v):
 # any 两级探查：任意节键树（深度可调，扁平小节首选读取方式）
 # ---------------------------------------------------------------------------
 
+def _print_xqvoice(v):
+    print(f"## xqvoice status={v.get('status')} latest={_fmt((v.get('latest_period') or {}).get('date'))}"
+          f" days_old={_fmt((v.get('latest_period') or {}).get('days_old'))}")
+    p = v.get("processed") or {}
+    st = p.get("stats") or {}
+    print(f"\n[总评] {p.get('summary')}")
+    print(f"[stats] citations={_fmt(st.get('citations'))} intel_facts={_fmt(st.get('intel_facts'))} "
+          f"传闻={_fmt(st.get('chuanwen'))} 实锤={_fmt(st.get('shichui'))} date_marks={_fmt(st.get('date_marks'))}")
+    print(f"[module_map] " + " ".join(f"{k}->{x}" for k, x in (p.get("module_map") or {}).items()))
+    answers = (v.get("data") or {}).get("answers") or {}
+    print(f"\n[维度] {len(answers)} 个（每维前12行；全文 → --raw xq_market_voice.data.answers.<dim>）")
+    for dim, txt in answers.items():
+        lines = [l for l in str(txt).split("\n") if l.strip()][:12]
+        print(f"\n-- {dim} ({len(str(txt))}c) --")
+        for l in lines:
+            print("  " + l[:150])
+
+
+def _print_xqcheck(v):
+    print(f"## xqcheck status={v.get('status')}")
+    p = v.get("processed") or {}
+    print(f"[判词] {p.get('summary')}  objections={p.get('objections')}")
+    for vd in p.get("verdicts") or []:
+        mark = "!!反对" if vd.get("verdict") == "反对" else vd.get("verdict")
+        print(f"  #{vd.get('no')} [{mark}] {vd.get('conclusion')}")
+    print("\n[raw_answer 前 20 行；逐条段落 → --raw xq_conclusion_check.data.raw_answer]")
+    for l in [l for l in str((v.get("data") or {}).get("raw_answer") or "").split("\n") if l.strip()][:20]:
+        print("  " + l[:150])
+
+
 PRINTERS = {
     "kline": _print_kline, "cash_flow": _print_cash, "income": _print_income,
     "mainfina": _print_mainfina, "news": _print_news, "events": _print_events,
@@ -460,6 +493,7 @@ PRINTERS = {
     "consensus": _print_consensus, "peer": _print_peer, "annual": _print_annual,
     "short_term": _print_short_term, "market_context": _print_market_context,
     "fund_flow": _print_fund_flow, "b_head": _print_b_head,
+    "xqvoice": _print_xqvoice, "xqcheck": _print_xqcheck,
 }
 
 

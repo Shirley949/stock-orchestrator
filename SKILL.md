@@ -137,6 +137,22 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ---
 
+## Phase 1.5：雪球站内声量拉取（Phase 2 拉取后、写作前执行 · 模式 A/B 均跑）
+
+> **执行时机（钉死）：Phase 2 的 runner 拉取完成 + precheck 通过之后、Phase 3 写作之前**——voice 相锚点全部从 snapshot 提取（K线异动日/公告事件/板块/股东户数/风险身份），快照不存在脚本直接报错。本节是数据获取阶段子步骤，不是新 Phase 门（checklist 无对应项）。
+
+```bash
+python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>.json --phase voice
+```
+
+- **写 `xq_market_voice` scene**（加法式合入 snapshot，不动 runner scenes）：T1-v2 六维问市场（d1 最新经营情报→d6 风险讨论 + 尾行【站内总评】），`processed` 含 summary/stats/module_map。
+- **幂等**：同日 status=ok 即跳过（零配额）；跨日旧 scene 当日重拉（站内声量是当日观点快照）。`--force` 强制重拉。
+- **配额保险丝**：当日 xqSearch 已用 >160（剩余 <40）→ 自动熔断写 `status="degraded_quota"`（零发问），报告数据局限节一行披露（R6），G80 全臂豁免。
+- **会话保留**：cid 落 `data.meta.cid`，**永不删除**（用户 review + 零配额恢复用）。
+- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。
+
+---
+
 ## Phase 2：数据拉取（按模式定制场景路径）
 
 ### ⚠️ Runner 调用强制规范（P1-2 fix — 2026-06-30）
@@ -256,7 +272,7 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
      --profile full      # 或 quick
    # → 产出 /tmp/analysis_report_<code>.md.verified.json（含 verdict / self_score / failed_gates）
    ```
-3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档）：
+3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档；**归档命令必须保 mtime**——三件套逐文件 `cp -p <src> <dst>`（或目录整体 `cp -rp`，发布副本 mdx 一并覆盖），禁裸 `cp`：裸 cp 刷新 mtime，任何基于归档副本的 mtime 时序审计（V11 类）都会失真）：
    ```
    ~/analysis_report/analysis_report-<模型>-<股票名>-<代码>/   ← 每股一目录（用股票名+代码区分）
        ├── analysis_report-<模型>-<股票名>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
@@ -299,6 +315,21 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
 |------|---------|---------|
 | A | profile_full | 3 |
 | B | profile_quick | 2 |
+
+### Phase 4.5：站内结论求证（仅模式 A；Phase 4 内子步骤——报告草稿落盘后、verify_gates 前）
+
+> **时序（硬约束，V11 实测）**：插在 Phase 4 第 1 步（报告写入 /tmp）与第 2 步（verify_gates）之间。② 写 scene 会刷新 snapshot mtime，③ 修订重存报告在其后 → verify 的 mtime 检查（报告 ≥ snapshot）天然满足；错序（先 verify 后写 scene）= exit 2。模式 B 跳过本节（无 capstone 反对处理刚需，省配额）。
+
+1. **提取结论**：从报告草稿提取 10-15 条核心结论（每条一句、含关键数字），一行一条写入 `/tmp/conclusions_<code>.txt`
+2. **Q2 独立会话求证**（防迎合 FRAME 已内嵌；**必须独立会话**——同会话续问会把站内检索退化成上文检索，反对 3→1 实测退化）：
+   ```bash
+   python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>.json \
+     --phase check --conclusions /tmp/conclusions_<code>.txt
+   ```
+   写 `xq_conclusion_check` scene（verdicts 四值：支持/部分支持/反对/无讨论 + objections 反对条目号）。**幂等 = 同日 ok 且 conclusions 未变**才跳过（修订后新结论集必须重问）。
+3. **定向修订草稿**：读 `snapshot_view.py <snap> xqcheck`，每条 objection 在报告（§13.2 反方证据列）写「**站内反对·须直视**」处理段——三要件：标记词（站内反对/站内反驳/市场反对/反对意见）+ 证据 token（数字/≥6 字串）**同段** + 处理三选一（维持/降档/修正），禁静默忽略（详见 m6 capstone「站内反对·须直视」节）。修订后**重存报告文件**。
+3b. **增量逐条过堂**（增量利空/利好不留黑洞，checklist `c_xq_delta`）：d1-d6 各维与 check raw 中「我方此前未覆盖的增量」**逐条显式落点**——利空→m7 §7.1 收录、利好→§4.5 对撞行/观察清单——或写明弃用理由；报告只写结果（对撞行增量句），不出现工序表（规则句见 m4 §4.5 R5）。
+4. 回到 Phase 4 第 2 步跑 verify_gates（G80 三臂此时执法：a 声量已消费 / b 反对已处理 / c 引文逐字）。
 
 ### Phase 6：Token 审计归档（报告完成后一条命令，LLM 零成本记录）
 

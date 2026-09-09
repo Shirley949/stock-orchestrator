@@ -32,6 +32,10 @@ DEFAULT_SNAP_GLOB = os.path.join(HERE, "..", "regression-tests", "parity", "corp
                                  "*_processed_golden.json.gz")
 B_GOLDEN_GLOB = os.path.join(HERE, "..", "regression-tests", "fixtures",
                              "*_modeB_golden.json.gz")
+# xq 双 scene 金票（2026-09-09 真跑 688270 提取）：冻结池 A/B 金票均早于 xq scene，
+# 模块文档的 [src: snapshot.xq_*] 路径须有可解析快照（专用 glob——不进 gate_fixture_test 池）
+XQ_GOLDEN_GLOB = os.path.join(HERE, "..", "regression-tests", "fixtures",
+                              "*_xq_golden.json.gz")
 # 条件性路径标注（R10 规范「模板路径旁必标『仅当 X 存在』」）的等效标记词：
 # 文档实测三式——「仅当…」「⚠️ 条件性：」「…时禁标此 src」任一出现即降级 WARN
 CONDITIONAL_MARKERS = ("仅当", "条件性", "禁标")
@@ -56,7 +60,8 @@ def resolve(snapshot, path):
 
 def load_default_snapshots():
     snaps = []
-    for p in sorted(glob.glob(DEFAULT_SNAP_GLOB)) + sorted(glob.glob(B_GOLDEN_GLOB)):
+    for p in sorted(glob.glob(DEFAULT_SNAP_GLOB)) + sorted(glob.glob(B_GOLDEN_GLOB)) \
+            + sorted(glob.glob(XQ_GOLDEN_GLOB)):
         snaps.append((os.path.basename(p), json.load(gzip.open(p))))
     return snaps
 

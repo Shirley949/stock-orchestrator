@@ -688,6 +688,74 @@ SCENES = {
                 "报告引用须 [src: web_research_findings]，m5 目标价优先 API-grade valuation_snapshot。",
     },
 
+    "xq_market_voice": {
+        # 雪球站内声量（plan /home/ubuntu/xq-plan-final.md §2）：T1-v2 六维问市场
+        # Phase 1.5（快照拉取后、写作前）由 LLM 编排调用，非 runner 网络（同 web_research_findings 范式）
+        "fetcher": "xq_voice.py --phase voice",   # ~/xueqiu-ai/scripts/xq_voice.py（xqai 库真问，1 次 xqSearch/股）
+        "mode": ["A", "B"],                       # 模式 B voice 相照跑（V4 中钨已证可消费）
+        "produces": [
+            {"path": "status", "confidence": CONFIRMED,
+             "note": "三态 ok(含真空)/degraded_quota(保险丝：剩余<40≈已用>160)/failed——G80 全臂豁免读此键"},
+            {"path": "data", "confidence": CONFIRMED,
+             "note": "question + raw_answer(全文原声，含首维度标题前的导语段——G80-c 语料与 stats 计数同源) "
+                     "+ answers{d1_intel,d2_analyst,d3_bullbear,d4_news,d5_moves,d6_risk |<3维→d_full}"
+                     " + meta{asked_at,cid,answer_chars,quota_after}；cid=会话保留不删除（conversation_messages 零配额恢复，V21 实战）"},
+            {"path": "processed", "confidence": CONFIRMED,
+             "note": "module_map(模块→维度路由) + summary(站内总评正则提取，四形态统吃 cap 400c) + "
+                     "stats{citations,intel_facts,chuanwen,shichui,date_marks}"},
+        ],
+        "consumers": {
+            "processed.summary":        ["m12", "G80"],
+            "data.answers.d1_intel":    ["m1", "m2", "m25", "m4"],
+            "data.answers.d2_analyst":  ["m10"],
+            "data.answers.d3_bullbear": ["m4", "m6"],
+            "data.answers.d4_news":     ["m4"],
+            "data.answers.d5_moves":    ["m3"],
+            "data.answers.d6_risk":     ["m7"],
+            "data.answers":             ["G80"],   # c 臂引文子串语料（answers+raw_answer+summary）
+            "data.raw_answer":          ["G80"],   # c 臂语料（导语段引文执法）；旧快照无此键 .get 兜底
+            "status":                   ["G80"],   # 豁免臂：status≠ok/degraded 全臂不执法
+        },
+        "priority": P2,
+        "cost": {"calls": 1, "latency": "medium"},  # xqSearch 日额 ~200；串行 + sleep 3s 防限流
+        "depends_on": [],                            # Phase 1.5 在 runner 快照后运行，锚点自快照提取（K线/事件/板块/户数/行情）
+        "fallback": {},
+        "cacheable": False,                          # 当日观点快照非时序：voice 同日 ok 幂等 skip，跨日重拉（G80 有意无 staleness）
+        "coverage_only": True,   # 不进 _EXPECTED_SCENES（self-score 分母）；配额熔断/次新无声量属常态
+        "note": "站内声量信封（引擎切分+信封，LLM 只按 module_map 分层读取）："
+                "报告引用须 [src: snapshot.xq_market_voice.*]（G21 已验证接受）；引文逐字 R1 写作规则 / G80-c 执法。",
+    },
+
+    "xq_conclusion_check": {
+        # Q2 独立会话求证（plan §1 Phase 4.5）：草稿 10-15 条核心结论逐条判词
+        "fetcher": "xq_voice.py --phase check",  # ~/xueqiu-ai/scripts/xq_voice.py --conclusions <file|->
+        "mode": ["A"],                          # 模式 B 无 capstone 反对处理刚需，check 相跳过省配额（plan §1）
+        "produces": [
+            {"path": "status", "confidence": CONFIRMED, "note": "三态同 xq_market_voice"},
+            {"path": "data", "confidence": CONFIRMED,
+             "note": "raw_answer(Q2 原始回答，b 臂证据 token 提取源) + conclusions(被求证清单；幂等键之一——"
+                     "同日 ok 且 conclusions 未变才 skip，V21：修订后新结论集不能吃旧判词)"},
+            {"path": "processed", "confidence": CONFIRMED,
+             "note": "verdicts[]{no,verdict,conclusion[:50]} 判词值 支持/部分支持/部分反对/反对/无讨论/未标注"
+                     "（「（部分）」限定词折叠，括号内外均可；部分支持/部分反对=核心验证细节出入，不进 objections）"
+                     "+ summary 计数串（各值条件分支，总数=N）+ objections 反对条目号（G80-b 执法输入）"},
+        ],
+        "consumers": {
+            "processed.objections": ["m6", "G80"],
+            "processed.verdicts":   ["m6"],
+            "data.raw_answer":      ["G80"],    # b 臂：反对段证据 token（数字/≥6字串）提取
+            "status":               ["G80"],
+        },
+        "priority": P2,
+        "cost": {"calls": 1, "latency": "medium"},
+        "depends_on": ["xq_market_voice"],      # 同管道 Phase 4.5，在 voice 相与草稿结论提取之后
+        "fallback": {},
+        "cacheable": False,
+        "coverage_only": True,   # 不进 _EXPECTED_SCENES；配额熔断/模式 B 无此 scene 属常态
+        "note": "Q2 必须独立会话（V2：同会话续问把站内检索退化成上文检索）+ 防迎合 FRAME 必带；"
+                "m6 capstone「站内反对·须直视」处理段的执法数据源。",
+    },
+
     "s_margin": {
         # _fetch_margin_scene（runner.py）：westock fund margin 融资融券单日快照
         # A 由 _attach_westock_extras 内部调用（输出同构保 parity），B 由 fan-out 直接调用

@@ -55,6 +55,8 @@ echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA �
 python3 "$ROUTING/test_lixinger_client.py" 2>&1 | tail -1
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
 python3 "$HERE/test_lhb_northbound_processor.py" 2>&1 | tail -3
+echo "[① 契约层] test_financial_indicators_ladder.py（次新股 start_year 降档 2018→2024，真实 payload fixtures 离线回放）"
+python3 "$ROUTING/test_financial_indicators_ladder.py" 2>&1 | tail -3
 echo "[① 契约层] test_g1_g14_dual_segment.py（G1/G14 四段 Gate：技术面完整性+TD 数据驱动+三态+禁编造）"
 python3 "$HERE/test_g1_g14_dual_segment.py" 2>&1 | tail -3
 echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径对齐+#2/#3/#6 拦截）"

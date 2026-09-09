@@ -58,7 +58,7 @@ EXPECTED_OUT = 2
 EXPECTED_WRITEBACK = 1
 
 
-def _build_fixture(path, calls=CALLS, user_text=None):
+def _build_fixture(path, calls=CALLS, user_text=None, write_report=False):
     with open(path, "w", encoding="utf-8") as fh:
         if user_text is not None:
             fh.write(json.dumps({"type": "user", "message": {
@@ -71,6 +71,16 @@ def _build_fixture(path, calls=CALLS, user_text=None):
             fh.write(json.dumps({"type": "user", "message": {
                 "content": [{"type": "tool_result", "tool_use_id": tid,
                              "content": [{"type": "text", "text": "x" * res_len}]}]}}) + "\n")
+        if write_report:
+            # Write 工具写 analysis_report*：审计史入史判据（守卫正例开关）
+            fh.write(json.dumps({"type": "assistant", "message": {
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+                "content": [{"type": "tool_use", "id": "wr1", "name": "Write",
+                             "input": {"file_path": "/tmp/analysis_report_TEST.md",
+                                       "content": "# report"}}]}}) + "\n")
+            fh.write(json.dumps({"type": "user", "message": {
+                "content": [{"type": "tool_result", "tool_use_id": "wr1",
+                             "content": [{"type": "text", "text": "File created"}]}]}}) + "\n")
 
 
 def _run_audit(fx, out, stock="TEST", no_history=True, home=None):
@@ -107,7 +117,7 @@ class TokenAuditV2Test(unittest.TestCase):
                           f"| 写回 {EXPECTED_WRITEBACK} | 覆盖率 47.6%", stdout)
 
             # 版本戳与检查项
-            self.assertIn("semantics v3", md)
+            self.assertIn("semantics v3.1", md)
             self.assertIn("3-bucket 处数", md)
             self.assertIn("无快照写回", md)          # 期望行存在（此处 ❌，写回=1）
             self.assertIn("1 处 json.dump/open(w/a) 写快照", md)
@@ -217,6 +227,12 @@ class TokenAuditV2Test(unittest.TestCase):
                        "df=ak.stock_financial_analysis_indicator(symbol='688048');"
                        "p='/tmp/runner_snapshot_688048.json';d=json.load(open(p));"
                        "d['financial_indicators']=df.to_dict();json.dump(d,open(p,'w'))\"", 400),
+                # fetch 补救（webfindings 策展）：读快照 web_research_findings 做核对/整理，
+                # 无 akshare/financial-data-routing 字面量 → 仍须归 fetch 桶（勿计入真提取）
+                ("w1", 'python3 -c "import json;'
+                       "d=json.load(open('/tmp/runner_snapshot_688048.json'));"
+                       "items=d['web_research_findings']['data']['items'];"
+                       'print(len(items), [i[\'topic\'] for i in items][:3])"', 350),
                 ("v1", "python3 snapshot_view.py /tmp/runner_snapshot_688048.json income", 500),
             ]
             _build_fixture(fx, calls=calls)
@@ -225,20 +241,20 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             md, stdout = open(out, encoding="utf-8").read(), r.stdout
 
-            # 分解式（stdout [v2] 行）：3 = 1 + 1 + 1
-            self.assertIn("手写提取 3 处 = 真提取 1（视图内 0 / 视图外 1）"
-                          "+ gate 调试 1 + fetch 补救 1", stdout)
+            # 分解式（stdout [v2] 行）：4 = 1 + 1 + 2
+            self.assertIn("手写提取 4 处 = 真提取 1（视图内 0 / 视图外 1）"
+                          "+ gate 调试 1 + fetch 补救 2", stdout)
             # ② 新段：🔧 gate 调试 / 🔄 fetch 补救（注入写 1 处）
             self.assertIn("🔧 gate 调试（hint 数据核对优先，读 gate 源码属行为分诊非取数）1 处", md)
-            self.assertIn("🔄 fetch 补救（API 失败后重拉/注入运维）1 处，"
+            self.assertIn("🔄 fetch 补救（API 失败后重拉/注入运维）2 处，"
                           "其中 ⚠️ 注入写 1 处（json.dump 直写快照，D4 变量间接盲区）", md)
             self.assertIn("c) ⚠️ 注入写 `python3 -c", md)
             # json.dumps 反例：gate 命令不亮注入写（fetch 注入写计数仍 1）
             self.assertIn("| fetch 注入写 1 处", stdout)
             # D4 盲区透明：open(p,'w') 变量间接 → 写回计数仍 0（标记≠写回命中）
             self.assertIn("| 写回 0 |", stdout)
-            # chars 口径不变：手写全量（非 surgical）计覆盖率分母 500/(500+900)=35.7%
-            self.assertIn("覆盖率 35.7%", stdout)
+            # chars 口径不变：手写全量（非 surgical）计覆盖率分母 500/(500+1250)=28.6%
+            self.assertIn("覆盖率 28.6%", stdout)
 
     def test_a5_field_distribution(self):
         """--field 调用分布行：含 --field 的 snapshot_view 调用计入、普通调用不计。"""
@@ -324,7 +340,7 @@ class TokenAuditV2Test(unittest.TestCase):
         """A4 防污染闸门：NO_HISTORY=1 不 append；未设时 append 到隔离 HOME。"""
         with tempfile.TemporaryDirectory() as td:
             fx = os.path.join(td, "fxh.jsonl")
-            _build_fixture(fx)
+            _build_fixture(fx, write_report=True)   # 报告会话（写盘 analysis_report*）才入史
             home = os.path.join(td, "home")
             os.makedirs(home, exist_ok=True)
 
@@ -345,6 +361,37 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertEqual(r2.returncode, 0, r2.stderr)
             entries2 = [json.loads(x) for x in open(hist, encoding="utf-8") if x.strip()]
             self.assertEqual(len(entries2), 1)
+
+    def test_report_session_guard(self):
+        """审计史守卫：只认「Write/Edit 写盘 analysis_report*」，不认 verify_gates 痕迹。
+        反例钉死击穿点——CALLS 含 verify_gates 调用+真 FAIL 输出（守卫 v1 候选条件）
+        但无报告写盘 → 必须不入史；正例加一处 Write → 恰 append 1 行。"""
+        with tempfile.TemporaryDirectory() as td:
+            home = os.path.join(td, "home")
+            os.makedirs(home, exist_ok=True)
+            hist = os.path.join(home, ".cache", "token_audit_history.jsonl")
+
+            # 反例：verify_gates 会话（无 analysis_report 写盘）→ 不入史
+            fx = os.path.join(td, "fxneg.jsonl")
+            _build_fixture(fx)          # CALLS 自带 t5 verify_gates 调用+结果
+            out = os.path.join(td, "outneg.md")
+            r = _run_audit(fx, out, no_history=False, home=home)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("非报告会话", r.stdout)
+            self.assertIn("不入史", r.stdout)
+            self.assertFalse(os.path.exists(hist), "非报告会话禁止 append 审计史")
+            self.assertTrue(os.path.exists(out), "审计 md 照常产出（守卫只挡入史）")
+
+            # 正例：同一会话 + Write analysis_report* → 恰 1 行
+            fx2 = os.path.join(td, "fxpos.jsonl")
+            _build_fixture(fx2, write_report=True)
+            out2 = os.path.join(td, "outpos.md")
+            r2 = _run_audit(fx2, out2, no_history=False, home=home)
+            self.assertEqual(r2.returncode, 0, r2.stderr)
+            self.assertNotIn("不入史", r2.stdout)
+            entries = [json.loads(x) for x in open(hist, encoding="utf-8") if x.strip()]
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["stock"], "TEST")
 
 
 if __name__ == "__main__":

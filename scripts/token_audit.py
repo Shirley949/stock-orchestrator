@@ -45,14 +45,17 @@ MODULE_RE = re.compile(r"modules/(m\d[\w-]*)\.md")
 VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder",
               "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual",
               # 模式B视图（2026-08-26 B v2；2026-08-31 +b_head 核心结论头块）
-              "short_term", "market_context", "fund_flow", "b_head"]
+              "short_term", "market_context", "fund_flow", "b_head",
+              # 雪球站内声量视图（2026-09-09 原型）
+              "xqvoice", "xqcheck"]
 # 视图 → 消费模块（报告归因用；events 双消费取 m4）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
                   "news": "m4", "events": "m4", "holder": "m4",
                   "balance": "m2", "timeline": "m4", "technical": "m3",
                   "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
                   "short_term": "m36", "market_context": "m36", "fund_flow": "m37",
-                  "b_head": "m38"}
+                  "b_head": "m38",
+                  "xqvoice": "m4", "xqcheck": "m6"}
 
 # 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
 VIEW_MOUNT_PREFIXES = [
@@ -64,6 +67,8 @@ VIEW_MOUNT_PREFIXES = [
     "s11_peer.data", "s36_annual_analysis.data",
     # 模式B挂载点（short_term_enrich 天然落在 s4_technical.data 前缀内）
     "market_context.data", "s3_fund_flow.data.fund_flow",
+    # 雪球站内声量挂载点（2026-09-09 原型）
+    "xq_market_voice.data", "xq_conclusion_check.data",
 ]
 # 扁平小节（≤4K，any --depth 2 一条命令即全量；V9 尺寸采样结论，视图化收益<维护成本）
 FLAT_SECTIONS = ["segment_composition", "financial_indicators", "rd_expense",
@@ -133,6 +138,8 @@ def classify_block(kind, detail):
         return "视图:list/raw", None
     if HANDWRITE_PAT.search(c) and SNAPSHOT_FILE_PAT.search(c):
         return "手写提取", None   # 处数/分层/覆盖率以 handwrite_hits 单一计数源为准（v2）
+    if "xq_voice.py" in c:
+        return "xq拉取", None
     if "runner.py" in c:
         return "runner拉取", None
     if "verify_gates" in c or "update_checklist" in c:
@@ -269,6 +276,7 @@ def main():
     blocks = []  # [{turn, phase, cat, module, chars, desc, kind(call/result)}]
     result_chars_by_id = {}   # tool_use_id -> result chars（handwrite_hits 记录用）
     vg_result_texts = []      # verify_gates.py 执行的 result（按时间序，末条=终态）
+    report_written = False    # 会话是否写盘过 analysis_report*（审计史入史判据）
     turn_no = -1
     for l in lines:
         if l.get("type") == "assistant":
@@ -286,6 +294,8 @@ def main():
                 cat, mod = classify_block("tool_use", (name, inp))
                 c = str(inp.get("command", "")) if isinstance(inp, dict) else ""
                 fp = str(inp.get("file_path", "")) if isinstance(inp, dict) else ""
+                if name in ("Write", "Edit") and "analysis_report" in fp:
+                    report_written = True
                 desc = (c[:70] or fp[-70:]).replace("\n", " ")
                 blocks.append(dict(turn=turn_no, phase=ph, cat=cat, module=mod,
                                    chars=len(desc) + 20, desc=f"调用:{name} {desc}",
@@ -393,7 +403,8 @@ def main():
                     # > extract（真提取，验收线 ≤5 只量此桶）。注入写标记用 re 匹配 json.dump(
                     # ——禁裸子串 'json.dump'，会误中 json.dumps 打印惯用法
                     "bucket": ("gate" if "gate_definitions" in c else
-                               "fetch" if ("akshare" in c or "financial-data-routing" in c)
+                               "fetch" if ("akshare" in c or "financial-data-routing" in c
+                                           or "webfindings" in c or "web_research" in c)
                                else "extract"),
                     "inj_write": bool(re.search(r"json\.dump\s*\(", c)
                                       and SNAPSHOT_FILE_PAT.search(c)),
@@ -500,9 +511,15 @@ def main():
     except (OSError, json.JSONDecodeError):
         recent = []
     if os.environ.get("TOKEN_AUDIT_NO_HISTORY") != "1":
-        os.makedirs(os.path.dirname(hist_path), exist_ok=True)
-        with open(hist_path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(hist_entry, ensure_ascii=False) + "\n")
+        # 审计史只收报告会话：以「会话写盘过 analysis_report*」为判据。
+        # 跑过 verify_gates 不算报告会话（研究/工程会话同样会跑 gate）——
+        # 判据只认写盘动作，勿换成 verify_gates 执行痕迹。
+        if report_written:
+            os.makedirs(os.path.dirname(hist_path), exist_ok=True)
+            with open(hist_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(hist_entry, ensure_ascii=False) + "\n")
+        else:
+            print("[token_audit] 非报告会话（无 analysis_report 写盘）→ 不入史")
 
     # ---- 输出 ----
     # stock 已在 A4 段取 args.stock or detected_code or "?"
@@ -527,7 +544,8 @@ def main():
 
     L = []
     L.append(f"# Token 审计 — {stock}（{datetime.now():%Y-%m-%d %H:%M}）")
-    L.append(f"- 语义口径：**semantics v3**（deduped · result-only · path-tiered · 3-bucket 处数）"
+    L.append(f"- 语义口径：**semantics v3.1**（deduped · result-only · path-tiered · 3-bucket 处数"
+             "，webfindings/web_research 策展归 fetch 桶）"
              "——处数口径与 v2 不可比（gate 调试/fetch 补救另计）；chars 口径可比")
     L.append(f"\n- 会话：`{os.path.basename(path)}`（{T} 轮 API 调用，{len(blocks)} 内容块）")
     L.append(f"- 被分析文件：`{path}`")

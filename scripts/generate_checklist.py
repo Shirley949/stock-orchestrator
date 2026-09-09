@@ -163,6 +163,9 @@ PHASE_STEPS = {
             {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）"},
             {"id": "c70b", "desc": "失败轮关闭且引擎侧未修 → 落 ledger/memory 后再开下一股（写侧纪律：修完即走 = 教训不落笔，下批同法再撞）"},
         ],
+        "phase_4_5": [
+            {"id": "c_xq_delta", "desc": "增量逐条过堂：d1-d6+check 每维增量逐条显式落点（利空→m7 §7.1、利好→对撞行/观察清单）或写明弃用理由（漏填=修订未完）"},
+        ],
         "phase_5": [
             {"id": "c80", "desc": "报告写入腾讯文档"},
         ],
@@ -214,6 +217,7 @@ def get_phase_name(phase_key: str) -> str:
         "phase_2": "Phase 2: 数据收单",
         "phase_3": "Phase 3: 报告生成",
         "phase_4": "Phase 4: Gate 校验",
+        "phase_4_5": "Phase 4.5: 站内结论求证（仅模式 A）",
         "phase_5": "Phase 5: 输出",
     }
     return names.get(phase_key, phase_key)
@@ -392,6 +396,13 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
     for step in mode_steps["phase_4"]:
         lines.append(f"- [ ] <!--{step['id']}--> {step['desc']}")
     lines.append("")
+
+    # Phase 4.5（仅模式 A：PHASE_STEPS 仅 A 含此键，B 跳过站内求证）
+    if "phase_4_5" in mode_steps:
+        lines.append(f"## {get_phase_name('phase_4_5')}")
+        for step in mode_steps["phase_4_5"]:
+            lines.append(f"- [ ] <!--{step['id']}--> {step['desc']}")
+        lines.append("")
 
     # Phase 5
     lines.append(f"## {get_phase_name('phase_5')}")

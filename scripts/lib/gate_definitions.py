@@ -16,6 +16,7 @@ PROFILES（full/quick 组装）、compute_score（Gate 加权）、compute_self_
 
 import difflib
 import re
+import unicodedata
 
 from latest_extract import days_old  # noqa: E402  G32/G33 freshness 维度（plan Step 5.5）
 from capstone_panorama import panorama as _cap_panorama  # noqa: E402
@@ -108,6 +109,7 @@ GATE_DESCS = {
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
+    "G80": "雪球站内声量三臂（a 站内词+xq src 同段共现 / b 反对逐条处理段带证据 token / c 站内引文≥12字须为语料子串；status≠ok 全臂豁免，配额熔断/拉取失败禁编造）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
@@ -200,13 +202,18 @@ GATE_HINTS = {
            "（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn / curl_sina），"
            "样板话（「已披露数据降级」不带源名）不算。修法：照 FAIL reason 里的"
            "『可写 token』清单在 m8 补点名行。ts<2026-09-01 的旧快照豁免。",
+    "G80": "站内声量三臂高频败因：①c 臂改写——引号内换词/压缩日期/转述（V6 实战 4 例均为自发，"
+           "熟知规则仍会犯；正道=逐字照抄，改写移出引号）；②b 臂只写「站内有反对意见」"
+           "不带反方证据 token——须「站内反对·须直视」标记+数字/≥6字原句同段+处理结论三选一"
+           "（维持/降档/修正）；③a 臂声量拉了没消费。status≠ok（熔断/失败）全臂豁免但须 R6 一行披露。"
+           "数据核对：snapshot_view <S> xqvoice / xqcheck。",
 }
 
 # GATE_WEIGHTS 从 GATE_REGISTRY 派生（单一来源=注册表，见文件尾；外部 import 面 GATE_WEIGHTS 不变）
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G80"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -4490,6 +4497,111 @@ def check_g72(report: str, data: dict) -> bool:
         "腾讯 qt.gtimg.cn（tencent）」"])
 
 
+# ============================================================
+# G80 — 雪球站内声量三臂（plan /home/ubuntu/xq-plan-final.md §6 B4）
+# 母本 /tmp/xq_ai_accuracy/g80_test.py（V6 全矩阵：反例5 FAIL/正例15 PASS/捏造改写张冠李戴 3/3 抓）
+# + /tmp/xq_final5/build_fragments.py（V19 5 新股片段矩阵 12/12）
+# ============================================================
+
+_G80_KW = re.compile(r"站内|雪球|球友|董秘|纪要")
+_G80_OBJ_MARK = re.compile(r"站内反对|站内反驳|市场反对|反对意见")
+# 归一化剔除集：弯/直/角引号全形态 + 括号书名号 + 中西标点 + markdown 强调字符
+_G80_JUNK = "「」『』“”‘’\"'（）()【】[]·—…。．.,、;;:!?！？-*#|`"
+
+
+def _g80_norm(s: str) -> str:
+    """归一化：NFKC 全半角统一 + 去全部空白 + 去引号类/标点/markdown 强调（\s 须 re.escape 外拼接）"""
+    s = unicodedata.normalize("NFKC", s)
+    return re.sub("[" + re.escape(_G80_JUNK) + r"\s]", "", s)
+
+
+def _g80_obj_tokens(seg: str):
+    """反对段证物 token：数字串(≥3位/带%) + 全部 ≥6 字连续段（任一命中即算处理痕迹）"""
+    toks = set(re.findall(r"\d+\.\d+%?|\d{2,}", seg))
+    runs = re.split(r"[，。；、：（）\s\[\]#*「」‘’“”·—…！？]", seg)
+    toks.update(r for r in runs if len(r) >= 6)
+    return toks
+
+
+def check_g80(report: str, data: dict) -> bool:
+    """G80: 站内声量消费三臂。a 臂 presence（voice ok→须(站内词+xq src)同段共现）；
+    b 臂 objection-forcing（check ok→每条反对须「站内反对标记+证据token」同段）；
+    c 臂引文子串（站内语境引文≥12字→归一化后须为语料子串，省略号分段每段≥8字）。
+    status≠ok（含 degraded_quota/failed）全臂豁免；无反对 b 豁免；0 引文 c no-op。"""
+    blocks = re.split(r"\n\s*\n", report)
+
+    # —— a 臂 presence：status=ok → 报告须有（站内词 + xq src）同段共现 ——
+    mv = data.get("xq_market_voice") or {}
+    if mv.get("status") == "ok":
+        hit = any(_G80_KW.search(b) and ("snapshot.xq_market_voice" in b or "snapshot.xq_conclusion_check" in b)
+                  for b in blocks)
+        if not hit:
+            st = (mv.get("processed") or {}).get("stats") or {}
+            return GateResult(passed=False, reasons=[
+                "xq_market_voice status=ok（站内声量已入库：引用 {c} 条/情报 {f} 条/日期标记 {d} 处）"
+                "但全报告无（站内词 + [src: snapshot.xq_market_voice.*]）同段共现——声量拉了没消费。"
+                .format(c=st.get("citations"), f=st.get("intel_facts"), d=st.get("date_marks")),
+                "💡 修法：m4 补「站内之声」小节（声量对比+多空各≥1+最有价值情报1条），"
+                "或 m12 速览补市场之声行；引文逐字照抄 answers 维度并带 "
+                "[src: snapshot.xq_market_voice.data.answers.<dim>]。"])
+
+    # —— b 臂 objection-forcing：每条反对须被报告处理（标记+证据token 同段）——
+    cc = data.get("xq_conclusion_check") or {}
+    if cc.get("status") == "ok":
+        objs = (cc.get("processed") or {}).get("objections") or []
+        if objs:
+            raw = (cc.get("data") or {}).get("raw_answer") or ""
+            verdicts = {v.get("no"): v for v in (cc.get("processed") or {}).get("verdicts") or []}
+            missed = []
+            for no in objs:
+                m = re.search(r"(?:^|\n)(?:#+\s*)?\**\s*" + str(no) + r"\s*[\.、][^\n]*"
+                              r"((?:\n(?!(?:^|\n)(?:#+\s*)?\**\s*\d+\s*[\.、])[^\n]*)*)", raw)
+                seg = m.group(0) if m else ""
+                toks = _g80_obj_tokens(seg)
+                hit = any(_G80_OBJ_MARK.search(b) and any(_g80_norm(t) in _g80_norm(b) for t in toks if t)
+                          for b in blocks)
+                if not hit:
+                    missed.append((no, verdicts.get(no, {}).get("conclusion", ""), sorted(toks)[:5]))
+            if missed:
+                det = "；".join(f"#{no}『{(c or '')[:36]}…』(可锚 token: {'/'.join(t[:3] for t in toks[:3])})"
+                                for no, c, toks in missed[:3])
+                return GateResult(passed=False, reasons=[
+                    "xq_conclusion_check 判词含 {n} 条【反对】，以下未被报告处理（无「站内反对标记+证据token」同段）：{det}"
+                    .format(n=len(objs), det=det),
+                    "💡 修法：m6 capstone 补「站内反对·须直视」处理段——每条反对列反方证据（照抄 raw_answer 对应"
+                    "条目数字/≥6字原句）并给处理结论（维持/降档/修正），禁止静默忽略。"
+                    "数据核对：snapshot_view <S> xqcheck（objections 条目+raw_answer 段落）。"])
+
+    # —— c 臂引文子串：站内语境引文 ≥12 字须为语料子串（防改写/捏造）——
+    if mv.get("status") == "ok":
+        answers = (mv.get("data") or {}).get("answers") or {}
+        corpus = _g80_norm("".join(answers.values()) + " "
+                           + ((mv.get("data") or {}).get("raw_answer") or "")
+                           + " " + ((cc.get("data") or {}).get("raw_answer") or "")
+                           + " " + str((mv.get("processed") or {}).get("summary") or ""))
+        pat = re.compile(re.escape("「") + r"([^" + re.escape("「」") + r"]{12,})" + re.escape("」")
+                         + "|" + re.escape("“") + r"([^" + re.escape("“”") + r"]{12,})" + re.escape("”"))
+        bad = []
+        for qa, qb in pat.findall(report):
+            q = qa or qb
+            pos = report.find(q)
+            line_ctx = report[max(0, pos - 60): pos + len(q) + 10]
+            if not _G80_KW.search(line_ctx):    # 只校站内语境引文
+                continue
+            segs = [s for s in re.split(r"…+|\.\.\.+|⋯+", q) if len(s) >= 8]
+            if not segs or not all(_g80_norm(s) in corpus for s in segs):
+                bad.append((report[:pos].count("\n") + 1, q))
+        if bad:
+            det = "；".join(f"L{ln}:『{q[:40]}…』" for ln, q in bad[:3])
+            return GateResult(passed=False, reasons=[
+                "{n} 条站内引文非语料子串（疑似改写/捏造/张冠李戴）：{det}。语料=answers+raw_answer+summary"
+                "（归一化后逐字匹配）。".format(n=len(bad), det=det),
+                "💡 修法：引文逐字照抄语料原文（含日期/球友ID），改写转述移出引号；长引文可删节但保留段须≥8字"
+                "逐字。数据核对：snapshot_view <S> xqvoice / --raw xq_market_voice.data.answers.<dim>。"])
+
+    return True
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G11": check_g11, "G12": check_g12,
@@ -4521,6 +4633,7 @@ GATE_CHECKERS = {
     "G65": check_g65, "G66": check_g66, "G67": check_g67,
     "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
     "G72": check_g72,
+    "G80": check_g80,
 }
 
 # ============================================================
@@ -4793,6 +4906,12 @@ GATE_REGISTRY = {
             "data_dim": "snapshot._warnings",
             "requires": "_warnings 非空→报告逐条点名各降级源特征 token（API 名/域名/源标签）；ts<2026-09-01 豁免（向后兼容）",
             "fail_hint": "降级未逐条点名（样板话不算）——照 FAIL reason『可写 token』清单在 m8 补点名行"},
+    "G80": {"checker": check_g80, "weight": 3, "owner": ["m4", "m6"],
+            "data_dim": "xq_market_voice/xq_conclusion_check",
+            "requires": "站内声量三臂：voice ok→(站内词+xq src)同段共现；check 反对→「站内反对·须直视」段带证据token；"
+                        "站内引文≥12字归一化后为语料子串；status≠ok 全臂豁免",
+            "fail_hint": "照 FAIL reason 修：a 臂补站内之声段+xq src；b 臂补反对处理段（标记+证据同段）；"
+                         "c 臂引文逐字照抄语料、改写移出引号"},
 }
 
 # GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）

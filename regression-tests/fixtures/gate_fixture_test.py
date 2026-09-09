@@ -116,6 +116,9 @@ EXPECTED = {
     # 降级源点名披露门（2026-09-01 收官批 F1）：池票快照 ts=2026-08-14（生效前）→
     # legacy 豁免恒 True；两极执法由 SECTION_PROBES 带构造快照（第 4 元素）的 G72 探针覆盖
     "G72": {"000988": True,  "002008": True,  "300394": True},
+    # 雪球站内声量三臂门（2026-09-09 plan B4）：池票快照无 xq scene（voice/check 均缺席）
+    # → status≠ok 全臂豁免恒 True；两极执法由 SECTION_PROBES 带构造快照的 G80 探针覆盖
+    "G80": {"000988": True,  "002008": True,  "300394": True},
 }
 
 # Level C：段内省略探针（段存在但内容缺席 → 必 FAIL；内容合规 → PASS）
@@ -195,6 +198,109 @@ SECTION_PROBES = [
         "",
         True,  # legacy 豁免极：ts<2026-09-01 空报告亦 PASS（G61 旧快照同款向后兼容）
         {"_warnings": ["[akshare] K线使用 stock_zh_a_daily"], "timestamp": "2026-08-14T18:00:00"},
+    ),
+    # —— G80 雪球站内声量三臂（2026-09-09 plan B4）两极 + 降级豁免，第 4 元素 = 构造快照 ——
+    # 构造语料：answers.d1 + raw_answer 反对段（b/c 臂证据同源，引文/ token 全部取自语料）
+    (
+        "G80",   # a 臂执法极：voice ok + 报告有站内词但无 xq src 同段 → 必 FAIL（声量拉了没消费）
+        "## 4.4 市场情绪\n站内声音分歧较大，多空辩论激烈，传闻偏多。\n",
+        False,
+        {"xq_market_voice": {"status": "ok",
+                             "data": {"answers": {"d1_intel": "## 1 最新经营情报\n- 站内转述：公司8月排产满载、订单环比大增三成（球友abc，8/31）【传闻】。"}},
+                             "processed": {"stats": {"citations": 12, "intel_facts": 1, "chuanwen": 1, "shichui": 0, "date_marks": 3},
+                                           "summary": "分歧——多空各有声量。"},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "ok",
+                                 "data": {"raw_answer": "### 1. 订单判断\n判词：【反对】\n站内多人指出订单并未放量，8月排产仅六成左右，环比是下降的。",
+                                          "conclusions": ["订单环比大增三成"]},
+                                 "processed": {"verdicts": [{"no": 1, "verdict": "反对", "conclusion": "订单环比大增三成"}],
+                                               "summary": "支持0/反对1/无讨论0", "objections": [1]}}},
+    ),
+    (
+        "G80",   # 全臂合规极：a 站内词+src 同段 / b 反对处理段带证据 token / c 引文逐字（语料子串）→ PASS
+        "## 4.4 市场情绪\n站内之声：球友称「公司8月排产满载、订单环比大增三成」【传闻】"
+        "[src: snapshot.xq_market_voice.data.answers.d1_intel]。\n\n"
+        "## 13.2 反方证据\n**【站内反对·须直视】**（结论#1）：站内证据「8月排产仅六成左右」与订单放量判断相反"
+        "——处理：本条结论降档，标注站内分歧 [src: snapshot.xq_conclusion_check.data.raw_answer]。\n",
+        True,
+        {"xq_market_voice": {"status": "ok",
+                             "data": {"answers": {"d1_intel": "## 1 最新经营情报\n- 站内转述：公司8月排产满载、订单环比大增三成（球友abc，8/31）【传闻】。"}},
+                             "processed": {"stats": {"citations": 12, "intel_facts": 1, "chuanwen": 1, "shichui": 0, "date_marks": 3},
+                                           "summary": "分歧——多空各有声量。"},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "ok",
+                                 "data": {"raw_answer": "### 1. 订单判断\n判词：【反对】\n站内多人指出订单并未放量，8月排产仅六成左右，环比是下降的。",
+                                          "conclusions": ["订单环比大增三成"]},
+                                 "processed": {"verdicts": [{"no": 1, "verdict": "反对", "conclusion": "订单环比大增三成"}],
+                                               "summary": "支持0/反对1/无讨论0", "objections": [1]}}},
+    ),
+    (
+        "G80",   # b 臂执法极：a 合规但反对无处理段（无「站内反对」标记+证据同段）→ 必 FAIL
+        "## 4.4 市场情绪\n站内之声：球友称「公司8月排产满载、订单环比大增三成」【传闻】"
+        "[src: snapshot.xq_market_voice.data.answers.d1_intel]。\n\n"
+        "## 13.2 反方证据\n站内亦有谨慎观点，综合看待。\n",
+        False,
+        {"xq_market_voice": {"status": "ok",
+                             "data": {"answers": {"d1_intel": "## 1 最新经营情报\n- 站内转述：公司8月排产满载、订单环比大增三成（球友abc，8/31）【传闻】。"}},
+                             "processed": {"stats": {"citations": 12, "intel_facts": 1, "chuanwen": 1, "shichui": 0, "date_marks": 3},
+                                           "summary": "分歧——多空各有声量。"},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "ok",
+                                 "data": {"raw_answer": "### 1. 订单判断\n判词：【反对】\n站内多人指出订单并未放量，8月排产仅六成左右，环比是下降的。",
+                                          "conclusions": ["订单环比大增三成"]},
+                                 "processed": {"verdicts": [{"no": 1, "verdict": "反对", "conclusion": "订单环比大增三成"}],
+                                               "summary": "支持0/反对1/无讨论0", "objections": [1]}}},
+    ),
+    (
+        "G80",   # c 臂执法极：a/b 合规 + 站内语境捏造引文（非语料子串）→ 必 FAIL
+        "## 4.4 市场情绪\n站内之声：球友称「公司已获特斯拉十年独家供货大单锁定全部产能」"
+        "[src: snapshot.xq_market_voice.data.answers.d1_intel]。\n\n"
+        "## 13.2 反方证据\n**【站内反对·须直视】**（结论#1）：站内证据「8月排产仅六成左右」与订单放量判断相反"
+        "——处理：本条结论降档，标注站内分歧 [src: snapshot.xq_conclusion_check.data.raw_answer]。\n",
+        False,
+        {"xq_market_voice": {"status": "ok",
+                             "data": {"answers": {"d1_intel": "## 1 最新经营情报\n- 站内转述：公司8月排产满载、订单环比大增三成（球友abc，8/31）【传闻】。"}},
+                             "processed": {"stats": {"citations": 12, "intel_facts": 1, "chuanwen": 1, "shichui": 0, "date_marks": 3},
+                                           "summary": "分歧——多空各有声量。"},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "ok",
+                                 "data": {"raw_answer": "### 1. 订单判断\n判词：【反对】\n站内多人指出订单并未放量，8月排产仅六成左右，环比是下降的。",
+                                          "conclusions": ["订单环比大增三成"]},
+                                 "processed": {"verdicts": [{"no": 1, "verdict": "反对", "conclusion": "订单环比大增三成"}],
+                                               "summary": "支持0/反对1/无讨论0", "objections": [1]}}},
+    ),
+    (
+        "G80",   # R1 正例探针（① voice 语料扩展）：引文仅存于 mv.data.raw_answer（不在任何 answers 维/
+                 # summary/check.raw）——锁死语料拼装键名+顺序两个笔误面。修复前语料无此键 → c 臂 FAIL（红）；
+                 # 修复后语料 +mv.raw_answer → PASS（绿）。a 臂两态均过（站内词+xq src 同段）、
+                 # b 臂两态不触发（无反对）→ 红绿差唯一归因 c 臂语料面。
+        "## 4.4 市场情绪\n站内提到「排产指引上修至满产，订单能见度到四季度」，按原话收录"
+        "[src: snapshot.xq_market_voice.data.raw_answer]。\n",
+        True,
+        {"xq_market_voice": {"status": "ok",
+                             "data": {"raw_answer": "导语：最新爆料，排产指引上修至满产，订单能见度到四季度。",
+                                      "answers": {"d1_intel": "## 1 最新经营情报\n- 与引文无关的内容。"}},
+                             "processed": {"stats": {"citations": 1, "intel_facts": 1, "chuanwen": 0, "shichui": 1, "date_marks": 1},
+                                           "summary": "站内情绪中性。"},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "ok",
+                                 "data": {"raw_answer": "### 1. 判断\n判词：【无讨论】\n与引文无关的内容。",
+                                          "conclusions": ["某结论"]},
+                                 "processed": {"verdicts": [{"no": 1, "verdict": "无讨论", "conclusion": "某结论"}],
+                                               "summary": "支持0/反对0/无讨论1", "objections": []}}},
+    ),
+    (
+        "G80",   # 降级豁免极：degraded_quota 全臂不执法（报告零站内内容亦 PASS，R6 披露属写作规则非 gate）
+        "## 14. 数据时效与局限\n雪球站内声量未获取（配额熔断），本章不引用站内内容。\n",
+        True,
+        {"xq_market_voice": {"status": "degraded_quota",
+                             "data": {"reason": "xqSearch 剩余 30 < 40"},
+                             "processed": {"summary": None},
+                             "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}},
+         "xq_conclusion_check": {"status": "degraded_quota",
+                                 "data": {"reason": "xqSearch 剩余 30 < 40"},
+                                 "processed": {},
+                                 "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}}},
     ),
 ]
 

@@ -418,3 +418,34 @@ entries:
     status: landed
     blocked: false
     fix: "G30#1 真片面假 FAIL（B类引擎侧，retrospective_audit_20260902 处置④）：旧 _scene_has_data 黑名单语义仅 failed/error/throttled 判无，status=degraded/missing 的非空信封（002202 实证：asset_safety={status:degraded} 无 data 键、segment 富 dict status=missing）落 bool(val) 兜底判 present → 把从未到货的维度当 present 强制覆盖。已落地三桶（P1b 批）：_scene_bucket 判 present/gap/failed/absent，panorama 增 disclose_quant（failed 或 degraded/missing 信封，theme+path+status）；G30#1 新增披露义务臂——豁免覆盖≠静默免单（防 Goodhart），各维须一行〈维度名或关键词+降级/缺失/失败〉（002202 §4.0 维表形态=合规样例）；结构性缺席（mode B 不拉 s1）不担披露义务。corpus 四段=FLIP/PROTECTION(正外部性保护)/INVARIANT/NEGATIVE（test_g30_disclose_bucket.py）。预申报翻转实测：12 份首写 verdict/failed-set 零变化，仅 reason 面——002202 真片面[资产安全,主营构成]→披露义务[资产安全[path:degraded]]（主营构成首写自带披露行）、300408 豁免清单增两维（display-only）"
+  - signature: G27#financial_indicators:start_year_empty_nextnew
+    gate: G27
+    subcheck: financial_indicators
+    reason_class: start_year_empty_nextnew
+    match: "financial_indicators"
+    count: 0
+    last_seen: "2026-09-08"
+    status: landed
+    blocked: false
+    fix: "（泰金 688813 实锤 2026-09-08）runner _fetch_financial_indicators 硬编码 start_year='2018'——新浪 stock_financial_analysis_indicator 对次新票（2026-03-31 上市）在 start_year 早于上市年时返回 0 行 → financial_indicators all_failed → G27 数据臂 FAIL。已 landed（2026-09-09）：单发改双档 ladder（2018 空→降档 2024 重试一次），fetch_with_fallback 缓存/失败记忆全继承（params 入键两档不互染）；老股首试即中零额外调用。测试 test_financial_indicators_ladder.py 5 用例（真实 payload fixtures：688813@2024 九行/000657@2018 三十四行）挂载 run_regression.sh；live 688813 自愈 status=ok periods=8。写作侧规避条款已随本批删除（宪法②）：memory 次新家族条目改为「已引擎化禁会话注入」"
+  - signature: G58#percentile:m0_hijack_first_verify
+    gate: G58
+    subcheck: percentile
+    reason_class: m0_hijack_first_verify
+    match: "m5 未 surface"
+    count: 0
+    last_seen: "2026-09-09"
+    status: pending
+    root_cause: engine
+    blocked: false
+    fix: "（剑桥 603083 实锤 2026-09-09）section_locator.locate() 候选按文档序首个验签命中者胜——m0「股票分类与估值框架」节含 G58 verify_re token 时劫持 m5 切片→估值分位三维全假 FAIL：PE 子串可经 PEG/『动态 PE』命中，PB 可经『禁以 PB』否定句命中（gate 主 hint 宣称 m0 不再劫持，实际 verify_re 无词边界、否定句/缩写含塞即命中）。写作侧规避（随本签名 landed 批删除，宪法②）：m0 框架行避写 PE/PB/PEG 及『市盈/市净』子串，改用 动态盈利倍数/账面价值倍数/市销率 表述，G39 框架词由 PS/DCF/市销率 继续满足（剑桥已按此过 56/56）。引擎修向（宪法⑧候选）：G58 head_re 候选排除分类章标题，或 verify_re 对 PE/PB 加词边界"
+  - signature: G80#c_arm:corpus_missing_voice_raw
+    gate: G80
+    subcheck: c_arm
+    reason_class: corpus_missing_voice_raw
+    match: "非语料子串"
+    count: 0
+    last_seen: "2026-09-09"
+    status: landed
+    blocked: false
+    fix: "（世运 603920 复盘实锤 2026-09-09）voice 相不存 raw_answer——首维度标题前的导语段（模型复述/总起，实测 8.6% 字量）不在任何 answers 维：导语段真引文逐字照抄反被 c 臂判『非语料子串』（真引文诬为改写），且 stats 对全文计数与语料口径分叉不可对账。已 landed：xq_voice.py voice 信封 data 增 raw_answer（与 check 相同构）+ gate_definitions G80 c 臂语料拼装 +mv.data.raw_answer（.get 兜底，旧快照零翻转）。先红后绿：gate_fixture_test SECTION_PROBES R1 正例探针（引文仅存 mv.data.raw_answer 样本）修复前必 FAIL、修复后 PASS。写作侧无规避条款（纯引擎修，无可规避面）"

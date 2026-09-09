@@ -617,3 +617,22 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **为什么**：旧 G28 读 `dupont._closure_check`（残差<0.25pp + 金融豁免），而 Sina ROE 口径随报告期切换（Q1=自算平均自闭合；中报/年报=披露加权值），恒等反算在披露期不成立 → 7 票中报季系统性误 FAIL（锡业股份 000960 RCA 起点）。用户裁决：gate 只管「拉到+存对」（status ok + 核心四字段非 None），面板值为权威，不自算。金融股无需 gate 豁免（字段在场即 PASS；三因子 N/A 是模块层事，m2 读 `data._profile`）。
 - **改动**：`check_g28` 重写（纯快照完整性）；GATE_DESCS/GATE_REGISTRY 述求同步（weight/owner/data_dim 不变）；data_contracts dupont 条目加双源 note + scene fallback 行；新增 `regression-tests/test_g28_dupont.py`（gate 两极/编排两极/reshape/max_retries=0 单次/runner 源码契约防漂移）挂载 run_regression.sh。
 - **兼容证明**：67 份真实归档重放（25 配对+41 report-only+000960）G28 翻转恰 7 份全 FAIL→PASS（预期变更面）；parity 冻结票 000988/002008/300394 与 600183_modeB 金票 old=new（EXPECTED 零改）；旧快照 `_closure_check` 残留不读（加法式无害）。
+
+## 2026-09-09 审计史守卫（非报告会话不入史）+ webfindings 重分桶 v3.1（手写率攀升 RCA 批）
+
+- **背景（S2）**：审计史 `token_audit_history.jsonl` 被非报告会话污染——377108 实为 xueqiu_mcp 认证研究会话（首条用户消息为 GitHub 链接），股票码系误提，其 74 处「手写」全部入史拉高趋势基线。
+- **守卫 v1 被实证击穿（记录在案）**：候选判据「会话跑过 verify_gates（vg_result_texts 非空）」不成立——377108 研究会话真实跑过 11 次 verify_gates（3 次真 FAIL 输出）。改 **Guard B：会话经 Write/Edit 写盘过 `analysis_report*`** 才入史；5/5 真实会话判定全对 + 工程会话扫描零误拦。
+- **S2 改动**：token_audit.py 解析循环记 `report_written`（Write/Edit + file_path 含 analysis_report）；append 点守卫——非报告会话打印「不入史」跳过 append（审计 md 照常产出）。真实会话两极验收（HOME 隔离）：5f64b126 拦截✅ / dcad61bb 恰 +1 行 stock=603083✅。
+- **S2 清理**：history 删 377108 污染行（101→100）；`.bak-20260830` 未动。
+- **测试**：test_token_audit.py 新增 `test_report_session_guard`（反例钉死 v1 击穿点：CALLS 含 verify_gates 调用+真 FAIL 输出但无报告写盘 → 必不入史；正例 +Write → 恰 1 行）；`test_a4_history_env_gate` fixture 改带 write_report=True（有意行为变更，外科更新）。
+- **背景（S4）**：web_research_findings 策展命令（读快照 items 核对/整理，无 akshare/financial-data-routing 字面量）误落「真提取」桶——688813 轮132、600172 轮92/95/109 实锤，虚增真提取处数。603083 经 runner 路径的命令本就落 fetch 桶不受影响。
+- **S4 改动**：bucket fetch 臂加 `webfindings`/`web_research` 字面量；审计 md 版本戳 v3→v3.1（处数口径变、chars 不变）。反例先 FAIL（fixture 实测「真提取 2/fetch 1」≠ 期望）后修复转 PASS，8/8 绿。
+
+## 2026-09-09 雪球链路修复批（603920 复盘九项发现裁决落地）：G80-c 语料扩展 + 判词 canon 折叠联动 + checklist phase_4_5
+
+- **背景**：603920 只读复盘四主项裁决（设计评审 v2，R1/R2/R3 红灯折入后执行）。
+- **G80 c 臂语料**（`gate_definitions.py`）：corpus 拼装插 `mv.data.raw_answer`（.get 兜底；冻结池 parity/corpus 与 688270 golden 经 grep 预检均无该键 → 既有判定零翻转）。配套 `xq_voice.py` voice 信封 data 增 `raw_answer`（~/xueqiu-ai 独立仓，同批落码：导语段存档 + G80-c 语料 + stats 口径对齐）+ `data_contracts.py` voice 契约 produces note/consumers 增 `data.raw_answer`、check 契约判词值清单改「支持/部分支持/部分反对/反对/无讨论/未标注（（部分）限定词折叠）」。
+- **R1 正例探针**（`gate_fixture_test.py` SECTION_PROBES）：引文仅存于 mv.data.raw_answer 的构造样本——先红（修复前 c 臂必 FAIL，实录 1 miss）后绿（修复后 PASS，64 门漏报=0）；锁死语料键名+拼装顺序两个笔误面（现有 fixtures 全产修复前 schema，无探针的回归全绿=假验证）。
+- **判词 canon 折叠**（xq_voice.py，独立仓）：`【支持（部分）】`（括号内，603920 第 8 形态）与 `**【支持】（部分）**`（括号外粗体式，603083 第 9 形态）折叠为部分支持/部分反对（re.match 前缀式 + 紧邻括号外组）；summary 计数串增部分反对条件分支（总数闭合 N）；objections 代码零改动、语义显式裁决=部分反对不进（b 臂行为收缩，裁为正确）。三票重放：603920 10支持→5支持/5部分支持；002865 2 条、603083 3 条转部分支持（全部人工回 raw 判词原文核对）；14 反例全过；【反对（部分）】三断言（canon/summary 计数/objections 不含）monkeypatch 全链路过。trap_ledger 入 `G80#c_arm:corpus_missing_voice_raw`（landed）。
+- **checklist phase_4_5**（`generate_checklist.py`）：PHASE_STEPS["A"] 增 `phase_4_5`（c_xq_delta 增量逐条过堂）+ get_phase_name 映射 + 渲染块（`if "phase_4_5" in mode_steps` 守卫，模式 B 不渲染）——checklist 生成器不解析 SKILL.md（R3：只改 SKILL.md = 写作侧生成清单永远缺该项）。SKILL.md Phase 4.5 增步骤 3b（过程清单唯一落点，m4 只加规则句不给表格模板——Y2 过程/正文分家）；归档命令 cp → cp -p（保 mtime，三件套逐文件 cp -p 或目录 cp -rp）。
+- **验证**：gate_fixture_test 先红后绿实录；contract/checklist 全绿；全量回归 1 处 FAIL = `test_b_head_g71.test_v2_report_flags_missing_slots`——**外部会话撞车非本批**：V2_REPORT 是活归档文件（蓝思 300433 报告 18:57 被并行会话覆写为今日数据，对拍冻结语料 8/28 快照 MA20 35.527 必不符）。本批改动相关测试（contracts/gate_fixture/checklist 三家）全绿；活文件作 fixture 的脆弱性另立（禁回退修测试换绿）。
