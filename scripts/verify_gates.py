@@ -572,7 +572,7 @@ def main():
         if _rep.exists() and _snap.exists() and _rep.stat().st_mtime < _snap.stat().st_mtime:
             print(f"❌ 报告 mtime 早于数据快照 mtime（report={_rep} < snapshot={_snap}）——"
                   "报告不是从该快照写出的（错文件/陈旧拷贝，F3）。修法：核对 --report 路径是否"
-                  "run-scoped（/tmp/analysis_report_<code>.md）；确认无误后从正确快照重写报告。")
+                  "run-scoped 且模式匹配（/tmp/analysis_report_<code>_mode<X>.md）；确认无误后从正确快照重写报告。")
             sys.exit(2)
     if args.report_only:
         data = {}  # 纯文本模式：禁用数据感知 Gate（等同旧 quality runner 行为）

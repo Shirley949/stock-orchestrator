@@ -170,6 +170,8 @@ def main():
     ap.add_argument("session", nargs="?", help="会话 JSONL 路径")
     ap.add_argument("--latest", action="store_true", help="取最新会话")
     ap.add_argument("--stock", default="", help="股票代码（仅用于标注/文件名）")
+    ap.add_argument("--mode", default="", choices=["", "A", "B"],
+                    help="归档目录模式过滤（analysis_report-*-mode<A|B>-<code>）；空 = 不过滤（兼容旧目录）")
     ap.add_argument("-o", "--out", default="", help="输出 md 路径（默认 ~/analysis_report/token_audits/）")
     args = ap.parse_args()
 
@@ -523,7 +525,8 @@ def main():
 
     # ---- 输出 ----
     # stock 已在 A4 段取 args.stock or detected_code or "?"
-    # 默认落对应股票分析目录（analysis_report-*-{code}/）；无匹配目录再退 token_audits/
+    # 默认落对应股票分析目录（analysis_report-*-mode<X>-{code}/ 新约定，旧目录无 mode 段也兼容）；
+    # --mode 过滤模式段（同股 A/B 目录并存时防误落异模式目录）；无匹配目录再退 token_audits/
     if args.out:
         out_path = args.out
     else:
@@ -531,9 +534,12 @@ def main():
         stock_dir = None
         if os.path.isdir(base):
             for d in sorted(os.listdir(base)):
-                if d.startswith("analysis_report-") and d.endswith(f"-{stock}"):
-                    stock_dir = os.path.join(base, d)
-                    break
+                if not (d.startswith("analysis_report-") and d.endswith(f"-{stock}")):
+                    continue
+                if args.mode and f"-mode{args.mode}-" not in d:
+                    continue
+                stock_dir = os.path.join(base, d)
+                break
         if stock_dir:
             out_path = os.path.join(
                 stock_dir, f"token_audit-{stock}-{datetime.now():%Y%m%d-%H%M}.md")

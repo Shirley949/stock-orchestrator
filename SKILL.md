@@ -32,7 +32,7 @@ description: >
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_checklist.py \
   --user-prompt "用户原始问题" \
   --stock-codes "股票代码" \
-  --output /tmp/analysis_checklist_{timestamp}.md
+  --output /tmp/analysis_checklist_{code}_mode{X}_{timestamp}.md
 ```
 不跑清单 = 不知道该做什么 = 不能开始分析。
 → 原因：清单是 Phase 判断的唯一依据。跳过清单会导致后续 Phase 不知道该拉哪些数据、加载哪些模块，最终产出质量不可控。
@@ -46,7 +46,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_check
 ```bash
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py \
   --check c01 \
-  --file /tmp/analysis_checklist_{timestamp}.md
+  --file /tmp/analysis_checklist_{code}_mode{X}_{timestamp}.md
 ```
 → 原因：打勾是进度跟踪的唯一方式。如果不打勾，Phase 门控无法判断是否可以进入下一阶段，可能导致未完成的步骤被跳过。
 
@@ -58,14 +58,14 @@ Phase N 结束前 → 检查 Phase N 所有 `[ ]` 项是否打勾，**未打勾�
 报告写完后、输出前 → **必须**运行 `verify_gates.py`，它会**自动产出 sidecar**（分数唯一真相源）：
 ```bash
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
-  --report /tmp/analysis_report_<code>.md \
-  --data-snapshot /tmp/runner_snapshot_<code>.json \
+  --report /tmp/analysis_report_<code>_mode<X>.md \
+  --data-snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
   --profile full        # 或 quick
-# → 产出 /tmp/analysis_report_<code>.md.verified.json（sidecar）+ 退出码
+# → 产出 /tmp/analysis_report_<code>_mode<X>.verified.json（sidecar，= 报告 stem + .verified.json）+ 退出码
 ```
-- **路径必须 run-scoped（带 `<code>`，2026-09-01 F3）**：`/tmp` 是跨会话共享区，裸 `/tmp/analysis_report.md` 会被并行分析会话互覆（实证：000887 审计中报告被 688385 会话覆盖）；verify_gates 同时校验 **report mtime ≥ snapshot mtime**（报告早于快照 = 写错了文件/陈旧拷贝，exit 2）。
+- **路径必须 run-scoped + 模式隔离（带 `<code>_mode<A|B>`）**：`/tmp` 是跨会话共享区，裸 `/tmp/analysis_report.md` 会被并行分析会话互覆（实证：000887 审计中报告被 688385 会话覆盖）；不带模式段则同股 A/B 会话互覆。verify_gates 同时校验 **report mtime ≥ snapshot mtime**（报告早于快照 = 写错了文件/陈旧拷贝，exit 2）。
 - **m11 区只放指针行，禁止手填分数**：`[verified: self_score=N profile=full | see analysis_report.verified.json]`
-- **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report_<code>.md.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
+- **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report_<code>_mode<X>.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
 - `verify_gates` 退出码 1 = `verdict==FAIL`，报告不能输出，必须补全失败的 Gate。
 → 原因：Gate 校验是最后一道质量关卡。**分数、verdict、≥80 阈值全部由代码强制**（根治"三套分数 87/93/95"漂移：手填分数从不进报告，引擎产出无下游消费）。
 
@@ -142,7 +142,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 > **执行时机（钉死）：Phase 2 的 runner 拉取完成 + precheck 通过之后、Phase 3 写作之前**——voice 相锚点全部从 snapshot 提取（K线异动日/公告事件/板块/股东户数/风险身份），快照不存在脚本直接报错。本节是数据获取阶段子步骤，不是新 Phase 门（checklist 无对应项）。
 
 ```bash
-python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>.json --phase voice
+python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json --phase voice
 ```
 
 - **写 `xq_market_voice` scene**（加法式合入 snapshot，不动 runner scenes）：T1-v2 六维问市场（d1 最新经营情报→d6 风险讨论 + 尾行【站内总评】），`processed` 含 summary/stats/module_map。
@@ -160,7 +160,7 @@ python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<
 ```bash
 # ✅ 正确：使用 > file 重定向 stdout（输出完整 JSON）
 python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A <code> \
-  > /tmp/runner_snapshot_<code>.json 2>/tmp/runner_stderr_<code>.log
+  > /tmp/runner_snapshot_<code>_mode<X>.json 2>/tmp/runner_stderr_<code>_mode<X>.log
 
 # ❌ 错误：使用管道截断（会导致 BrokenPipeError，丢失 90% 数据）
 python runner.py A <code> | head -2000    # ← 禁止
@@ -178,7 +178,7 @@ runner 一条命令全量并发（scene 编排 = `fetch_for_mode` 阶段A `_TASK
 **拉完后第一步（强制 stop-gate）**：
 
 ```bash
-python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/precheck.py /tmp/runner_snapshot_<code>.json
+python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/precheck.py /tmp/runner_snapshot_<code>_mode<X>.json
 ```
 
 exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warnings / 财务摘要期数 / 主营构成三态 / 收单 N/12），**禁手写 json.load 验收**。
@@ -197,7 +197,7 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 ```bash
 python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_research <code> \
-  --snapshot /tmp/runner_snapshot_<code>.json \
+  --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
   --items '<json | @findings.json>'     # [{source,title,url,published,content}, ...]
 ```
 
@@ -223,27 +223,27 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 
 ```bash
 SV=~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py
-python3 $SV /tmp/runner_snapshot_<code>.json kline       # K线：recent30 desc + 52周/YTD/量能 stats
-python3 $SV /tmp/runner_snapshot_<code>.json cash_flow   # 现金流 12 期（FCF/CFO净利比已算好）
-python3 $SV /tmp/runner_snapshot_<code>.json income      # 利润表 12 期（毛利率/同比已算好）
-python3 $SV /tmp/runner_snapshot_<code>.json mainfina    # 主要指标 8 期（单季同比/ROIC/偿债）
-python3 $SV /tmp/runner_snapshot_<code>.json balance     # 资产负债表：最新4期×~32关键科目（含合同负债，G16 面）
-python3 $SV /tmp/runner_snapshot_<code>.json timeline    # 事件五桶 risk/catalyst/future/fatal + 买卖压力/股东动态 verdict
-python3 $SV /tmp/runner_snapshot_<code>.json technical   # 技术面：信号态+TD+fib/S&R/筹码+ATR（G63 真值面）
-python3 $SV /tmp/runner_snapshot_<code>.json valuation   # 估值：quote+分位(pe/pb/ev_ebitda)+评级/目标价+EV
-python3 $SV /tmp/runner_snapshot_<code>.json consensus   # 一致预期：westock+东财双年度表+时序+实际值
-python3 $SV /tmp/runner_snapshot_<code>.json peer        # 同业：核心6指标表+rank+行业中位+相对大盘
-python3 $SV /tmp/runner_snapshot_<code>.json annual      # 年报维度：D3分红/D4前十大/D7客户供应商/D8员工
-python3 $SV /tmp/runner_snapshot_<code>.json news        # 新闻 high+medium 标题级
-python3 $SV /tmp/runner_snapshot_<code>.json events      # 大事提醒投影
-python3 $SV /tmp/runner_snapshot_<code>.json holder      # 股东户数信号期
-python3 $SV /tmp/runner_snapshot_<code>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json kline       # K线：recent30 desc + 52周/YTD/量能 stats
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json cash_flow   # 现金流 12 期（FCF/CFO净利比已算好）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json income      # 利润表 12 期（毛利率/同比已算好）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json mainfina    # 主要指标 8 期（单季同比/ROIC/偿债）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json balance     # 资产负债表：最新4期×~32关键科目（含合同负债，G16 面）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json timeline    # 事件五桶 risk/catalyst/future/fatal + 买卖压力/股东动态 verdict
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json technical   # 技术面：信号态+TD+fib/S&R/筹码+ATR（G63 真值面）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json valuation   # 估值：quote+分位(pe/pb/ev_ebitda)+评级/目标价+EV
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json consensus   # 一致预期：westock+东财双年度表+时序+实际值
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json peer        # 同业：核心6指标表+rank+行业中位+相对大盘
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json annual      # 年报维度：D3分红/D4前十大/D7客户供应商/D8员工
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json news        # 新闻 high+medium 标题级
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json events      # 大事提醒投影
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json holder      # 股东户数信号期
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）
 # any 探查（视图外数据的第一入口）：
-python3 $SV /tmp/runner_snapshot_<code>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）
-python3 $SV /tmp/runner_snapshot_<code>.json any s35_research_reports.data --depth 1                 # ② 逐层下钻（猜深路径必报「路径不存在」，必须逐层）
-python3 $SV /tmp/runner_snapshot_<code>.json any s1_financial.data.segment_composition --depth 2     # ③ 扁平小节 depth 2（主营构成/指标/computed_metrics/千股千评 s_stock_evaluation.data 同款）
-python3 $SV /tmp/runner_snapshot_<code>.json annual --raw s36_annual_analysis.data.D4_top10_holders.0  # ④ 单行全文深读（独立 `--raw <path>` 亦可）
-python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_sheet --field 合同负债   # ⑤ 外科投影：单字段全期直出（行表→「日期: 值」单列；字段错=显式报错）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any s35_research_reports.data --depth 1                 # ② 逐层下钻（猜深路径必报「路径不存在」，必须逐层）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any s1_financial.data.segment_composition --depth 2     # ③ 扁平小节 depth 2（主营构成/指标/computed_metrics/千股千评 s_stock_evaluation.data 同款）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json annual --raw s36_annual_analysis.data.D4_top10_holders.0  # ④ 单行全文深读（独立 `--raw <path>` 亦可）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.balance_sheet --field 合同负债   # ⑤ 外科投影：单字段全期直出（行表→「日期: 值」单列；字段错=显式报错）
 ```
 
 **取数硬规则（六条）**：
@@ -263,24 +263,26 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
 
 > **⚠️ 报告写完后、输出前，必须运行 `verify_gates.py`（见约束 5）。单一出口 = sidecar + 指针行。**
 
-1. 将报告写入 `/tmp/analysis_report_<code>.md`（**run-scoped 命名，2026-09-01 F3**——裸固定路径会被并行会话互覆）
+1. 将报告写入 `/tmp/analysis_report_<code>_mode<X>.md`（**run-scoped + 模式隔离命名，2026-09-01 F3**——裸固定路径会被并行会话互覆，缺模式段则同股 A/B 会话互覆）
 2. 运行 Gate 校验脚本（**自动产出 sidecar**；同时校验 report mtime ≥ snapshot mtime，报告早于快照 = 错文件/陈旧拷贝 → exit 2）：
    ```bash
    python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
-     --report /tmp/analysis_report_<code>.md \
-     --data-snapshot /tmp/runner_snapshot_<code>.json \
+     --report /tmp/analysis_report_<code>_mode<X>.md \
+     --data-snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
      --profile full      # 或 quick
-   # → 产出 /tmp/analysis_report_<code>.md.verified.json（含 verdict / self_score / failed_gates）
+   # → 产出 /tmp/analysis_report_<code>_mode<X>.verified.json（含 verdict / self_score / failed_gates）
    ```
 3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档；**归档命令必须保 mtime**——三件套逐文件 `cp -p <src> <dst>`（或目录整体 `cp -rp`，发布副本 mdx 一并覆盖），禁裸 `cp`：裸 cp 刷新 mtime，任何基于归档副本的 mtime 时序审计（V11 类）都会失真）：
    ```
-   ~/analysis_report/analysis_report-<模型>-<股票名>-<代码>/   ← 每股一目录（用股票名+代码区分）
-       ├── analysis_report-<模型>-<股票名>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
-       ├── analysis_report-<模型>-<股票名>-<代码>.md.verified.json   ← sidecar
-       └── analysis_report-<模型>-<股票名>-<代码>_publish.md   ← 发布副本（已剥 src）
+   ~/analysis_report/analysis_report-<模型>-<股票名>-mode<A|B>-<代码>/   ← 每股×模式一目录
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>.verified.json   ← sidecar（= 报告 stem + .verified.json）
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>_publish.md   ← 发布副本（已剥 src）
+       └── runner_snapshot_<代码>_mode<A|B>.json（可选，同期快照——diff_engine 同期配对优先用）
    ```
-   示例：`~/analysis_report/analysis_report-glm5.1-源杰科技-688498/analysis_report-glm5.1-源杰科技-688498.md`
-   > `<模型>` = 当前会话模型简称（如 glm5.1）；同股重分析（模型/日期不同）各自成目录，不覆盖。
+   示例：`~/analysis_report/analysis_report-glm5.1-源杰科技-modeA-688498/analysis_report-glm5.1-源杰科技-modeA-688498.md`
+   > `<模型>` = 当前会话模型简称；**模式段 `mode<A|B>` 置于股票名后、代码前——目录名尾 6 位必须仍是代码**（token_audit `endswith("-{code}")` 与 diff_engine 正则的既有合同，勿破坏）。
+   > **覆盖规则（用户裁定 2026-09-09）：只有同模式才可覆盖**——模式B 只写自己的 `modeB` 目录，模式A 目录（含无 mode 段的旧目录，原地保留不再改名）永不触碰。runner 数据存档 `~/.cache/skill-snapshots/full/` 本就按日并集合并（A∪B），无需处理。
 3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
    **FAIL 修法直接看 verify 输出**：action_required 自带 `💡 Gxx 修法` hint（GATE_HINTS，高频 gate
    败因+修法速查）。hint 不足再 Read `stock-analysis-quality/references/modules/m11-gates.md` 对应节；
@@ -299,13 +301,13 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
    ```
    [verified: self_score=<sidecar中的值> profile=full | see analysis_report.verified.json]
    ```
-5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report_<code>.md.verified.json`
+5. c70 打勾（代码强制）：`update_checklist.py --check c70 --file <清单> --evidence-from /tmp/analysis_report_<code>_mode<X>.verified.json`
    —— `verdict==PASS` + `self_score>=80` + 新鲜度由 `update_checklist.py` / `--check-pointer` 自动校验，不达标 `sys.exit(1)`。无需单独的"自评分≥80"判断。
-   c50 同款在场证明：`update_checklist.py --check c50 --file <清单> --evidence-from /tmp/runner_snapshot_<code>.json`
+   c50 同款在场证明：`update_checklist.py --check c50 --file <清单> --evidence-from /tmp/runner_snapshot_<code>_mode<X>.json`
    （映射叶子 `s10_checklist.completed`，snapshot 在场即过——凭空打勾会 exit 1）。
 6. **发布到外部文档（腾讯文档等）前，先过发布闸门**（清洗/转换/lint 一体；规则真相源=tdx_publish.py rules 表）：
    ```bash
-   python3 /home/ubuntu/tdx-publish-v4/tdx_publish.py prepare /tmp/analysis_report_<code>.md -o /tmp/tdx_out/
+   python3 /home/ubuntu/tdx-publish-v4/tdx_publish.py prepare /tmp/analysis_report_<code>_mode<X>.md -o /tmp/tdx_out/
    # → 产出 publish.mdx（[src:] 剥净 + [verified:] 整段剥离；非零退出=禁止上传）
    #   原报告 md 永不修改（verify_gates 扫的就是它）；后续五步见 CLAUDE.md「腾讯文档发布 SOP」
    ```
@@ -323,7 +325,7 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
 1. **提取结论**：从报告草稿提取 10-15 条核心结论（每条一句、含关键数字），一行一条写入 `/tmp/conclusions_<code>.txt`
 2. **Q2 独立会话求证**（防迎合 FRAME 已内嵌；**必须独立会话**——同会话续问会把站内检索退化成上文检索，反对 3→1 实测退化）：
    ```bash
-   python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>.json \
+   python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
      --phase check --conclusions /tmp/conclusions_<code>.txt
    ```
    写 `xq_conclusion_check` scene（verdicts 四值：支持/部分支持/反对/无讨论 + objections 反对条目号）。**幂等 = 同日 ok 且 conclusions 未变**才跳过（修订后新结论集必须重问）。
@@ -337,8 +339,8 @@ python3 $SV /tmp/runner_snapshot_<code>.json --raw s1_financial.data.balance_she
 
 ```bash
 python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/token_audit.py \
-  --latest --stock <code>
-# → ~/analysis_report/token_audits/<code>-<日期>.md
+  --latest --stock <code> --mode <X>
+# → <股票的 analysis_report-*-mode<X>-<code>/token_audit-<code>-<日期>.md；--mode 过滤模式目录，缺省不过滤（兼容旧目录）
 # 含：Phase×类别矩阵 / 模块明细 / 新管线检查项(JIT/m11延迟/视图直读/无手写提取/模块占比) / Top-15 贵内容块
 ```
 

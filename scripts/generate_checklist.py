@@ -14,7 +14,7 @@ Phase 0 第一步必须调用，输出本次任务的完整执行清单。
     --user-prompt "深度分析沃尔核材002130，重点看期货成本和订单" \
     --stock-codes "002130" \
     --mode A \
-    --output /tmp/analysis_checklist_20260612.md
+    --output /tmp/analysis_checklist_002130_modeA_20260612_1030.md
 """
 
 import argparse
@@ -153,7 +153,7 @@ PHASE_STEPS = {
             {"id": "c63", "desc": "m3 技术（TD 4 步 + 多指标交叉）"},
             {"id": "c64", "desc": "m4.1.1 事件扫描结果"},
             {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比 + 机构一致预期）"},
-            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景研判 + 情景-动作矩阵）；写作第一步跑 helper 抽证据全景草稿（只抽值不打分）：python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot /tmp/runner_snapshot_<code>.json（m6:18）"},
+            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景研判 + 情景-动作矩阵）；写作第一步跑 helper 抽证据全景草稿（只抽值不打分）：python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot /tmp/runner_snapshot_<code>_mode<X>.json（m6:18）"},
             {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性）"},
             {"id": "c_d5_governance", "desc": "m9.2 股东结构与治理（控股股东 + 质押 + 关联交易）"},
             {"id": "c67", "desc": "m7 风险 + 反转假设"},
@@ -327,17 +327,17 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"# Step 1: 数据拉取（routing runner）")
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
             lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A {sc} \\")
-            lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
+            lines.append(f"  > /tmp/runner_snapshot_{sc}_mode{mode}.json 2>/tmp/runner_stderr_{sc}_mode{mode}.log")
             lines.append(f"# 订单数据已并入主 snapshot（合同负债+分地区+中标事件），无需独立 runner")
         elif mode == "B":
             lines.append(f"# 数据拉取（routing runner）")
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
             lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
-            lines.append(f"  > /tmp/runner_snapshot_{sc}.json 2>/tmp/runner_stderr_{sc}.log")
+            lines.append(f"  > /tmp/runner_snapshot_{sc}_mode{mode}.json 2>/tmp/runner_stderr_{sc}_mode{mode}.log")
         # Step 2: 错码核对 + 视图认知（P1c 2026-09-03，内联产生真相的命令、拒绝视图计数）
         lines.append(f"# Step 2: 错码核对（不一致立即停——错码跑完全量拉取落盘后才在 [verify] 行暴露，白跑一次）")
-        lines.append(f"grep '\\[verify\\]' /tmp/runner_stderr_{sc}.log   # stock_code=…→stock_name=… × 任务书代码/公司名逐一比对")
-        lines.append(f"python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}.json --list   # 头部 code= 复核 + 全部视图挂载状态（合法视图以 --list 输出为准）")
+        lines.append(f"grep '\\[verify\\]' /tmp/runner_stderr_{sc}_mode{mode}.log   # stock_code=…→stock_name=… × 任务书代码/公司名逐一比对")
+        lines.append(f"python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}_mode{mode}.json --list   # 头部 code= 复核 + 全部视图挂载状态（合法视图以 --list 输出为准）")
         lines.append("```")
         lines.append("")
 

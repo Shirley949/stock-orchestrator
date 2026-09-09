@@ -394,5 +394,54 @@ class TokenAuditV2Test(unittest.TestCase):
             self.assertEqual(entries[0]["stock"], "TEST")
 
 
+class TokenAuditDirSelectionTest(unittest.TestCase):
+    """--mode 目录过滤两极验证（2026-09-09 报告工件模式隔离批）：
+    同股「旧目录 + modeB 目录」并存 → 缺省落 sorted 首中旧目录（旧行为兼容）/
+    --mode B 命中 modeB 目录（正极）/ --mode A 全 miss 退 token_audits 兜底（负极）。"""
+
+    def _run_default_out(self, fx, stock, home, mode=None):
+        env = dict(os.environ)
+        env["TOKEN_AUDIT_NO_HISTORY"] = "1"
+        env["HOME"] = home
+        cmd = [sys.executable, AUDIT, fx, "--stock", stock]
+        if mode:
+            cmd += ["--mode", mode]
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
+
+    def test_mode_filter_polarity(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = os.path.join(td, "home")
+            base = os.path.join(home, "analysis_report")
+            old_dir = os.path.join(base, "analysis_report-m1-测试股-603663")
+            mb_dir = os.path.join(base, "analysis_report-m1-测试股-modeB-603663")
+            for d in (old_dir, mb_dir):
+                os.makedirs(d)
+            fx = os.path.join(td, "fx.jsonl")
+            _build_fixture(fx)
+
+            # ① 缺省（无 --mode）：sorted 首中旧目录（兼容旧行为），modeB 目录零写入
+            r = self._run_default_out(fx, "603663", home)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            outs = os.listdir(old_dir)
+            self.assertEqual(len(outs), 1, outs)
+            self.assertTrue(outs[0].startswith("token_audit-603663-"), outs)
+            self.assertEqual(os.listdir(mb_dir), [])
+
+            # ② --mode B：命中 modeB 目录（过滤正极），旧目录不再新增
+            r = self._run_default_out(fx, "603663", home, mode="B")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            outs = os.listdir(mb_dir)
+            self.assertEqual(len(outs), 1, outs)
+            self.assertTrue(outs[0].startswith("token_audit-603663-"), outs)
+            self.assertEqual(len(os.listdir(old_dir)), 1)
+
+            # ③ --mode A：全 miss（过滤负极）→ 退 token_audits/ 兜底
+            r = self._run_default_out(fx, "603663", home, mode="A")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            fb = os.listdir(os.path.join(base, "token_audits"))
+            self.assertEqual(len(fb), 1, fb)
+            self.assertTrue(fb[0].startswith("603663-"), fb)
+
+
 if __name__ == "__main__":
     unittest.main()
