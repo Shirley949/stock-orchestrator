@@ -26,8 +26,10 @@
      token_audit / verify_gates 的命令不计（日志挖掘与自审计排除）
   5. gate 源码零读入：Read gate_definitions.py（178K）→ ❌（FAIL 修法看 verify hint）
   6. 视图覆盖率：CLI result chars /（CLI result + 手写 result）chars > 80%（v2 result-only）
-  7. 模块文件加权占比 vs 基线 32.3%
-  8. 无快照写回：以写模式 open 的文件参数命中快照路径（runner.py 除外）→ ❌
+  7. 无快照写回：以写模式 open 的文件参数命中快照路径（runner.py 除外）→ ❌
+  8. 加载集 diff：实际 Read 模块集 vs skill_dep_graph 应载集——漏读 ❌；多读（延迟/跨模式
+     混入）ℹ️ 分列不计 FAIL（3.2，2026-09-10 起，替代退役的「模块占比 vs 32.3 基线」——
+     旧基线对 B 多读不敏感且混用 A 基线）
 """
 import argparse
 import glob
@@ -37,6 +39,10 @@ import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
+from pathlib import Path as _P
+
+sys.path.insert(0, str(_P(__file__).resolve().parent / "lib"))
+from skill_dep_graph import resolve_required_files  # 加载集 diff（3.2）：机制应加载集单一真相源
 
 # ---------- 类别/Phase 推断规则（确定性，勿靠 LLM 自觉） ----------
 
@@ -124,6 +130,8 @@ def classify_block(kind, detail):
             return f"模块文件{mid}", mid
         if "gate_definitions" in fp:
             return "gate源码读入", None
+        if "/scenarios/" in fp:
+            return "场景文件", None
         if "SKILL" in fp or "/references/" in fp or "skills/" in fp:
             return "Skill加载", None
         return "Read其它", None
@@ -354,6 +362,7 @@ def main():
     gate_src_bash_n, gate_src_bash_chars = 0, 0        # A2：gate 源码 Bash 侧访问（透明度）
     compact_turns, snapshot_cli_events = [], []        # v4：compact 段起点轮 / CLI 取数事件(turn, cmd)
     b_mode_cmds = []                                   # 模式B会话检测（runner.py B <code>）
+    b_report_writes = []                               # 3.1 兜底：Write/Edit 落盘 modeB 工件
     hw_turn = -1
     for l in lines:
         # v4：compact 段起点——顶层键判定（禁子串 grep：正文提及 isCompactSummary 会 16→2 假阳）
@@ -387,6 +396,10 @@ def main():
             # 模式B会话检测（runner.py B <code> 调用形态；模块基线标注用）
             if re.search(r"runner\.py[\"']?\s+B\s", c):
                 b_mode_cmds.append(c[:60])
+            # 3.1 兜底：runner 调用形态漏检时（如 fetch_for_mode 变体），Write/Edit 落盘
+            # modeB 工件（analysis_report_*modeB / runner_snapshot_*_modeB）判 B 会话
+            if n in ("Write", "Edit") and "modeB" in fp:
+                b_report_writes.append(fp[:60])
             # 写回检测：以写模式 open 的文件参数本身命中快照路径（目标同一，
             # 防「读快照+写报告 md」跨文件假阳——688048 轮212-246 曾 7 处误报）；
             # 合法生产者 runner.py 除外；Path.write_text(json.dumps) 形态为已知限制
@@ -432,7 +445,6 @@ def main():
     m11_delayed = (not m11_turns) or (vg_turn is not None and m11_turns[0] > vg_turn)
 
     mod_file_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("模块文件"))
-    mod_file_pct = 100 * mod_file_cost / total_cost
     view_cost = sum(b["cost"] for b in blocks if b["cat"].startswith("视图:"))
     # v2：覆盖率口径 result-only（剔 tool_use stub 幽灵 chars），两侧同口径
     view_chars = sum(b["chars"] for b in blocks
@@ -455,9 +467,22 @@ def main():
     cli_chars = view_chars
     view_cov_pct = 100 * cli_chars / (cli_chars + hw_chars) if (cli_chars + hw_chars) else 0
     any_flat_hits = sum(1 for c in any_calls if any(s in c for s in FLAT_SECTIONS))
-    BASE_MOD_PCT = 32.3   # 瑞丰 300243 旧路径基线（2026-08-20 审计）
-    # 模式B会话：模块面 m3/m36/m37/m6 与 A 不同，基线暂沿 A（P5 盲测后单列校准）
-    IS_B_SESSION = bool(b_mode_cmds)
+    # 模式B会话：runner 调用形态（b_mode_cmds）或 modeB 工件写盘（b_report_writes，
+    # 3.1 兜底——fetch_for_mode 等变体不匹配 runner 调用正则时）任一命中即判 B
+    IS_B_SESSION = bool(b_mode_cmds or b_report_writes)
+    # ---- 3.2 加载集 diff：机制应载集（skill_dep_graph 单一真相源）vs 实际 Read 模块集 ----
+    # 漏读（机制要求但未读，如「机制要求 6、实际读 0」形态）→ FAIL；
+    # 多读（延迟 m11 / 跨模式混入）ℹ️ 分列不计 FAIL
+    mode_letter = "B" if IS_B_SESSION else "A"
+    _mode_mods = {m: {e["path"].split("/")[-1][:3] for e in resolve_required_files(m, "")
+                      if "/modules/" in e["path"] and e.get("load") != "deferred"}
+                  for m in ("A", "B")}
+    want_mods = _mode_mods[mode_letter]
+    got_mods = set(module_reads)
+    missing_mods = want_mods - got_mods
+    extra_mods = got_mods - want_mods
+    _other = "A" if mode_letter == "B" else "B"
+    cross_mode_mods = got_mods & (_mode_mods[_other] - want_mods)
 
     # xqvoice 视图块归属：模式B= m39（站内声量模块），模式A= m4（T1-A voice 场景模块）。
     # by_cat 聚合在 :347 已跑过，改标签后须重算，矩阵行才带归属。
@@ -513,6 +538,7 @@ def main():
     stock = args.stock or detected_code or "?"
     hist_path = os.path.expanduser("~/.cache/token_audit_history.jsonl")
     hist_entry = dict(date=datetime.now().strftime("%Y-%m-%d %H:%M"), stock=stock,
+                      mode=("B" if IS_B_SESSION else "A"),   # 3.1：无默认值——旧条目读回 None=迁移前
                       cli=cli_chars, handwrite=hw_chars, total=total_pull,
                       coverage=round(view_cov_pct, 1), gate_fails=gate_fails,
                       gate_fix_rounds=gate_fix_rounds, gate_converged=gate_converged,
@@ -585,8 +611,10 @@ def main():
              f"｜P4 dump {p4_dump_chars:,}c｜外科豁免 {len(hw_exempt)} 处）")
     if recent:
         # F7 注记（2026-09-01）：stock 为 '？' = 历史条目未存 stock 字段（旧版本写入），非识别失败
+        # mode 为 None（2026-09-10 前旧条目）展示「迁移前」——禁 .get("mode","A") 注入默认值
         L.append("- 环比（最近 3 次；'？'股码=旧条目未存 stock 字段）：" + "；".join(
-            f"{r.get('date','?')} {r.get('stock','?')}: {r.get('total',0):,}c" for r in recent))
+            f"{r.get('date','?')} [{r.get('mode') or '迁移前'}] "
+            f"{r.get('stock','?')}: {r.get('total',0):,}c" for r in recent))
 
     L.append("\n## ① Phase × 类别矩阵（归因占比 %）\n")
     cats = sorted(by_cat, key=lambda c: -sum(by_cat[c].values()))
@@ -600,6 +628,25 @@ def main():
     L.append("| **合计** | " + " | ".join(
         f"**{100*sum(by_phase[p].values())/total_cost:.0f}**"
         if sum(by_phase[p].values()) else "—" for p in phases) + " | **100** |")
+
+    # ---- 3.3 三桶汇总（矩阵后）：固定层/场景面/模块面 × 归因%｜字节KB 两口径分列 ----
+    # 固定层 = system prompt（CLAUDE.md+MEMORY.md，归因管道视野外→字节离线 wc 静态计）
+    #          + 会话内 Skill 加载（4×SKILL.md Read，管道内可见）；两口径覆盖面不同，分列勿混
+    scen_cost = sum(b["cost"] for b in blocks if b["cat"] == "场景文件")
+    scen_chars = sum(b["chars"] for b in blocks if b["cat"] == "场景文件")
+    mod_chars = sum(b["chars"] for b in blocks if b["cat"].startswith("模块文件"))
+    skill_cost = sum(b["cost"] for b in blocks if b["cat"] == "Skill加载")
+    skill_chars = sum(b["chars"] for b in blocks if b["cat"] == "Skill加载")
+    FIXED_FILES = ["~/CLAUDE.md", "~/.claude/projects/-home-ubuntu/memory/MEMORY.md"]
+    fixed_offline_b = sum(os.path.getsize(os.path.expanduser(f))
+                          for f in FIXED_FILES if os.path.exists(os.path.expanduser(f)))
+    L.append("\n### 三桶汇总（归因% 管道内｜字节 KB 静态）\n")
+    L.append("| 桶 | 归因%（context 压力） | 字节 KB |")
+    L.append("|----|----------------------|---------|")
+    L.append(f"| 固定层 | {100*skill_cost/total_cost:.1f}（仅 SKILL.md Read；CLAUDE/MEMORY 管道外） "
+             f"| 离线 wc {fixed_offline_b/1024:.1f} + 会话内 {skill_chars/1024:.1f} |")
+    L.append(f"| 场景面 | {100*scen_cost/total_cost:.1f} | {scen_chars/1024:.1f} |")
+    L.append(f"| 模块面 | {100*mod_file_cost/total_cost:.1f} | {mod_chars/1024:.1f} |")
 
     L.append("\n## ② 模块维度（Phase 3 内）\n")
     L.append("| 模块 | 文件Read轮次 | 首读轮 | 视图取数（chars） |")
@@ -636,7 +683,11 @@ def main():
             mark = " ⚠️ 注入写" if h.get("inj_write") else ""
             L.append(f"  - 轮{h['turn']} ({h['chars']:,}c){mark} `{h['cmd'][:90]}`")
 
-    _b_tag = " · **模式B会话**（模块面 m3/m36/m37/m6，基线暂沿 A，P5 盲测后单列）" if IS_B_SESSION else ""
+    # 3.4：B 模块清单读 skill_dep_graph（旧硬编码漏 m38）；B 分层基线独立采样（P5 盲测后判读）
+    _b_mods = "/".join(e["path"].split("/")[-1][:3] for e in resolve_required_files("B", "")
+                       if "/modules/" in e["path"])
+    _b_tag = (f" · **模式B会话**（模块面 {_b_mods}，分层基线独立采样·P5 盲测后单列）"
+              if IS_B_SESSION else "")
     L.append(f"\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）{_b_tag}\n")
     checks = [
         ("模块 JIT 加载", jit_span >= 10, f"跨度 {jit_span} 轮（旧：Phase3 开头集中全量 Read）"),
@@ -662,8 +713,13 @@ def main():
         ("视图覆盖率>80%", view_cov_pct > 80,
          f"CLI 直读 {cli_chars:,} / (CLI+手写) {cli_chars + hw_chars:,} chars = "
          f"{view_cov_pct:.0f}%（any 命中扁平小节计合规）"),
-        ("模块文件占比较基线下降", mod_file_pct < BASE_MOD_PCT,
-         f"当前 {mod_file_pct:.1f}% vs 基线 {BASE_MOD_PCT}%（健康线 20%）"),
+        ("加载集 diff·漏读", not missing_mods,
+         f"模式{mode_letter} 应读 {len(want_mods)} 模块 {'/'.join(sorted(want_mods))}，"
+         f"漏读 {sorted(missing_mods) or '无'}"
+         + (f"；多读 {sorted(extra_mods)}"
+            + (f"（其中跨模式混入 {sorted(cross_mode_mods)} ⚠️）" if cross_mode_mods
+               else "（装载集外按需读·合法，如 m11 延迟/m9 治理面）")
+            if extra_mods else "")),
     ]
     for name, ok, detail in checks:
         L.append(f"- {'✅' if ok else '❌'} **{name}**：{detail}")

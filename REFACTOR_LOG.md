@@ -690,3 +690,15 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **承接文件**：`_research/rule-evidence-archive.md`（规则实证档案，不自动加载）——取数规则 RCA + token 审计实证 + C-4 簿记语义三节。
 - **指标③ 实测（诚实登记）**：固定层六件合计 **85,023B**（CLAUDE.md 20,262 / MEMORY.md 7,555 / orchestrator SKILL 30,251 / routing SKILL 11,461 / quality SKILL 12,582 / registry SKILL 2,912），距 plan 目标 83KB 差 2KB。plan 对 2.4 预估 −4.3~5.3KB 系纸面估计，四点实际文本量 −1.1KB；进一步收缩需砍行为规则本体/命令块（超出温和整备授权）。1M 窗口径下 85KB≈8.2%，原 83KB 线系 200k 窗时代危险比例反推——缺口登记不强行凑数，后续批如需达标应先裁决砍哪块规则本体。
 - **验证**：全量回归 exit 0（含 test_load_set_single_source 三方对拍——JIT 表区域未动）；engine_pending=2 基线一致。
+
+## 2026-09-10 批3 2c 健康仪器（plan-compact-loop-fix-v4 #4）：token_audit mode 字段 + 加载集 diff + 三桶汇总 + #16 分诊 + 仪式 inventory
+
+- **3.1 mode 字段入 history**（`scripts/token_audit.py`）：hist_entry 加 `mode=("B" if IS_B_SESSION else "A")`——**无默认值**，旧条目读回 None 展示「迁移前」（禁 `.get("mode","A")`：会把旧 B 条目误归属 A）。IS_B_SESSION 兜底：`b_report_writes`（Write/Edit 落盘路径含 modeB）与 `b_mode_cmds`（runner 调用形态）任一命中即判 B——fetch_for_mode 变体不匹配调用正则时由工件写盘兜住。两极实录：旧条目 [迁移前] 渲染 ✓；HOME 重定向隔离跑 002008 B 票写盘 entry `mode="B"` ✓（真 history 零污染）。
+- **3.2 加载集 diff 检查臂（2c 核心）**：`from skill_dep_graph import resolve_required_files`（进程直调纯函数，应载集单一真相源）；`set(实际 Read 模块) vs set(应载集非 deferred 模块)`——**漏读 ❌ FAIL**（三祥新材「机制要求 6、实际读 0」形态正是靶信号）、**多读 ℹ️ 分列不计 FAIL**（装载集外按需读·合法，如 m11 延迟/m9 治理面）、**跨模式混入 ⚠️**（A 会话读 B 专属模块 or 反向，独立点名）。两极实录：B 极（002008，09-09）真 FAIL——漏读 `['m39']`（该会话未读 m39-b-xq-voice，按现行机制判定为漏载的历史信号）✓；A 极（dcad61bb）12 模块全读 PASS + 多读 `['m9-']` 分列 ✓。
+- **3.3 三桶汇总行**（①矩阵后新表）：固定层/场景面/模块面 × **归因%｜字节 KB 两口径分列**——固定层=system prompt（CLAUDE.md+MEMORY.md，归因管道视野外→字节离线 wc 静态计 27.2KB）+ 会话内 SKILL.md Read（管道内，归因% 只计此段并注明）；场景/模块面两口径均管道内。实测：A 极 固定 10.7%/36.1KB·场景 0%/0KB·模块 22.2%/120.2KB；B 极 固定 32.3%/42.6KB·模块 21.8%/40.3KB。
+- **3.4 BASE_MOD_PCT 退役**：`BASE_MOD_PCT=32.3` + 检查臂「模块文件占比较基线下降」+ 孤儿变量 `mod_file_pct` 全删（消费方 grep 实证=文件内 3 处、仓内零外部；`mod_file_cost` 保留改供三桶模块面归因口径）。`_b_tag` 硬编码 B 模块清单（漏 m38）改读 `resolve_required_files("B")`——顺修显示失真。B 分层基线自此独立采样，P5 盲测里程碑（n≥10）到达后正式判读。
+- **3.5 #16 分诊结论（孤儿 O2）**：intraday 族 4 scenes+market_context=B 面（A 档缺席合理；002008/603663 B 档在场佐证）；web_research_findings=LLM 编排写回步骤（runner web_research 子命令）——09-09 三票 live+full 均缺=会话未做 websearch 真空合法；**688385 形态（live 有/full 无）=真欠账低频路径**：save_full_archive 先跑、写回后不触发 full/ 同步——修法建议=写回时检测 full/ 档存在则同步 merge，登记待办非本批。
+- **3.6 仪式 inventory**：`_research/ritual-inventory.md` 落盘——三类实体索引（cron=复盘无 durable 载体，靠会话内联；复盘 prompt=B 票收尾会话内联 Phase 6，不建 durable cron=按票触发非按时刻触发；彩排=tdx_publish self-test+彩排档）。P5 盲测立卡同文件（目标/判据 n≥10/状态等待累积）。
+- **xq_voice 跨仓工程债**：实体在 `~/xueqiu-ai` 私库，skill 侧（orchestrator SKILL.md Phase 1.5）绝对路径引用，单向引用关系。
+- **观察发现（登记不修，P5 输入）**：①场景面两极 0KB——MODE_SCENARIO_FILES 应载 10/4 个 vs 会话实际零 Read（fetch 逻辑内化于 runner，场景 .md 仅人读参考），装载表 vs 行为的 drift 待分诊是「清单虚载」or「合理 JIT」；②B 会话「模块 JIT 加载」检查恒 ❌（跨度 <10 轮，阈值系 A 的 12 模块校准）——B 阈值待 P5 单列；③`/tmp/smoke_measure.py`（冒烟①测量工具）同批修 7 处词干错误改读 MODE_MODULE_FILES 单一真相源。
+- **回归**：run_regression.sh exit 0（gate_fixture 漏报=0 共64门；engine_pending=2 与基线一致）。冒烟会话判据测量用自备 smoke_measure.py 不依赖 token_audit，批3 改码与冒烟并行零撞车。
