@@ -702,3 +702,18 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **xq_voice 跨仓工程债**：实体在 `~/xueqiu-ai` 私库，skill 侧（orchestrator SKILL.md Phase 1.5）绝对路径引用，单向引用关系。
 - **观察发现（登记不修，P5 输入）**：①场景面两极 0KB——MODE_SCENARIO_FILES 应载 10/4 个 vs 会话实际零 Read（fetch 逻辑内化于 runner，场景 .md 仅人读参考），装载表 vs 行为的 drift 待分诊是「清单虚载」or「合理 JIT」；②B 会话「模块 JIT 加载」检查恒 ❌（跨度 <10 轮，阈值系 A 的 12 模块校准）——B 阈值待 P5 单列；③`/tmp/smoke_measure.py`（冒烟①测量工具）同批修 7 处词干错误改读 MODE_MODULE_FILES 单一真相源。
 - **回归**：run_regression.sh exit 0（gate_fixture 漏报=0 共64门；engine_pending=2 与基线一致）。冒烟会话判据测量用自备 smoke_measure.py 不依赖 token_audit，批3 改码与冒烟并行零撞车。
+
+## 2026-09-10 批4 4.1 C2 preflight（plan-compact-loop-fix-v4 #5）：matcher+stdout 双契约实证 + 注入预算测得
+
+- **探针命中（V6-4 步4）**：tmux 交互会话灌 5 轮对话 → 手动 `/compact` → 会话逐字复述 `SessionStart:compact hook success: C2_PROBE_1789050107`——**matcher:compact + stdout 注入双契约成立**（-p 非交互未证点绕开，按 plan 用交互式）。附证：compact 后自动 Read CLAUDE.md（277 行）= 续接行为正常。
+- **注入长度上限（步5 顺带测）**：30KB 结构化块（START+30×L??行+END）→ 上下文仅留 **~2KB 预览**（START+L00），余量外存 `tool-results/hook-<id>-stdout.txt`——C2 A 版注入（~5 行 ≈500c）预算内安全；设计约束=单次注入 ≤2KB。
+- **还原验证（步6）**：settings.json 从 .bak-1789049941 还原——hooks 键 False、model=opus[1m]、env 9 键无 AUTO_COMPACT_WINDOW/MAX_CONTEXT_TOKENS、mcpServers 完好（终态与批0 裁决一致）。tmux 会话清理。
+- **4.2/4.3 代码件同日先行落地**（commit d55d08d）：C1' 骨架 `--skeleton-out` + `load_skeleton.py` 台账翻页副作用化，fixture 22 用例红先绿后挂载 run_regression，回归 exit 0。
+- **待办**：4.4 正式部署（preflight 绿已解锁，等批2 冒烟四票跑完再写 settings——防 hook 中途进冒烟会话污染判据）；4.6 冒烟（含诱导 compact）。
+
+## 2026-09-10 批2 步2.5 冒烟① A-normal（603920）：判据全过 + 429 截断披露
+
+- **判据（全过）**：复读 **0KB**（判据 ≤132KB；重复 Read 文件=零）｜加载集 diff **缺=0 / B 模块混入=0 / m11 预读=0**（12 模块全读 JIT 序+多读仅 m9-governance 按需合法）｜compact **0**（协变量，1M 窗）｜peak_ctx **0.224M**（1M 窗 22.4%，头部空间充裕）。工具 /tmp/smoke_measure.py（同批修 7 处词干错误改读 MODE_MODULE_FILES 单源）。
+- **P4 龙虎榜探针 PASS**：报告三处落点（§7.5/§镜头二/结论速览）+ never_listed 结论 + 137 处 [src: snapshot] 引用；三问（龙虎榜/估值/风险）结论速览完整回应。
+- **截断披露（诚实口径）**：会话 18:46-19:08 死于 **429「已达到 5 小时的使用上限」（20:24:43 重置）**——流程走到 拉取→写作（报告 62KB 落盘 /tmp/analysis_report_603920_modeA.md，m11 区待回填）→ **verify_gates 之前**；Phase 4 gate/归档未执行。判据系 P2-P3 现象不受影响，但「全流程」未走完；归档件未产生（~/analysis_report 无今日新件）。
+- **新事实（plan 未覆盖，登记）**：5h 配额窗为冒烟序列的硬约束——A-normal 与本工程会话共享 key 配额，单窗内 4 票连跑不可行；后续票按「重置后逐票+429 即挂起等下窗」节奏推进（cron 20:26 起 A-stress 301682）。
