@@ -449,3 +449,14 @@ entries:
     status: landed
     blocked: false
     fix: "（世运 603920 复盘实锤 2026-09-09）voice 相不存 raw_answer——首维度标题前的导语段（模型复述/总起，实测 8.6% 字量）不在任何 answers 维：导语段真引文逐字照抄反被 c 臂判『非语料子串』（真引文诬为改写），且 stats 对全文计数与语料口径分叉不可对账。已 landed：xq_voice.py voice 信封 data 增 raw_answer（与 check 相同构）+ gate_definitions G80 c 臂语料拼装 +mv.data.raw_answer（.get 兜底，旧快照零翻转）。先红后绿：gate_fixture_test SECTION_PROBES R1 正例探针（引文仅存 mv.data.raw_answer 样本）修复前必 FAIL、修复后 PASS。写作侧无规避条款（纯引擎修，无可规避面）"
+  - signature: F3#report_path:run_scoped_collision
+    gate: verify_gates
+    subcheck: report_path
+    reason_class: run_scoped_collision
+    match: "陈旧拷贝|run-scoped"
+    count: 0
+    last_seen: "2026-09-01"
+    status: landed
+    blocked: false
+    fix: "（2026-09-01 收官批 B2 落地，补注册 2026-09-10）并行会话互覆 /tmp 固定路径报告/快照——verify_gates 验的是 A 的报告 × B 的快照，静默串档。已 landed：报告/快照路径 run-scoped（analysis_report_<code>）+ verify_gates CLI 层 mtime 闸（报告 mtime < 快照 mtime → exit 2『陈旧拷贝』，两极实测：早于拦截/新于放行；主条目 REFACTOR_LOG:139）+ mode 段叠加（2026-09-09 模式隔离批：mode<A|B> 段，同模式才可覆盖）。残余（显式记录在案）：同 code 同 mode 跨日碰撞 day-scoped 不足——mtime 闸兜底拦截，未见复发实锤"
+
