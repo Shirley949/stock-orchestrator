@@ -71,42 +71,56 @@ KEYWORD_TO_FILES = {
     "做t": ["stock-intraday-t-analyzer/SKILL.md"],
 }
 
-# 模式 → 需要加载的场景子文件
+# 模式 → 需要加载的子文件（两张分表：scenario=拉数面 / module=写作面，混装曾是增删漏温床）
+# 条目为 dict；`"load": "deferred"` = JIT 延迟读（不进 Phase 0 强制装载，首次 verify FAIL 才 Read）。
+# module 表与 orchestrator SKILL.md Phase 3 JIT 表 / quality SKILL.md 模块表三方一致性
+# 由 regression-tests/test_load_set_single_source.py 锁（机制=单源，文档=投影）。
 MODE_SCENARIO_FILES = {
     "A": [
-        "financial-data-routing/references/scenarios/s1-financial.md",
-        "financial-data-routing/references/scenarios/s2-quote-kline.md",
-        "financial-data-routing/references/scenarios/s3-fund-flow.md",
-        "financial-data-routing/references/scenarios/s5-events-18.md",
-        "financial-data-routing/references/scenarios/s7-cyclical.md",
-        "financial-data-routing/references/scenarios/s8-a-share.md",
-        "financial-data-routing/references/scenarios/s9-news-peer.md",
-        "financial-data-routing/references/scenarios/s10-checklist.md",
-        "financial-data-routing/references/scenarios/s11-peer.md",
-        "financial-data-routing/references/scenarios/s12-orders.md",
-        "stock-analysis-quality/references/modules/m0-classification.md",
-        "stock-analysis-quality/references/modules/m1-narrative.md",
-        "stock-analysis-quality/references/modules/m2-financial.md",
-        "stock-analysis-quality/references/modules/m25-orders.md",
-        "stock-analysis-quality/references/modules/m3-technical.md",
-        "stock-analysis-quality/references/modules/m4-sentiment.md",
-        "stock-analysis-quality/references/modules/m5-valuation.md",
-        "stock-analysis-quality/references/modules/m6-decision.md",
-        "stock-analysis-quality/references/modules/m7-risk.md",
-        "stock-analysis-quality/references/modules/m8-disclaimer.md",
-        "stock-analysis-quality/references/modules/m11-gates.md",
+        {"path": "financial-data-routing/references/scenarios/s1-financial.md"},
+        {"path": "financial-data-routing/references/scenarios/s2-quote-kline.md"},
+        {"path": "financial-data-routing/references/scenarios/s3-fund-flow.md"},
+        {"path": "financial-data-routing/references/scenarios/s5-events-18.md"},
+        {"path": "financial-data-routing/references/scenarios/s7-cyclical.md"},
+        {"path": "financial-data-routing/references/scenarios/s8-a-share.md"},
+        {"path": "financial-data-routing/references/scenarios/s9-news-peer.md"},
+        {"path": "financial-data-routing/references/scenarios/s10-checklist.md"},
+        {"path": "financial-data-routing/references/scenarios/s11-peer.md"},
+        {"path": "financial-data-routing/references/scenarios/s12-orders.md"},
     ],
     "B": [
-        "financial-data-routing/references/scenarios/s2-quote-kline.md",
-        "financial-data-routing/references/scenarios/s3-fund-flow.md",
-        "financial-data-routing/references/scenarios/market-context.md",
-        "financial-data-routing/references/scenarios/intraday-60min.md",
-        "stock-analysis-quality/references/modules/m3-technical.md",
-        "stock-analysis-quality/references/modules/m38-b-conclusion-head.md",
-        "stock-analysis-quality/references/modules/m36-short-term.md",
-        "stock-analysis-quality/references/modules/m37-positioning.md",
-        "stock-analysis-quality/references/modules/m6-decision.md",
-        "stock-analysis-quality/references/modules/m11-gates.md",
+        {"path": "financial-data-routing/references/scenarios/s2-quote-kline.md"},
+        {"path": "financial-data-routing/references/scenarios/s3-fund-flow.md"},
+        {"path": "financial-data-routing/references/scenarios/market-context.md"},
+        {"path": "financial-data-routing/references/scenarios/intraday-60min.md"},
+    ],
+}
+
+# 模式 → 报告模块（quality references/modules；顺序=JIT 表报告章节顺序）
+# A = 12 模块 + m11 延迟读；B = 6 模块（m11 依 JIT B 行「同上」延迟读——不入 B 装载集，即其延迟表示）
+MODE_MODULE_FILES = {
+    "A": [
+        {"path": "stock-analysis-quality/references/modules/m12-summary.md"},
+        {"path": "stock-analysis-quality/references/modules/m0-classification.md"},
+        {"path": "stock-analysis-quality/references/modules/m1-narrative.md"},
+        {"path": "stock-analysis-quality/references/modules/m2-financial.md"},
+        {"path": "stock-analysis-quality/references/modules/m25-orders.md"},
+        {"path": "stock-analysis-quality/references/modules/m3-technical.md"},
+        {"path": "stock-analysis-quality/references/modules/m4-sentiment.md"},
+        {"path": "stock-analysis-quality/references/modules/m5-valuation.md"},
+        {"path": "stock-analysis-quality/references/modules/m6-decision.md"},
+        {"path": "stock-analysis-quality/references/modules/m7-risk.md"},
+        {"path": "stock-analysis-quality/references/modules/m8-disclaimer.md"},
+        {"path": "stock-analysis-quality/references/modules/m10-forecast.md"},
+        {"path": "stock-analysis-quality/references/modules/m11-gates.md", "load": "deferred"},
+    ],
+    "B": [
+        {"path": "stock-analysis-quality/references/modules/m38-b-conclusion-head.md"},
+        {"path": "stock-analysis-quality/references/modules/m39-b-xq-voice.md"},
+        {"path": "stock-analysis-quality/references/modules/m3-technical.md"},
+        {"path": "stock-analysis-quality/references/modules/m36-short-term.md"},
+        {"path": "stock-analysis-quality/references/modules/m37-positioning.md"},
+        {"path": "stock-analysis-quality/references/modules/m6-decision.md"},
     ],
 }
 
@@ -149,15 +163,22 @@ def resolve_required_files(mode: str, user_prompt: str) -> list[dict]:
                 "reason": f"模式{mode}强制加载"
             })
 
-    # 2. 模式对应的场景子文件
-    for rel_path in MODE_SCENARIO_FILES.get(mode, []):
-        if rel_path not in seen:
-            seen.add(rel_path)
-            result.append({
-                "path": rel_path,
-                "priority": "P1",
-                "reason": f"模式{mode}场景依赖"
-            })
+    # 2. 模式对应的场景/模块子文件（两分表；dict 条目可带 load=deferred 延迟语义透传）
+    for table, dep_label in ((MODE_SCENARIO_FILES, "场景依赖"), (MODE_MODULE_FILES, "模块依赖")):
+        for entry in table.get(mode, []):
+            if isinstance(entry, str):          # 兼容 str 条目旧写法
+                entry = {"path": entry}
+            rel_path = entry["path"]
+            if rel_path not in seen:
+                seen.add(rel_path)
+                item = {
+                    "path": rel_path,
+                    "priority": "P1",
+                    "reason": f"模式{mode}{dep_label}",
+                }
+                if entry.get("load"):
+                    item["load"] = entry["load"]
+                result.append(item)
 
     # 3. 用户关键词触发的额外文件
     for rel_path in get_keyword_files(user_prompt):

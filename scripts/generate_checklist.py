@@ -426,6 +426,8 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         # orchestrator 和 data-source-registry 视为已加载
         if "orchestrator" in path or "data-source-registry" in path:
             status = "✅ 已加载"
+        elif f.get("load") == "deferred":
+            status = "⏸ 延迟读：首次 verify FAIL 才 Read"
         else:
             status = "[ ] 未加载"
         bold = "**" if priority == "P0" else ""

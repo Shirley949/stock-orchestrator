@@ -666,3 +666,11 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **0.6 宪法⑧ 转正**（终裁 #4 默认执行）：CLAUDE.md「修向政策（宪法⑧·试用态）」转正式条文，注明观察期起点 2026-09-03（G71④ landed）；转正条件核账=落地后下一批失败事件 0+零新假阴。
 - **plan 回写**：plan-compact-loop-fix-v4.md 共 12 处按闸终局修订（0.3/0.4/第 2 章/第 3 章/第 8 章/第 9 章/第 11 章/第 14 章/0.1 表/第 16 章修订记录），全部带 2026-09-10 日期标注；承重不变量（批 0+批 1 止损优先、批 1 标的 m11 白背/单源钉死、最小行动集判断）不动。
 - **回归**：run_regression.sh exit 0（提交前脏态+ledger 变更后各一次；本条目提交面=md+yaml，无 .py 变更）。
+
+## 2026-09-10 批1 止损件Ⅱ（plan-compact-loop-fix-v4）：加载集单源钉死 + m11 延迟语义落码
+
+- **机制表四处对齐**（`scripts/lib/skill_dep_graph.py`）：MODE_SCENARIO_FILES 混装表拆为 scenario/module **两张分表**（条目 str→dict，`"load": "deferred"` 字段承载延迟语义）——①B 集 +m39（对齐 JIT B 行）②A 集 +m12-summary/m10-forecast（对齐 JIT A 行；此前 A 装载集缺这两模块=写作期靠 JIT 人读救场）③**m11 语义反转修复**：A 集 m11 条目 load=deferred（不再 P1 白背 46.4KB），B 集整条移除（JIT B 行「同上」延迟读——装载集缺席即其表示）④resolve_required_files 消费两表+load 透传（str 旧写法兼容）。V6-1 断言 `aligned 13 6` 实测通过（A=12+m11deferred；B=6），全路径存在性校验过。
+- **渲染分支**（`scripts/generate_checklist.py` 装载表区）：deferred 条目状态列 `[ ] 未加载`→`⏸ 延迟读：首次 verify FAIL 才 Read`（elif 分支 ~3 行；c-tag 计数区零触碰）。两极实测：A checklist m11 行=⏸ 延迟读（无 `[ ]` 前缀，update_checklist tick 正则天然不吞）；B checklist m39=未加载、m11 无行。
+- **三方对拍 fixture**（`regression-tests/test_load_set_single_source.py`，8 用例入 run_regression 串联）：机制表×orchestrator JIT 表×quality 模块表投影三向锁——装载集双向集合相等（多/漏两侧分列）+m11 延迟规则（A deferred 点名/B 装载集缺席）+投影相容（**单向** mechanism→quality；反向不锁=投影表是目录，含条件模块 m35/m9 等非装载集成员）+分表结构锁（scenario 表只准 /scenarios/、module 表只准 /modules/，结构性防再混装）+装载路径存在性。**红极自证**：JIT B 行删 m39／投影删 m39 行／m11 塞入 B 集三坏样例必报 mismatch，真实源净通过——红得了非恒绿空转。指标①②自此 fixture 执法。
+- **挂账（显式不改，非本批漂移清单项）**：quality SKILL.md 模块表 m9-governance 标「模式 A」但 JIT A 行与机制装载集均不载——目录行 vs 装载集既有出入，留独立分诊；若 A 报告治理面实需 m9，先改 JIT 表（人读源），机制与 fixture 随锁跟随。
+- **回归**：run_regression.sh exit 0（含新 fixture 8/8；gate_fixture_test 漏报=0 共64门；engine_pending=2 与基线一致）。
