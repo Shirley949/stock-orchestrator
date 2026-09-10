@@ -4,7 +4,7 @@ latest_extract.py — 统一 latest_period 信封构造 + 最新值提取（轻�
 
 排序统一后（序列族 [0]=最新），本模块只负责三件事：
   1. make_latest_envelope() — 构造统一 latest_period 信封（6 形态 × 2 data_class）
-  2. latest_value_from_section() — 双键兜底（data/data_full，CLAUDE.md 硬规则）+ 取 [0]
+  2. latest_value_from_section() — 双键兜底（data/data_full，硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md）+ 取 [0]
   3. compute_as_of() / to_sort_key() / make_period_label() — 信封字段计算
 
 **设计**：纯函数，无 IO，可测试。信封是**加法式**字段（序列族 top-level / 信号族
@@ -163,7 +163,7 @@ def latest_value_from_section(
 ) -> Tuple[Optional[Any], Optional[dict]]:
     """从 scene envelope section 取最新一行的某字段值 + 整行。
 
-    双键兜底（CLAUDE.md 硬规则）：THS/EM 主路径填 ``.data``，Sina 路径填 ``.data_full``，
+    双键兜底（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md）：THS/EM 主路径填 ``.data``，Sina 路径填 ``.data_full``，
     **单读任一键 = 隐蔽 never-match bug**（G16/G9 已两次踩坑）。本函数 data 优先、data_full 兜底。
 
     排序统一后（L1 normalize）序列族 actual ``rows[0]`` == 最新期；forecast 由调用方保证升序。

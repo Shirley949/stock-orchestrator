@@ -674,3 +674,12 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **三方对拍 fixture**（`regression-tests/test_load_set_single_source.py`，8 用例入 run_regression 串联）：机制表×orchestrator JIT 表×quality 模块表投影三向锁——装载集双向集合相等（多/漏两侧分列）+m11 延迟规则（A deferred 点名/B 装载集缺席）+投影相容（**单向** mechanism→quality；反向不锁=投影表是目录，含条件模块 m35/m9 等非装载集成员）+分表结构锁（scenario 表只准 /scenarios/、module 表只准 /modules/，结构性防再混装）+装载路径存在性。**红极自证**：JIT B 行删 m39／投影删 m39 行／m11 塞入 B 集三坏样例必报 mismatch，真实源净通过——红得了非恒绿空转。指标①②自此 fixture 执法。
 - **挂账（显式不改，非本批漂移清单项）**：quality SKILL.md 模块表 m9-governance 标「模式 A」但 JIT A 行与机制装载集均不载——目录行 vs 装载集既有出入，留独立分诊；若 A 报告治理面实需 m9，先改 JIT 表（人读源），机制与 fixture 随锁跟随。
 - **回归**：run_regression.sh exit 0（含新 fixture 8/8；gate_fixture_test 漏报=0 共64门；engine_pending=2 与基线一致）。
+
+## 2026-09-10 批2 固定层总整备（plan-compact-loop-fix-v4 #3）：CLAUDE.md 三切口外移 + 触发分册索引 + 对拍 fixture
+
+- **切口账（CLAUDE.md 40,676B→20,262B，−50%）**：切口A 工具卷 5,628B（GLM 配额+WebSearch 链路+浏览器自动化→`~/.claude/docs/tooling-playbook.md`）；切口B 工程卷 6,003B（读三表/黄金范式/信封/事件原则/断言必验→本仓 `_research/engineering-paradigms.md` 10,055B）；切口C 发布卷 1,710B（腾讯文档 SOP→`~/tdx-publish-v4/SOP.md` 3,110B，版本行 v4.1.2 原样保留）。三卷+卷4（routing 场景 refs，内容增量见 routing 仓同批）全部非加载层。
+- **驻留增量三件**：`### 📚 触发分册索引`（4 行表：触发词|分册路径|何时读|摘要）；`### 🔴 工具红线`（Exa 链路序+豆包 ≤10/月省额+Exa 并发 ≤2，恒驻不可触发化）；乙情景留守行（宪法② 节前：「写读三表/新时序 scene/信号信封相关代码前，必读 engineering-paradigms.md」）。另：禁用 API 节压缩为 gdfx 单表+场景文档指针；环境约束表 WebSearch/GLM 两行改指索引·工具卷。
+- **对拍 fixture `test_fixed_layer_index.py`（12 用例，红先绿后）**：索引表在场 ≥4 条/schema 三要素/路径 Path.exists（断链=红）/分册内容标记（空壳卷=红）/驻留不回潮（11 个已外移特征串零回归）/红线+测试集表+留守行在场/触发词保留清单 20 token。红极自证：缺「何时读」列的坏样例必报。挂载 run_regression.sh（test_load_set_single_source 之后）。中途修 fixture 自身 bug：`Path.expanduser(str)` 炸→`Path(p).expanduser()`。
+- **锚重定向 8 处（本仓）**：gate_definitions.py ×2（双兜底→卷1 范式指针）、capstone_panorama.py ×2、latest_extract.py ×2、test_latest_extract.py ×1（同上）；test_diag_contract.py:593（「CLAUDE.md 记载」→「范式=engineering-paradigms.md 断言必验节」）。runner.py 5 处见 routing 仓同批。refresh_golden.py:4（行为准则#4 指涉）有意不动——行为准则仍驻留。
+- **MEMORY.md L9 瘦身**：发布链族 302→122 chars（真相源指针保留，枚举细节收缩——详情在 tdx_publish.py rules 表）。
+- **验证**：test_fixed_layer_index 12/12；全量回归 exit 0（gate_fixture 漏报=0 共64门；engine_pending=2 与基线一致）。卷2/卷3 为 home 文件（~/tdx-publish-v4、~/.claude/docs）不入本仓，其内容完整性由 fixture test_volume_content_markers 执法。

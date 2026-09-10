@@ -81,6 +81,8 @@ echo "[① 契约层] test_checklist_consistency.py（checklist 分母一致：g
 python3 "$HERE/test_checklist_consistency.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_load_set_single_source.py（批1 加载集单源三方对拍：机制表×JIT表×quality投影 + m11 deferred 语义 + 红极自证）"
 python3 "$HERE/test_load_set_single_source.py" 2>&1 | tail -3
+echo "[① 契约层] test_fixed_layer_index.py（批2 固定层分册索引对拍：索引三要素+路径存在+分册内容标记+驻留不回潮+红线/测试集/留守行）"
+python3 "$HERE/test_fixed_layer_index.py" 2>&1 | tail -3
 echo "[① 契约层] test_token_audit.py（表计 v2 语义自检：去重/result-only/挂载前缀分层/写回目标同一/排除正交）"
 python3 "$HERE/test_token_audit.py" 2>&1 | tail -3
 echo "[① 契约层] test_snapshot_view_field.py（--field 外科投影六语义+footer/截断指针+炸弹双帽）"

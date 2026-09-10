@@ -590,7 +590,7 @@ class TestV21CrashPaths(unittest.TestCase):
         if isinstance(cur, dict):
             cur[keys[-1]] = None
         out.append(("字段None", v2))
-        # ③ 类型异常：裸 error 信封（真实形态——CLAUDE.md 记载 API 坏 JSON 会落 {"error": ...}）。
+        # ③ 类型异常：裸 error 信封（真实形态——API 坏 JSON 会落（范式=_research/engineering-paradigms.md 断言必验节） {"error": ...}）。
         #    注：scene=list 形态不在测试面——违反 runner schema（scene 恒 dict/None），且其对
         #    `s4.get` 的 AttributeError 是 v2.1 之前就存在的原生前置行崩溃，非本批新增崩溃面。
         v3 = copy.deepcopy(self.base)

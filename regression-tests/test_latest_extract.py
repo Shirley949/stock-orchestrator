@@ -116,7 +116,7 @@ class TestEnvelope(unittest.TestCase):
 
 
 class TestDualFallback(unittest.TestCase):
-    """latest_value_from_section 双键兜底（CLAUDE.md 硬规则）。"""
+    """latest_value_from_section 双键兜底（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md）。"""
 
     def test_data_preferred(self):
         sec = {"data": [{"holder_count": 128685}, {"holder_count": 100000}]}

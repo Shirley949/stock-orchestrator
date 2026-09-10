@@ -540,7 +540,7 @@ def check_g6(report: str, data: dict) -> bool:
 def check_g7(report: str, data: dict):
     """G7: 扣非对比（净利润/扣非/差额%三列已展示）"""
     # 优先：从 snapshot 检查 financial_abstract 是否有扣非数据
-    # 双兜底 data/data_full（CLAUDE.md 硬规则：THS/EM 填 .data、Sina 填 .data_full；
+    # 双兜底 data/data_full（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md：THS/EM 填 .data、Sina 填 .data_full；
     # 单读任一键 = 静默 never-match。镜像 G8 cf_section 范式）。
     fa_section = _snapshot_get(data, "s1_financial.data.financial_abstract")
     fa = fa_section.get("data", fa_section.get("data_full", [])) if isinstance(fa_section, dict) else None
@@ -1581,7 +1581,7 @@ def check_g27(report: str, data: dict) -> bool:
     金融股天然豁免：不校验总资产周转率（数据语义 N/A），ROE/BVPS/EPS 金融股全有，ZCFZL 必有。
     """
     fi = _snapshot_get(data, "s1_financial.data.financial_indicators")
-    # 双兜底 data/data_full（CLAUDE.md 硬规则：THS/EM 填 .data、Sina 填 .data_full；
+    # 双兜底 data/data_full（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md：THS/EM 填 .data、Sina 填 .data_full；
     # 单读 data_full → 主路径 fi_rows=None → ROE 检查恒 false-fail）。
     fi_rows = fi.get("data", fi.get("data_full")) if isinstance(fi, dict) else None
 

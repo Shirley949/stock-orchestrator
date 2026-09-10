@@ -10,7 +10,7 @@ capstone_panorama.py — 综合研判 capstone 的「证据全景」helper（LLM
      裁决却 Y → 标记"请明示理由"。不计入 gate verdict（engine 无 warning 通道，故为写作期）。
 
 自包含（自带 _snapshot_get / _scene_has_data），不依赖 gate_definitions，避免循环 import。
-读三表/derived 双兜底（CLAUDE.md 硬规则）。
+读三表/derived 双兜底（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md）。
 
 CLI:
   python capstone_panorama.py --snapshot S.json                # 输出证据全景草稿
@@ -86,7 +86,7 @@ def _envelope_status(val) -> str:
 
 
 def _rows(section):
-    """三表/derived 双兜底取行（CLAUDE.md 硬规则）。"""
+    """三表/derived 双兜底取行（硬规则，范式全文=stock-orchestrator/_research/engineering-paradigms.md）。"""
     if not isinstance(section, dict):
         return []
     return section.get("data", section.get("data_full", [])) or []
