@@ -83,6 +83,8 @@ echo "[① 契约层] test_load_set_single_source.py（批1 加载集单源三�
 python3 "$HERE/test_load_set_single_source.py" 2>&1 | tail -3
 echo "[① 契约层] test_fixed_layer_index.py（批2 固定层分册索引对拍：索引三要素+路径存在+分册内容标记+驻留不回潮+红线/测试集/留守行）"
 python3 "$HERE/test_fixed_layer_index.py" 2>&1 | tail -3
+echo "[① 契约层] test_skeleton_schema.py（批4 C1'骨架schema+load_skeleton台账翻页：JIT序=MODE_MODULE_FILES单源对拍+禁[ ]前缀+m11延迟渲染+B豁免+幂等）"
+python3 "$HERE/test_skeleton_schema.py" 2>&1 | tail -3
 echo "[① 契约层] test_token_audit.py（表计 v2 语义自检：去重/result-only/挂载前缀分层/写回目标同一/排除正交）"
 python3 "$HERE/test_token_audit.py" 2>&1 | tail -3
 echo "[① 契约层] test_snapshot_view_field.py（--field 外科投影六语义+footer/截断指针+炸弹双帽）"

@@ -264,8 +264,58 @@ def generate_agent_steps(mode: str, question_result: dict) -> list[str]:
     return lines
 
 
+def generate_skeleton(required_files: list, mode_steps: dict, stock_codes: str,
+                      checklist_path: str, out_path: str) -> str:
+    """C1' 加载骨架（A-only，批4.2）——compact 免疫的加载集台账 + Phase 骨架。
+
+    行式 `- ▸ `（禁 `[ ]`/`<!--` 前缀：防 update_checklist tick 计数误吞）；
+    deferred 语义必须渲染进 m11 行（防注入骨架反而诱发重读）；
+    台账翻页走 load_skeleton.py（C0 副作用化，禁依赖 LLM 自发 Edit）。
+    """
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        f"# 加载骨架 — {stock_codes}（mode=A）",
+        f"- 生成时间：{ts}",
+        "- 台账：本文件（翻页走 load_skeleton.py，禁手工 Edit）",
+        f"- 执行清单：{checklist_path}",
+        "- 用法：compact/续接后先看本骨架——已读项勿重读；未读模块按 JIT 序写前才读",
+        "",
+        "## 台账（加载集 × 已读状态）",
+        "### 模块（JIT：写该模块章节前才 Read）",
+    ]
+    for f in required_files:
+        if "/modules/" not in f["path"]:
+            continue
+        note = (" | ⏸ 延迟读：首次 verify FAIL 才 Read，勿预读"
+                if f.get("load") == "deferred" else "")
+        lines.append(f"- ▸ {f['path']} | 状态:未读{note}")
+    scen = [f for f in required_files if "/scenarios/" in f["path"]]
+    if scen:
+        lines.append("### 场景（按需读）")
+        lines.extend(f"- ▸ {f['path']} | 状态:未读" for f in scen)
+    lines.append("### P0 Skill（会话启动已载，无需 Read）")
+    lines.extend(f"- ▸ {f['path']} | 状态:已载" for f in required_files
+                 if f["priority"] == "P0")
+    lines.append("")
+    lines.append("## Phase 骨架")
+    for key in ("phase_0", "phase_1", "phase_2", "phase_3",
+                "phase_4", "phase_4_5", "phase_5"):
+        steps = mode_steps.get(key)
+        if not steps:
+            continue
+        ids = [s["id"] for s in steps]
+        rng = ids[0] if len(ids) == 1 else f"{ids[0]}…{ids[-1]}"
+        lines.append(f"- ▸ {get_phase_name(key)}（{rng}）")
+    content = "\n".join(lines) + "\n"
+    p = Path(out_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+    return content
+
+
 def generate_checklist(user_prompt: str, stock_codes: str = None,
-                       mode: str = None, output: str = None) -> str:
+                       mode: str = None, output: str = None,
+                       skeleton_out: str = None) -> str:
     """
     生成完整执行清单的主函数。
 
@@ -274,6 +324,8 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         stock_codes: 股票代码（逗号分隔），None 则自动提取
         mode: 分析模式（A/B/C/D），None 则自动判定
         output: 输出文件路径，None 则返回字符串
+        skeleton_out: C1' 加载骨架输出路径（A-only；模式 B 豁免——0 compact n=2、
+                      JIT 下骨架纯增量、纳入折扣比 25.6%=A 侧 2.2 倍而收益恒 0）
 
     返回: 清单 Markdown 内容
     """
@@ -465,6 +517,14 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         print(f"   模式: {mode} | 股票: {stock_codes} | 步骤: {total_steps}")
         if question_result["unmapped"]:
             print(f"   ⚠️  {len(question_result['unmapped'])} 条问题需要 LLM 兜底")
+        if skeleton_out:
+            if mode == "A":
+                generate_skeleton(required_files, mode_steps, stock_codes,
+                                  output, skeleton_out)
+                print(f"✅ 加载骨架已生成: {skeleton_out}")
+            else:
+                print(f"ℹ️ 模式 {mode} 豁免骨架（A-only；B 证据：0 compact / JIT 纯增量 / "
+                      f"折扣比 25.6%）——骨架未生成")
     else:
         print(content)
 
@@ -481,6 +541,7 @@ def main():
     parser.add_argument("--stock-codes", help="股票代码（逗号分隔），不传则自动提取")
     parser.add_argument("--mode", choices=["A", "B"], help="分析模式，不传则自动判定")
     parser.add_argument("--output", help="输出清单文件路径")
+    parser.add_argument("--skeleton-out", help="C1' 加载骨架输出路径（A-only，B 豁免）")
     parser.add_argument("--ignore-trap-ledger", action="store_true",
                         help="逃生口：跳过 TRAP_LEDGER blocked(P3) 硬阻断检查")
     args = parser.parse_args()
@@ -502,6 +563,7 @@ def main():
         stock_codes=args.stock_codes,
         mode=args.mode,
         output=args.output,
+        skeleton_out=args.skeleton_out,
     )
 
 
