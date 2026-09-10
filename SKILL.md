@@ -254,9 +254,9 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
 3. **长列表纪律**：父层只看 `list x N` 计数（计数即答案，N=0 是真空结论）；要单条用 `.N` 下钻（`remind_records.0 --depth 1` = 920c；直接展开 95 条 = 77K token 炸弹——引擎 cap 只保底 10 条，cap 是底线不是配额）。
 4. 关键词定位：any/视图拿行索引 → `--raw` 单行深读；grep 只取计数不取全文。
 5. 跨 scene 计算先查 `computed_metrics`（fetch 期已算好）；确无可用的（全景/跨 scene 复合提取等 `--field` 不适用形态）才允许一次性 `python3 -c` 只打 ≤40 行摘要、**每会话 ≤2 次**，命令须带一行 `# rule5-surgical` 声明注释（审计单列豁免桶，超额 ⚠️）——唯一豁免通道，`--field` 落地后应趋零。**中段自查锚：写作/gate 修复中段任何 json.load 冲动 → 先 `--list` 对照挂载层，单字段需求直接 `--field`。gate 修复期取数同本规则**——gate FAIL 的 action_required 已带数据核对现成命令（GATE_HINTS），照抄即合规，勿再 sed 源码或手写 dump。
-6. **compact/续接后取数仪式**（2026-08-25 三会话 RCA：compact 后第一个取数动作锚定整段写作期——首动作 json.load 的段内手写 26 处/覆盖率 47.8%，首动作 `--list` 的仅 6 处/83.4%；审计 [v4] 行可量化复验）：续接后**第一个取数动作必是 `--list`** 重建全部视图 + scenes 认知（合法视图以 --list 输出为准）；存在性/结构验证用 `--list` 或 `any <路径> --depth 1`（路径不存在=显式报错即答案）——**禁 json.load 全树 walk 找键**；连续 2 处 json.load = 行为已分叉，立即停下按规则 5 自查锚改走视图/any。本文件 Phase 0 加载、compact 后不在上下文——compact 场景由全局 CLAUDE.md「Compact 续接取数仪式（硬规则）」（system 层每轮注入、compact 免疫）兜底，两处为同一规则双载体。
+6. **compact/续接后取数仪式**：续接后**第一个取数动作必是 `--list`** 重建全部视图 + scenes 认知（合法视图以 --list 输出为准）；存在性/结构验证用 `--list` 或 `any <路径> --depth 1`（路径不存在=显式报错即答案）——**禁 json.load 全树 walk 找键**；连续 2 处 json.load = 行为已分叉，立即停下按规则 5 自查锚改走视图/any。compact 免疫版全文=全局 CLAUDE.md「Compact 续接取数仪式」（system 层每轮注入）；RCA 实证见 `_research/rule-evidence-archive.md`。
 
-**为什么（token 审计实证）**：视图已在 runner 落盘时完成裁剪/反转（desc 最新在前）/换算（%·亿元），kline 视图 4.8K vs raw 146K（-96.7%）。688048 会话审计：手写 json.load 35 处 / 32,278 chars result / CLI 覆盖率仅 57%，其中 29 处 any 实测可达且 **any 输出全部 ≤ 手写**（top10 1,887 vs 3,790c、backtest 327 vs 2,380c）——手写不是省 token 的理性选择，是缺规范的训练默认。数值已对拍验证与 raw 分毫不差（41 股普适）。**视图没有的字段才用 `any`/`--raw`，禁止绕过 CLI 直接 json.load 写提取脚本。**
+**为什么**：视图已在 runner 落盘时完成裁剪/反转/换算（kline 视图 4.8K vs raw 146K，-96.7%），any 输出全部 ≤ 手写（688048 会话 35 处实证）——手写不是省 token 的理性选择，是缺规范的训练默认。**视图没有的字段才用 `any`/`--raw`，禁止绕过 CLI 直接 json.load 写提取脚本。**实证数据全档见 `_research/rule-evidence-archive.md`。
 
 ---
 
@@ -265,14 +265,7 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
 > **⚠️ 报告写完后、输出前，必须运行 `verify_gates.py`（见约束 5）。单一出口 = sidecar + 指针行。**
 
 1. 将报告写入 `/tmp/analysis_report_<code>_mode<X>.md`（**run-scoped + 模式隔离命名，2026-09-01 F3**——裸固定路径会被并行会话互覆，缺模式段则同股 A/B 会话互覆）
-2. 运行 Gate 校验脚本（**自动产出 sidecar**；同时校验 report mtime ≥ snapshot mtime，报告早于快照 = 错文件/陈旧拷贝 → exit 2）：
-   ```bash
-   python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py \
-     --report /tmp/analysis_report_<code>_mode<X>.md \
-     --data-snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
-     --profile full      # 或 quick
-   # → 产出 /tmp/analysis_report_<code>_mode<X>.verified.json（含 verdict / self_score / failed_gates）
-   ```
+2. 运行 Gate 校验脚本（**命令与参数见约束 5**，单一真相源；**自动产出 sidecar**；同时校验 report mtime ≥ snapshot mtime，报告早于快照 = 错文件/陈旧拷贝 → exit 2）。
 3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档；**归档命令必须保 mtime**——三件套逐文件 `cp -p <src> <dst>`（或目录整体 `cp -rp`，发布副本 mdx 一并覆盖），禁裸 `cp`：裸 cp 刷新 mtime，任何基于归档副本的 mtime 时序审计（V11 类）都会失真）：
    ```
    ~/analysis_report/analysis_report-<模型>-<股票名>-mode<A|B>-<代码>/   ← 每股×模式一目录
@@ -293,10 +286,7 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
    **复发晋级（第 2 次必须落引擎）**：同一陷阱第 2 次复发 → 必须落引擎修复（trap_ledger 该签名置
    `root_cause=engine` + `status=inflight`→修后 `landed`），禁第 3 次报告级修补；`trap_ledger_scan`
    对 delta>0 条目自动打 🔴 新增 + ⚠️ 晋级提示行，cron 复盘按提示升级。
-   **现场验收簿记（C-4，cron 收尾必跑；审计/人工跑数一律加 `--inspect` 只读——簿记写回仅限 cron 运行态）**：`python3 regression-tests/trap_ledger_scan.py --field-acceptance`
-   ——暴露探针（当窗报告 grep 触发形态）+ 窗口递减/达标关闭/展期/降级 + warn→硬断言翻转，全部自动落账
-   `references/trap_ledger_acceptance.yaml`，scan 首行与 engine_pending 并排自报；**零暴露 ≠ 安全**，
-   关闭须暴露达标（分位≥3/否定句≥2/定增≥1）。方向局限：现场只证假阳性方向，假阴性由 corpus+归档重放守。
+   **现场验收簿记（C-4，cron 收尾必跑）**：`python3 regression-tests/trap_ledger_scan.py --field-acceptance`；审计/人工跑数一律加 `--inspect` 只读（簿记写回仅限 cron 运行态）。簿记语义（暴露探针/窗口/降级/方向局限）真相源=`trap_ledger_scan.py` docstring。
 4. 在报告 m11 区放指针行（**禁止手填分数**）：verify 全过时 stdout 末尾直接打印可复制的 📌 指针行——
    从 verify 输出原样复制（勿为格式提前读 m11-gates.md），**粘贴后重跑一次 verify 刷新 sidecar**（mtime 新鲜度）：
    ```

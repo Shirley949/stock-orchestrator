@@ -683,3 +683,10 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **锚重定向 8 处（本仓）**：gate_definitions.py ×2（双兜底→卷1 范式指针）、capstone_panorama.py ×2、latest_extract.py ×2、test_latest_extract.py ×1（同上）；test_diag_contract.py:593（「CLAUDE.md 记载」→「范式=engineering-paradigms.md 断言必验节」）。runner.py 5 处见 routing 仓同批。refresh_golden.py:4（行为准则#4 指涉）有意不动——行为准则仍驻留。
 - **MEMORY.md L9 瘦身**：发布链族 302→122 chars（真相源指针保留，枚举细节收缩——详情在 tdx_publish.py rules 表）。
 - **验证**：test_fixed_layer_index 12/12；全量回归 exit 0（gate_fixture 漏报=0 共64门；engine_pending=2 与基线一致）。卷2/卷3 为 home 文件（~/tdx-publish-v4、~/.claude/docs）不入本仓，其内容完整性由 fixture test_volume_content_markers 执法。
+
+## 2026-09-10 批2 步2.4（plan-compact-loop-fix-v4 #3）：orchestrator SKILL.md 温和整备
+
+- **四点整备（31,391→30,251B，−1,140B）**：①取数规则 6 compact 双载体收缩——RCA 数据（三会话 26 处/47.8% vs 6 处/83.4%）外移，行为规则驻留，指向 CLAUDE.md 仪式全文；②token 审计实证段收缩——688048 数据（35 处/32,278c/57%/any ≤ 手写两例）外移，驻留一句结论+终句禁令；③C-4 簿记四行收缩为一行指针（簿记语义真相源=`trap_ledger_scan.py` docstring，SKILL.md 内为第三载体）；④Phase 4 步骤 2 verify_gates 命令块删除（与约束 5 逐字重复，约束 5 为单一真相源）。
+- **承接文件**：`_research/rule-evidence-archive.md`（规则实证档案，不自动加载）——取数规则 RCA + token 审计实证 + C-4 簿记语义三节。
+- **指标③ 实测（诚实登记）**：固定层六件合计 **85,023B**（CLAUDE.md 20,262 / MEMORY.md 7,555 / orchestrator SKILL 30,251 / routing SKILL 11,461 / quality SKILL 12,582 / registry SKILL 2,912），距 plan 目标 83KB 差 2KB。plan 对 2.4 预估 −4.3~5.3KB 系纸面估计，四点实际文本量 −1.1KB；进一步收缩需砍行为规则本体/命令块（超出温和整备授权）。1M 窗口径下 85KB≈8.2%，原 83KB 线系 200k 窗时代危险比例反推——缺口登记不强行凑数，后续批如需达标应先裁决砍哪块规则本体。
+- **验证**：全量回归 exit 0（含 test_load_set_single_source 三方对拍——JIT 表区域未动）；engine_pending=2 基线一致。
