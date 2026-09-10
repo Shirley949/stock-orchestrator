@@ -193,6 +193,7 @@ PHASE_STEPS = {
             {"id": "c60", "desc": "m3 技术面"},
             {"id": "c61", "desc": "m6 操作建议"},
             {"id": "c62", "desc": "m36 短期多周期共振 + m37 筹码与资金结构"},
+            {"id": "c63", "desc": "站内声量 T1-B 七维消费 + 总评 surface（m39 规则 R1-R6：非真空维 [src:] 落地、d3 看空同节、引文逐字；G80-B 三臂执法）"},
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）产出 sidecar，用其路径打勾"},

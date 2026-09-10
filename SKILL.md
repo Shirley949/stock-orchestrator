@@ -143,13 +143,14 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ```bash
 python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json --phase voice
+# 模式 B 必加 --template b：T1-B 七维问句（d0_sentiment 新增）+ data.meta.template="T1-B"（G80-B 分派键，缺它按 A 臂判）
 ```
 
 - **写 `xq_market_voice` scene**（加法式合入 snapshot，不动 runner scenes）：T1-v2 六维问市场（d1 最新经营情报→d6 风险讨论 + 尾行【站内总评】），`processed` 含 summary/stats/module_map。
 - **幂等**：同日 status=ok 即跳过（零配额）；跨日旧 scene 当日重拉（站内声量是当日观点快照）。`--force` 强制重拉。
 - **配额保险丝**：当日 xqSearch 已用 >160（剩余 <40）→ 自动熔断写 `status="degraded_quota"`（零发问），报告数据局限节一行披露（R6），G80 全臂豁免。
 - **会话保留**：cid 落 `data.meta.cid`，**永不删除**（用户 review + 零配额恢复用）。
-- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。
+- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。**模式 B**：T1-B 七维路由 = m39←d0+d2+d3+d4、m37←d0、m36←d1、m6←d1+d6、m3←d5、m38←summary；写作规则 R1-R6 见 m39 内联（G80-B 三臂执法）。
 
 ---
 
@@ -215,7 +216,7 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 | 模式 | 报告涉及模块（按此顺序 JIT） | 延迟加载 |
 |------|------------------------------|---------|
 | **A** | m12 / m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m10 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
-| **B** | m38 / m3 / m36 / m37 / m6 | 同上 m11（m38=核心结论头块，B 报告置顶必写） |
+| **B** | m38 / m39 / m3 / m36 / m37 / m6 | 同上 m11（m38=核心结论头块，B 报告置顶必写；m39=站内声量节，xqvoice status=ok 必写） |
 
 ### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
 

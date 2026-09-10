@@ -459,6 +459,19 @@ def main():
     # 模式B会话：模块面 m3/m36/m37/m6 与 A 不同，基线暂沿 A（P5 盲测后单列校准）
     IS_B_SESSION = bool(b_mode_cmds)
 
+    # xqvoice 视图块归属：模式B= m39（站内声量模块），模式A= m4（T1-A voice 场景模块）。
+    # by_cat 聚合在 :347 已跑过，改标签后须重算，矩阵行才带归属。
+    _xqv_mod = "m39" if IS_B_SESSION else "m4"
+    for b in blocks:
+        if b["cat"] == "视图:xqvoice":
+            b["module"] = _xqv_mod
+            b["cat"] = f"视图:xqvoice({_xqv_mod})"
+    by_phase = defaultdict(lambda: Counter())
+    by_cat = defaultdict(Counter)   # phase -> cat -> cost
+    for b in blocks:
+        by_phase[b["phase"]][b["cat"]] += b["cost"]
+        by_cat[b["cat"]][b["phase"]] += b["cost"]
+
     # ---- v4：compact 分叉段（RCA 2026-08-25：compact 后首取数动作锚定段内写作期行为；
     #      诊断项不进验收线。手写=HANDWRITE_PAT 命中集，CLI=snapshot_view.py 调用）----
     compact_segs = []

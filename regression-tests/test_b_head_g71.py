@@ -30,9 +30,6 @@ import report_views as rv  # noqa: E402
 from gate_definitions import GATE_CHECKERS, GateResult  # noqa: E402
 
 CORPUS_DIR = os.path.expanduser("~/.cache/skill-snapshots/full")
-V2_REPORT = os.path.expanduser(
-    "~/analysis_report/analysis_report-glm5.3-蓝思科技-300433/"
-    "analysis_report-glm5.3-蓝思科技-300433.md")
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +401,15 @@ _HEAD_OK = """# 300433 模式B
 | 悲观 | 15% | 36.919 | 失守减仓 |
 """
 
+# v2 时代头块形态：现价/分时两槽缺席（现价数值不作锚词出现），其余 8 槽全齐——
+# 供槽位收敛测试用：G71 须且仅须标记这 2 个真缺口（合成标本，不依赖 live 报告路径）。
+_HEAD_V2 = _HEAD_OK.replace(
+    "**现价 38.23 元（-2.1%，成交 47.89 亿、换手 2.46%）**。近 5 日**宽幅震荡**"
+    "（区间 35.79～40.09，涨跌 0.74%；20 日 21.06%）。今日分时：平开（0.03%），"
+    "冲高回落，收长上影阴线（尾盘连阴）。",
+    "近 5 日**宽幅震荡**（区间 35.79～40.09，涨跌 0.74%；20 日 21.06%）。")
+_HEAD_V2 = _HEAD_V2.replace("；现价 38.23；支撑", "；支撑")
+
 
 class TestG71(unittest.TestCase):
     def setUp(self):
@@ -482,15 +488,9 @@ class TestG71(unittest.TestCase):
         self.assertTrue(ok)
 
     def test_v2_report_flags_missing_slots(self):
-        """C14（对齐裁决 2026-08-31）：v2 措辞早于模板 v2——现价埋在情景表、无分时槽，
-        恰是用户 Request C 点名的第 1/3 优先槽位 → G71 必须标记缺『现价/分时』
-        （其余 8 槽 + 纪律位对拍 + 投影在 v2 全过——证明执法面收敛在真缺口上）。"""
-        if not (os.path.exists(V2_REPORT) and os.path.exists(
-                os.path.join(CORPUS_DIR, "300433_20260828.json"))):
-            self.skipTest("v2 报告或语料快照缺席")
-        report = open(V2_REPORT, encoding="utf-8").read()
-        snap = json.load(open(os.path.join(CORPUS_DIR, "300433_20260828.json")))
-        ok, reasons = _res(self.check, report, snap)
+        """槽位收敛：现价/分时两槽缺席、其余 8 槽 + 纪律位对拍 + 投影全过的头块，
+        G71 必须且仅须标记缺『现价/分时』（执法面收敛在真缺口上，不误伤其余槽）。"""
+        ok, reasons = _res(self.check, _HEAD_V2, self.snap)
         self.assertFalse(ok)
         self.assertEqual(len(reasons), 1, reasons)  # 收敛：仅槽位一项
         self.assertIn("现价", reasons[0])

@@ -695,17 +695,19 @@ SCENES = {
         "mode": ["A", "B"],                       # 模式 B voice 相照跑（V4 中钨已证可消费）
         "produces": [
             {"path": "status", "confidence": CONFIRMED,
-             "note": "三态 ok(含真空)/degraded_quota(保险丝：剩余<40≈已用>160)/failed——G80 全臂豁免读此键"},
+             "note": "四态 ok(含真空)/degraded_quota(保险丝：剩余<40≈已用>160)/failed/skipped(as-of 回测快照禁真问)——G80 全臂豁免读此键（只判 ≠ok）"},
             {"path": "data", "confidence": CONFIRMED,
              "note": "question + raw_answer(全文原声，含首维度标题前的导语段——G80-c 语料与 stats 计数同源) "
-                     "+ answers{d1_intel,d2_analyst,d3_bullbear,d4_news,d5_moves,d6_risk |<3维→d_full}"
-                     " + meta{asked_at,cid,answer_chars,quota_after}；cid=会话保留不删除（conversation_messages 零配额恢复，V21 实战）"},
+                     "+ answers{d0_sentiment(仅T1-B 模式B模板),d1_intel,d2_analyst,d3_bullbear,d4_news,d5_moves,d6_risk |<3维→d_full}"
+                     " + meta{asked_at,cid,answer_chars,quota_after,template(=T1-B 仅 B 模板写入，G80 分派键)}；"
+                     "cid=会话保留不删除（conversation_messages 零配额恢复，V21 实战）"},
             {"path": "processed", "confidence": CONFIRMED,
              "note": "module_map(模块→维度路由) + summary(站内总评正则提取，四形态统吃 cap 400c) + "
                      "stats{citations,intel_facts,chuanwen,shichui,date_marks}"},
         ],
         "consumers": {
             "processed.summary":        ["m12", "G80"],
+            "data.answers.d0_sentiment": ["m39", "m37"],   # 仅 T1-B（模式B）：m39 站内声量节 + m37 筹码情绪面
             "data.answers.d1_intel":    ["m1", "m2", "m25", "m4"],
             "data.answers.d2_analyst":  ["m10"],
             "data.answers.d3_bullbear": ["m4", "m6"],
@@ -714,7 +716,7 @@ SCENES = {
             "data.answers.d6_risk":     ["m7"],
             "data.answers":             ["G80"],   # c 臂引文子串语料（answers+raw_answer+summary）
             "data.raw_answer":          ["G80"],   # c 臂语料（导语段引文执法）；旧快照无此键 .get 兜底
-            "status":                   ["G80"],   # 豁免臂：status≠ok/degraded 全臂不执法
+            "status":                   ["G80"],   # 豁免臂：status≠ok/degraded/skipped 全臂不执法
         },
         "priority": P2,
         "cost": {"calls": 1, "latency": "medium"},  # xqSearch 日额 ~200；串行 + sleep 3s 防限流

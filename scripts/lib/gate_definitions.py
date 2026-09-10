@@ -244,7 +244,7 @@ PROFILES = {
     "profile_quick": {
         "name": "quick",
         "description": "模式B短期走势预测 → 技术面+操作+信号+G65-G70（B v2）",
-        "gates": ["G1", "G30", "G11", "G13"],
+        "gates": ["G1", "G30", "G11", "G13", "G80"],
         "auto_pass": [],  # 原 auto_pass 均不在 quick.gates 内（死代码，B v2 清理）
         "fail_threshold": 2,
     },
@@ -4528,6 +4528,11 @@ def check_g80(report: str, data: dict) -> bool:
     b 臂 objection-forcing（check ok→每条反对须「站内反对标记+证据token」同段）；
     c 臂引文子串（站内语境引文≥12字→归一化后须为语料子串，省略号分段每段≥8字）。
     status≠ok（含 degraded_quota/failed）全臂豁免；无反对 b 豁免；0 引文 c no-op。"""
+    # T1-B（模式B模板）分派：三臂 B 逻辑（维度覆盖/总评 surface/反方同节/引文逐字）。
+    # 旧快照无 template 键 → 走 A 臂原样（向后兼容）。
+    if (((data.get("xq_market_voice") or {}).get("data") or {}).get("meta") or {}).get("template") == "T1-B":
+        return _check_g80_t1b(report, data)
+
     blocks = re.split(r"\n\s*\n", report)
 
     # —— a 臂 presence：status=ok → 报告须有（站内词 + xq src）同段共现 ——
@@ -4599,6 +4604,84 @@ def check_g80(report: str, data: dict) -> bool:
                 "💡 修法：引文逐字照抄语料原文（含日期/球友ID），改写转述移出引号；长引文可删节但保留段须≥8字"
                 "逐字。数据核对：snapshot_view <S> xqvoice / --raw xq_market_voice.data.answers.<dim>。"])
 
+    return True
+
+
+# —— G80-B（T1-B 模式B）三臂：a①维度覆盖 + a②总评 surface + b 反方同节 + c 引文逐字 ——
+_G80B_XQ_PREFIX = "snapshot.xq_market_voice.data.answers."
+_G80B_VACUUM_RE = re.compile(r"无相关|暂无|没有找到|未见|没有明确|无明确|没有检索到|无显著|讨论较少")
+_G80B_ENGINE_QT = re.compile(r"我方|引擎|压力|支撑|均线|MA\d|VWAP|净流入|换手|K ?线")
+_G80B_DATE_RE = re.compile(r"20\d{2}|（\d{1,2}月|\d{1,2}/\d{1,2}|@\w+")
+
+
+def _g80b_is_vacuum(txt: str) -> bool:
+    """真空 = 极短（<80字），或（自称没找到 ∧ 零引用 ∧ 零日期标记）——局部否定不真空。"""
+    t = txt or ""
+    if len(t) < 80:
+        return True
+    return bool(_G80B_VACUUM_RE.search(t)) and t.count("[^") == 0 and not _G80B_DATE_RE.search(t)
+
+
+def _check_g80_t1b(report: str, data: dict):
+    """G80-B：a①非真空维 src 路径覆盖 ≥min(5,非真空维数) + a②processed.summary surface +
+    b 臂 d3_bullbear 引用节须含看空/风险/证伪词 + c 臂站内段「」≥12字引文归一化须为语料子串
+    （引擎读数引文豁免）。status≠ok（含 degraded_quota/skipped）全臂豁免。"""
+    mv = data.get("xq_market_voice") or {}
+    if mv.get("status") != "ok":
+        return True
+    mv_data = mv.get("data") or {}
+    answers = mv_data.get("answers") or {}
+    proc = mv.get("processed") or {}
+    corpus = _g80_norm("".join(list(answers.values()) + [mv_data.get("raw_answer") or "",
+                                         str(proc.get("summary") or "")]))
+    fails = []
+
+    # ---- a① 维度覆盖：非真空维度的 src 路径必须 surface ----
+    solid = {k: v for k, v in answers.items() if not _g80b_is_vacuum(v)}
+    surf = {k for k in solid if _G80B_XQ_PREFIX + k in report}
+    need = min(5, len(solid))
+    missing = sorted(set(solid) - surf)
+    if len(surf) < need:
+        fails.append(
+            ("a①维度覆盖不足 {n}/{need}：非真空维 {sd}，已 surface {sf}，缺 {miss}。"
+             "💡 修法：在 m3/m6/m37 对应段落补 [src: {pfx}{k}] 并引用该维至少 1 条站内证据")
+            .format(n=len(surf), need=need, sd=sorted(solid), sf=sorted(surf), miss=missing,
+                    pfx=_G80B_XQ_PREFIX, k=missing[0]))
+
+    # ---- a② 总评 surface：processed.summary 必须进报告 ----
+    summ = _g80_norm(str(proc.get("summary") or ""))
+    if summ and summ[:24] not in _g80_norm(report):
+        fails.append(
+            "a②总评缺失：xq_market_voice.processed.summary 未见 surface（探针『{}…』）。"
+            "💡 修法：m38 结论块或 §3.4 直引【站内总评】" .format(str(proc.get("summary") or "")[:24]))
+
+    # ---- b 臂 反方证据：d3_bullbear 引用节须含看空/风险/证伪词（按 ## 节判，看多/看空列表常跨段）----
+    if "d3_bullbear" in solid and _G80B_XQ_PREFIX + "d3_bullbear" in report:
+        secs = [s for s in re.split(r"\n(?=#{1,3} )", report) if _G80B_XQ_PREFIX + "d3_bullbear" in s]
+        bad = [s for s in secs if not re.search(r"看空|风险|反方|证伪|利空", s)]
+        if bad:
+            fails.append(
+                "b 臂反方缺失：d3_bullbear 引用节（{n} 节）无看空/风险/反方/证伪/利空词，节首『{h}…』。"
+                "💡 修法：同节补看空侧证据或证伪触发器"
+                .format(n=len(bad), h=bad[0].strip()[:60]))
+
+    # ---- c 臂 引文逐字：含 xq src 的段落内「」≥12字引文归一化须为语料子串；引擎读数引文豁免 ----
+    qre = re.compile(r"「([^「」]{12,})」")
+    for p in [p for p in re.split(r"\n{2,}", report) if p.strip()]:
+        if _G80B_XQ_PREFIX not in p:
+            continue
+        for q in qre.findall(p):
+            if _G80B_ENGINE_QT.search(q):
+                continue
+            if _g80_norm(q) not in corpus:
+                ln = report[:report.find(q)].count("\n") + 1
+                fails.append(
+                    "c 臂引文非逐字 L{ln}:『{q}…』归一化后非雪球语料子串。"
+                    "💡 修法：照抄 answers 原文（含日期/球友ID）或删引号改转述"
+                    .format(ln=ln, q=q[:30]))
+
+    if fails:
+        return GateResult(passed=False, reasons=fails)
     return True
 
 
