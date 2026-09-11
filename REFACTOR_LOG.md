@@ -724,3 +724,12 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **B-normal（002008）无效样本**：429 出生即死（transcript 12KB，零 verify/零报告/零模块 Read；smoke_measure 的「漏读 6 模块」系死亡伪影非行为信号，不入判据）。中途纠错一次：首放票 prompt 误写 600022，30s 内杀掉重放 002008（错码纪律前置核对同样适用于冒烟票 prompt 撰写）。
 - **配额节奏实证（plan 未覆盖新事实，第二次撞限）**：5h 窗 + 工程会话与冒烟票共享 key → 单窗实测 2 票封顶（A-normal+A-stress）；B-normal 启动即撞下一窗重置前尾部。冒烟票 429 即挂起、重置后续跑的节奏已两次执行。settings.json model 现为 `haiku`（用户 /model 本地命令改，新会话默认 glm-5.3-flash）——**覆盖批0 终态记录（model=opus[1m]），系用户侧主动变更非漂移，后续 Agent 勿按旧备份「还原」**；冒烟票一律显式 `--model glm-5.3[1m]` 保与 A-normal 可比。另：claude -p 票 transcript 落点跟随启动 cwd（/tmp 启动落 `-tmp/` 且读不到 ~/CLAUDE.md，与生产会话不可比）——冒烟票固定 home 目录启动（n=1 观察未机制化）。
 - **冒烟①累计 2/4 有效**：A-normal ✅ A-stress ✅ B-normal ✗（429）B-stress 未跑；P-B2 未跑。②③ 已收（3/3 探针 + T1/T2 全过）。剩余票+批4 4.4/4.6 等配额窗（2026-09-11 03:18:39 重置）。
+
+## 2026-09-11 批4 收官（plan-compact-loop-fix-v4 #5）：C2 正式部署 + 4.6 冒烟 + 冒烟① 4/4 全 PASS
+
+- **冒烟①终局 4/4 全 PASS（序贯判定零劣化）**：A-normal 603920（复读 0KB/diff=0/0 compact/峰压 22.4%）→ A-stress 301682（同判据+PASS=100+次新专项+G58 自纠）→ B-normal 002008（0 compact/峰压 13.3%/diff=0 六模块全读/PASS=100 quick/P-B1 判 B）→ B-stress 603663（0 compact/峰压 12.6%/diff=0/PASS=100）。对照基线 600105（2 compact/27min 复读 265-272KB）：复读风暴归零。P-B2：B 两票 routing 场景文件均「提及 4×、Read 0」——与批3 场景面 0KB 观察债同型，佐证「清单虚载 vs 合理 JIT」分诊题（登记，未裁决）。
+- **4.4 C2 正式部署**（备份 .bak-1789102035 → settings.json hooks.SessionStart[matcher:compact] = `c2_compact_inject.py`）：A/B 双版注入器 + fixture 11 用例（路由三态/健壮性/预算 ≤2KB/A 版命脉四要素；**fixture 抓出副信号翻转真 bug**——/tmp 遗留 modeB checklist 会把明确 A 会话翻成 B，修为 transcript runner A/B 计数决胜）。注入双版原文：A 版 4 行（首取数 --list/12 模块 JIT 勿重读/禁整段重读/清单+骨架+翻页命令带 transcript 路径）；B 版 2 行（--list/6 模块指针+清单）。模式路由主信号=transcript 计数决胜、副信号=checklist mtime、兜底 A。
+- **4.6 冒烟（受控 tmux+真 hook）三问全中**：①compact 后会话逐字确认 `[C2·compact续接·模式A]` 注入在场（SessionStart:compact hook 输出）②骨架台账被消费——会话据注入路径读出台账实况 m12/m3=已读 ③注入内联 `--transcript` 指向本会话自身 jsonl。B 版 live-compact 未另跑：matcher/stdin 管线与 A 臂同构、B 版渲染 fixture 锁定，残余风险登记。
+- **load_skeleton 并行会话绑错 bug（12:52 实证→已修）**：缺省 `--latest` 在多会话并行时绑到工程会话（翻页 0 项）；修法=hook 注入文本内联本会话 transcript_path，会话照抄命令即正确绑定；幂等性同场验证（重跑翻页 0 项、零重复计）。遗留建议（未落码）：load_skeleton 缺省行为在并行会话环境应显式报错提示传 --transcript，而非静默绑最新。
+- **杂项**：tmux 驱动会话 send-keys 提交不稳定（需补发 Enter）；heredoc 内含 `json.dumps({...multi-line...})` 两次同点截断（环境侧怪象，绕开=单行/函数调用）。
+- **验证**：run_regression.sh exit 0（test_c2_inject 11/11 + test_skeleton_schema 22/22 + 全量）；settings 终态=model haiku（用户 /model 所置）+hooks.SessionStart(compact)+env 无 inert 声明。plan 五批全部收官。
