@@ -32,9 +32,11 @@ description: >
 python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_checklist.py \
   --user-prompt "用户原始问题" \
   --stock-codes "股票代码" \
-  --output /tmp/analysis_checklist_{code}_mode{X}_{timestamp}.md
+  --output /tmp/analysis_checklist_{code}_mode{X}_{timestamp}.md \
+  --skeleton-out /tmp/analysis_skeleton_{code}_mode{X}.md   # A-only：加载骨架台账（B 豁免，自动跳过）
 ```
 不跑清单 = 不知道该做什么 = 不能开始分析。
+A 模式同时产出**加载骨架台账**（模块 JIT 序 × 已读状态）：compact/续接后先看骨架——已读项勿重读；翻页走 `load_skeleton.py <骨架> [--transcript <jsonl>]`（出内容+翻台账同一命令，禁手工 Edit）。
 → 原因：清单是 Phase 判断的唯一依据。跳过清单会导致后续 Phase 不知道该拉哪些数据、加载哪些模块，最终产出质量不可控。
 
 ### 约束 2：清单项必须跟踪
