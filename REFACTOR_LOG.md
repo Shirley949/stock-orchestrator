@@ -717,3 +717,10 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **P4 龙虎榜探针 PASS**：报告三处落点（§7.5/§镜头二/结论速览）+ never_listed 结论 + 137 处 [src: snapshot] 引用；三问（龙虎榜/估值/风险）结论速览完整回应。
 - **截断披露（诚实口径）**：会话 18:46-19:08 死于 **429「已达到 5 小时的使用上限」（20:24:43 重置）**——流程走到 拉取→写作（报告 62KB 落盘 /tmp/analysis_report_603920_modeA.md，m11 区待回填）→ **verify_gates 之前**；Phase 4 gate/归档未执行。判据系 P2-P3 现象不受影响，但「全流程」未走完；归档件未产生（~/analysis_report 无今日新件）。
 - **新事实（plan 未覆盖，登记）**：5h 配额窗为冒烟序列的硬约束——A-normal 与本工程会话共享 key 配额，单窗内 4 票连跑不可行；后续票按「重置后逐票+429 即挂起等下窗」节奏推进（cron 20:26 起 A-stress 301682）。
+
+## 2026-09-11 冒烟① A-stress（301682 次新压力面）PASS + B-normal 429 无效样本 + 配额节奏实证
+
+- **A-stress 判据全过且全流程走完**（对照 A-normal 的 429 截断，本票补齐「gate→归档态」证据）：复读 **0KB**｜diff 缺=0/B 混入=0/m11 预读=0（多读仅 m9 按需）｜compact 0｜peak_ctx 0.270M（27%）｜零重复 Read；sidecar 终态 **verdict=PASS score=100**（双轮 verify：run→9 门 FAIL→修复→run2 PASS）。次新观察项在案：G30 M5 IPO 事件剔除 + G27 start_year 引擎降档均按引擎行为执行、无会话级覆写。加分证据：票内自查发现一次 G58 改标题规避企图（「改标题规避通过，核对 ledger 后发现该签名明确禁以改标题规避，已回滚原标题改走软过协议」）——规避条款注册纪律在票内自执法。
+- **B-normal（002008）无效样本**：429 出生即死（transcript 12KB，零 verify/零报告/零模块 Read；smoke_measure 的「漏读 6 模块」系死亡伪影非行为信号，不入判据）。中途纠错一次：首放票 prompt 误写 600022，30s 内杀掉重放 002008（错码纪律前置核对同样适用于冒烟票 prompt 撰写）。
+- **配额节奏实证（plan 未覆盖新事实，第二次撞限）**：5h 窗 + 工程会话与冒烟票共享 key → 单窗实测 2 票封顶（A-normal+A-stress）；B-normal 启动即撞下一窗重置前尾部。冒烟票 429 即挂起、重置后续跑的节奏已两次执行。settings.json model 现为 `haiku`（用户 /model 本地命令改，新会话默认 glm-5.3-flash）——**覆盖批0 终态记录（model=opus[1m]），系用户侧主动变更非漂移，后续 Agent 勿按旧备份「还原」**；冒烟票一律显式 `--model glm-5.3[1m]` 保与 A-normal 可比。另：claude -p 票 transcript 落点跟随启动 cwd（/tmp 启动落 `-tmp/` 且读不到 ~/CLAUDE.md，与生产会话不可比）——冒烟票固定 home 目录启动（n=1 观察未机制化）。
+- **冒烟①累计 2/4 有效**：A-normal ✅ A-stress ✅ B-normal ✗（429）B-stress 未跑；P-B2 未跑。②③ 已收（3/3 探针 + T1/T2 全过）。剩余票+批4 4.4/4.6 等配额窗（2026-09-11 03:18:39 重置）。
