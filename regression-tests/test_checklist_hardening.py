@@ -81,6 +81,12 @@ class TestChecklistHardening(unittest.TestCase):
         self.assertEqual(hits, [], f"SKILL.md 残留视图计数硬编码: {hits}")
         self.assertIn("以 --list 输出为准", skill)
 
+    def test_phase_protocols_pointer(self):
+        """T1 下沉批：phase-protocols.md 在仓且被 SKILL.md 指名（断链=红）。"""
+        ref = HERE.parent / "references" / "phase-protocols.md"
+        self.assertTrue(ref.is_file(), f"phase-protocols.md 缺失: {ref}")
+        self.assertIn("phase-protocols.md", SKILL_MD.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

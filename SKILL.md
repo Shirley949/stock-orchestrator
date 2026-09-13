@@ -127,31 +127,23 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 ## Phase 1：会话级初始化（始终运行）
 
 1. 加载 `data-source-registry/SKILL.md`（评级体系）
-2. **数据源架构（2026-06-19 更新）**：
-   - 财报快速: 东财datacenter API (curl)
-   - K线: 新浪K线API (curl, datalen=60)
-   - 机构EPS: AkShare stock_profit_forecast_ths
-   - 技术指标: 自算(新浪K线+Python)
-   - **westock 数据**: westock_client.py（分析师评级/目标价/资金流/年度预测/EBIT 实际值，腾讯源 npx CLI，无限流）；估值 PE/PB/总市值用 akshare baidu（scene：`valuation_snapshot` / `consensus_forecast`）
-   - API模板: `financial-data-routing/references/api-templates/`
+2. 数据选型以 routing 场景文档 + registry catalog 为准（勿在此维护副本）；API 模板 → `financial-data-routing/references/api-templates/`
 3. **不运行 runtime-probe**（节省 5 秒）。probe 仅在后续 API 调用失败时按需触发
 
 ---
 
 ## Phase 1.5：雪球站内声量拉取（Phase 2 拉取后、写作前执行 · 模式 A/B 均跑）
 
-> **执行时机（钉死）：Phase 2 的 runner 拉取完成 + precheck 通过之后、Phase 3 写作之前**——voice 相锚点全部从 snapshot 提取（K线异动日/公告事件/板块/股东户数/风险身份），快照不存在脚本直接报错。本节是数据获取阶段子步骤，不是新 Phase 门（checklist 无对应项）。
+> **执行时机（钉死）：Phase 2 的 runner 拉取完成 + precheck 通过之后、Phase 3 写作之前**——voice 相锚点全部从 snapshot 提取，快照不存在脚本直接报错（数据获取子步骤，非新 Phase 门——checklist 无对应项）。
 
 ```bash
 python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json --phase voice
 # 模式 B 必加 --template b：T1-B 七维问句（d0_sentiment 新增）+ data.meta.template="T1-B"（G80-B 分派键，缺它按 A 臂判）
 ```
 
-- **写 `xq_market_voice` scene**（加法式合入 snapshot，不动 runner scenes）：T1-v2 六维问市场（d1 最新经营情报→d6 风险讨论 + 尾行【站内总评】），`processed` 含 summary/stats/module_map。
-- **幂等**：同日 status=ok 即跳过（零配额）；跨日旧 scene 当日重拉（站内声量是当日观点快照）。`--force` 强制重拉。
-- **配额保险丝**：当日 xqSearch 已用 >160（剩余 <40）→ 自动熔断写 `status="degraded_quota"`（零发问），报告数据局限节一行披露（R6），G80 全臂豁免。
-- **会话保留**：cid 落 `data.meta.cid`，**永不删除**（用户 review + 零配额恢复用）。
-- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。**模式 B**：T1-B 七维路由 = m39←d0+d2+d3+d4、m37←d0、m36←d1、m6←d1+d6、m3←d5、m38←summary；写作规则 R1-R6 见 m39 内联（G80-B 三臂执法）。
+- 幂等（同日 ok 跳过，`--force` 重拉）+ 配额保险丝（剩余 <40 熔断 `degraded_quota` 零发问）——熔断时报告数据局限节一行披露（R6），G80 全臂豁免。
+- 写作期消费：`snapshot_view.py <snap> xqvoice`（长引文 `--raw xq_market_voice.data.answers.<dim>` 兜底）；模块路由 = `processed.module_map`；写作规则 A 见 m4 §4.5、B 见 m39 内联（R1-R6，G80 三臂执法）。
+- 维度定义 / A·B 模块路由表 / 会话保留细节 → `references/phase-protocols.md` §P1.5
 
 ---
 
@@ -189,7 +181,7 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
 
-### ⚠️ websearch 素材落 snapshot（单一机制，2026-09-01 F8 裁决）
+### ⚠️ websearch 素材落 snapshot
 
 用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）：
 
@@ -199,8 +191,7 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
   --items '<json | @findings.json>'     # [{topic,value,provider,url,query}, ...]（白名单 5 键；content/title/source 系别名自动映射，白名单外非空键丢弃并 WARN）
 ```
 
-- 写回后 scene=`web_research_findings`；报告引用处带 `[src: snapshot.web_research_findings...]`（**执法者：G21 溯源 + G45 目标价/预测口径**；裸贴 findings = 溯源断裂）。
-- websearch 是**发现**工具非**验证**工具：API 结构化数据是权威上游，冲突时以 snapshot 为准（CLAUDE.md 同款原则）。
+- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单细节 → `references/phase-protocols.md` §P2。
 
 ---
 
@@ -235,6 +226,12 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json annual      # 年报维度�
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json news        # 新闻 high+medium 标题级
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json events      # 大事提醒投影
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json holder      # 股东户数信号期
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json short_term    # B：短期多周期预计算信号（读结论勿自算）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json market_context # B：大盘 regime + 板块环境
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json fund_flow     # B：资金流（当日+历史）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：核心结论头块 10 槽 + head_draft_md 预渲染（m38 照抄源）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqvoice       # 站内声量六/七维 + module_map（Phase 1.5 产物）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqcheck       # 站内结论求证 verdicts/objections（Phase 4.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）
 # any 探查（视图外数据的第一入口）：
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）
@@ -308,31 +305,27 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
 
 ### Phase 4.5：站内结论求证（仅模式 A；Phase 4 内子步骤——报告草稿落盘后、verify_gates 前）
 
-> **时序（硬约束，V11 实测）**：插在 Phase 4 第 1 步（报告写入 /tmp）与第 2 步（verify_gates）之间。② 写 scene 会刷新 snapshot mtime，③ 修订重存报告在其后 → verify 的 mtime 检查（报告 ≥ snapshot）天然满足；错序（先 verify 后写 scene）= exit 2。模式 B 跳过本节（无 capstone 反对处理刚需，省配额）。
+> **时序（硬约束）**：插在 Phase 4 第 1 步（报告写入 /tmp）与第 2 步（verify_gates）之间——② 写 scene 刷新 snapshot mtime、③ 修订重存报告在其后，verify 的 mtime 检查（报告 ≥ snapshot）天然满足；错序（先 verify 后写 scene）= exit 2。模式 B 跳过本节（省配额）。
 
-1. **提取结论**：从报告草稿提取 10-15 条核心结论（每条一句、含关键数字），一行一条写入 `/tmp/conclusions_<code>.txt`
-2. **Q2 独立会话求证**（防迎合 FRAME 已内嵌；**必须独立会话**——同会话续问会把站内检索退化成上文检索，反对 3→1 实测退化）：
+1. 提取 10-15 条核心结论（一句一条、含关键数字）→ `/tmp/conclusions_<code>.txt`
+2. **Q2 求证必须独立会话**（同会话续问会把站内检索退化成上文检索；防迎合问句由脚本 FRAME 内置，勿手写）：
    ```bash
    python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
      --phase check --conclusions /tmp/conclusions_<code>.txt
    ```
-   写 `xq_conclusion_check` scene（verdicts 四值：支持/部分支持/反对/无讨论 + objections 反对条目号）。**幂等 = 同日 ok 且 conclusions 未变**才跳过（修订后新结论集必须重问）。
-3. **定向修订草稿**：读 `snapshot_view.py <snap> xqcheck`，每条 objection 在报告（§13.2 反方证据列）写「**站内反对·须直视**」处理段——三要件：标记词（站内反对/站内反驳/市场反对/反对意见）+ 证据 token（数字/≥6 字串）**同段** + 处理三选一（维持/降档/修正），禁静默忽略（详见 m6 capstone「站内反对·须直视」节）。修订后**重存报告文件**。
-3b. **增量逐条过堂**（增量利空/利好不留黑洞，checklist `c_xq_delta`）：d1-d6 各维与 check raw 中「我方此前未覆盖的增量」**逐条显式落点**——利空→m7 §7.1 收录、利好→§4.5 对撞行/观察清单——或写明弃用理由；报告只写结果（对撞行增量句），不出现工序表（规则句见 m4 §4.5 R5）。
+3. 读 `snapshot_view.py <snap> xqcheck`，逐条 objection 写「站内反对·须直视」处理段（标记词+证据 token 同段+三选一维持/降档/修正，正典 = m6 capstone 对应节）后**重存报告**；增量逐条过堂（`c_xq_delta`）。细节 → `references/phase-protocols.md` §P4.5
 4. 回到 Phase 4 第 2 步跑 verify_gates（G80 三臂此时执法：a 声量已消费 / b 反对已处理 / c 引文逐字）。
 
 ### Phase 6：Token 审计归档（报告完成后一条命令，LLM 零成本记录）
 
 报告归档后跑一次事后审计（从会话 JSONL 提取 per-request 真实 usage + 内容块 context 压力归因，**分析过程零负担、勿在写作中自记 token**）：
+产物解读与 5 项检查说明 → `references/phase-protocols.md` §P6
 
 ```bash
 python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/token_audit.py \
   --latest --stock <code> --mode <X>
 # → <股票的 analysis_report-*-mode<X>-<code>/token_audit-<code>-<日期>.md；--mode 过滤模式目录，缺省不过滤（兼容旧目录）
-# 含：Phase×类别矩阵 / 模块明细 / 新管线检查项(JIT/m11延迟/视图直读/无手写提取/模块占比) / Top-15 贵内容块
 ```
-
-复盘看 5 项检查全 ✅ 与否即可；❌ 会给出具体量化（如「手写提取 N 处 / stdout X chars / 压力 Y%」）。
 
 ---
 

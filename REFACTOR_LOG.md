@@ -27,6 +27,12 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-13 T1 phase 配方下沉批：SKILL.md 触发块化 + phase-protocols.md 新建（A/B 对照 t0↔t1 全绿）
+
+- **改动**：①新建 `references/phase-protocols.md`（§P1.5/§P2/§P4.5/§P6 四节，头部类别披露）②SKILL.md Phase 1/1.5/2/4.5/6 五块压成触发块（时序合同+命令+指针，细节下沉）③视图表 +6 行（short_term/market_context/fund_flow/b_head/xqvoice/xqcheck）④`test_checklist_hardening.py` +护栏 `test_phase_protocols_pointer`（ref 在仓+被指名，6/6 OK）。
+- **数据**：orchestrator 343→336 行、30,759→29,013B（+新增按需 ref ~2.3KB 不占恒载）；视图覆盖 17/20→**20/20**；t0↔t1 16 探针零 REGRESSED（fixture 分数/清单 sha/解析形状逐字节相等，回归 78 OK exit 0）；内容保全率 100/85.7/80/100%——3 行叙事剥除（「V11 实测」「防迎合 FRAME 已内嵌；反对 3→1 实测退化」「2026-09-01 F8 裁决」），执行语义全部在场。**行数/字节目标（≤330 行/≤25.5KB/两仓 ≥6KB）未达**：触发块须内联保留执行期义务（命令/时序/白名单 schema）+逐字保全约束所致，实际两仓 −15 行/−2,017B，如实记录不追指标。
+- **用户规约（2026-09-13）**：加载层只写现在时执行指导，实验/变更叙事只进本 LOG。
+
 ## 2026-09-13 T0 清死重批：恒载层化石删除（plan rosy-puzzling-stonebraker；A/B 对照 base0↔t0 全绿）
 
 - **改动**：恒载 5 文件删 5 处化石 10 处编辑——quality 自评分手写节（与「禁手填」同文件双评分制）+cninfo A 级表行；routing 模式判定表三抄→detect_mode 指针 + 模式B Agent1/2 手工编排→runner 命令块（「模块3+模块6」「仅 G1/G30/G11/G13」孤本过时）；orchestrator 模式B s2 旧措辞+cninfo×2+T0.6 显式模式鼓励句；CLAUDE.md 模式表 8→3 行（无 VCS，备份 /tmp/ablab/CLAUDE.md.t0.bak，节外零差异已验）。
