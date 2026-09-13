@@ -106,7 +106,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 | 深度分析 / 帮我看看 / 买不买 / 估值 / 风险 / 事件（全量见 `generate_checklist.py` `detect_mode` 的 `mode_a_triggers`） | **A：完整** | Phase 1 + 2 + 3 + 4 |
 | 今天买不买 / 盘中 / 能加仓 / 要不要卖（全量见 `mode_b_triggers`） | **B：当日** | Phase 1 + 2 |
 
-> **模式判定权威 = `generate_checklist.py:detect_mode`（代码）**；本表仅代表例 + 指针，禁手抄全集（第三份手抄 = 漂移源）。
+> **模式判定权威 = `generate_checklist.py:detect_mode`（代码）**；本表仅代表例 + 指针，禁手抄全集（第三份手抄 = 漂移源）。显式「模式A / 模式B」判定零歧义（最高优先级），推荐显式声明；未写按词表自动判定。
 
 ### Phase 0 执行步骤
 1. 运行 `generate_checklist.py` → 生成 `/tmp/analysis_checklist_*.md`
@@ -129,7 +129,6 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 1. 加载 `data-source-registry/SKILL.md`（评级体系）
 2. **数据源架构（2026-06-19 更新）**：
    - 财报快速: 东财datacenter API (curl)
-   - 财报深挖: cninfo全文PDF (curl+pdfplumber) — 3步happy path
    - K线: 新浪K线API (curl, datalen=60)
    - 机构EPS: AkShare stock_profit_forecast_ths
    - 技术指标: 自算(新浪K线+Python)
@@ -176,7 +175,7 @@ python runner.py A <code> 2>&1 | tee ...  # ← 禁止（除非全程不截断�
 ### 模式 A 调用顺序
 
 runner 一条命令全量并发（scene 编排 = `fetch_for_mode` 阶段A `_TASKS` + 阶段B 串行 s4 技术；
-年报维度 s36 全 off-PDF：东财 datacenter + westock 分红，cninfo PDF 管道已退役）。
+年报维度 s36 全 off-PDF：东财 datacenter + westock 分红）。
 
 **拉完后第一步（强制 stop-gate）**：
 
@@ -188,11 +187,7 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 ### 模式 B 调用顺序
 
-```
-并行：s2 行情（实时行情快照）+ s2 K 线（近 60 日，同源拉取）
-串行：s2 技术指标（自算，依赖 K 线数据）
-串行：s2 盘口解读（依赖实时行情）
-```
+runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
 
 ### ⚠️ websearch 素材落 snapshot（单一机制，2026-09-01 F8 裁决）
 
