@@ -201,7 +201,7 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 ```bash
 python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_research <code> \
   --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
-  --items '<json | @findings.json>'     # [{source,title,url,published,content}, ...]
+  --items '<json | @findings.json>'     # [{topic,value,provider,url,query}, ...]（白名单 5 键；content/title/source 系别名自动映射，白名单外非空键丢弃并 WARN）
 ```
 
 - 写回后 scene=`web_research_findings`；报告引用处带 `[src: snapshot.web_research_findings...]`（**执法者：G21 溯源 + G45 目标价/预测口径**；裸贴 findings = 溯源断裂）。

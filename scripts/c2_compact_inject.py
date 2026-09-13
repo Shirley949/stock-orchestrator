@@ -48,7 +48,7 @@ def _latest(paths):
     return c[-1] if c else None
 
 
-def render(mode: str) -> str:
+def render(mode: str, transcript_path: str = "") -> str:
     cl = _latest(glob.glob(f"/tmp/analysis_checklist_*_mode{mode}_*.md"))
     if mode == "B":
         lines = [
@@ -57,11 +57,15 @@ def render(mode: str) -> str:
         ]
         return "\n".join(lines)
     sk = _latest(glob.glob("/tmp/analysis_skeleton_*.md"))
+    # transcript_path 内联：load_skeleton 缺省 --latest 在并行会话下绑错（12:52 实证），
+    # 显式传本会话 transcript 才能正确翻台账
+    sk_cmd = (f"（翻页=load_skeleton.py {sk} --transcript {transcript_path or '<本会话jsonl>'}，已读项勿重读）"
+              if sk else "")
     lines = [
         "[C2·compact续接·模式A] ①首个取数动作=snapshot_view.py <最新快照> --list（重建视图认知，禁 json.load 全树探查）",
         "②模块已读勿重读：12 模块 JIT（写哪章读哪章）；m11 仅首次 verify FAIL 才读",
         "③禁整段重读任何已 Read 过的文件（旧文按需 --list/any/--field 重取，不整段重读）",
-        f"④清单：{cl or '未找到'}" + (f"｜骨架台账：{sk}（翻页=load_skeleton.py，已读项勿重读）" if sk else ""),
+        f"④清单：{cl or '未找到'}" + (f"｜骨架台账：{sk}{sk_cmd}" if sk else ""),
     ]
     return "\n".join(lines)
 
@@ -73,7 +77,7 @@ def main():
         d = {}
     tp = d.get("transcript_path", "")
     mode = detect_mode(tp) if tp and os.path.exists(tp) else "A"
-    print(render(mode))
+    print(render(mode, tp))
 
 
 if __name__ == "__main__":

@@ -517,6 +517,13 @@ class DataSnapshot:
     # 查询接口
     # --------------------------------------------------------
 
+    # web_research items 键名合同（F4）：白名单 5 键 + 常见误传键别名。
+    # 别名来自生产实锤（603256/600105 等照入口文档旧 schema 传 content/title/source 系）：
+    # 仅当目标键为空才回填（防覆盖）；白名单外非空键不静默丢——命名 WARN + fetch_log 记账。
+    WEB_ITEM_KEYS = ("topic", "value", "provider", "url", "query")
+    WEB_KEY_ALIASES = {"content": "value", "text": "value", "finding": "value",
+                       "title": "topic", "source": "provider"}
+
     def fetch_web_research(self, items: list, topic_hint: str = "") -> dict:
         """F4: LLM websearch 研究发现封装为 web_research_findings 信封（grade=C，_verified=false）。
 
@@ -535,15 +542,32 @@ class DataSnapshot:
                 "（dict 包裹请传 items['items']）")
         norm = []
         url_only = 0
+        mapped_total = 0
+        dropped_keys, dropped_items = set(), 0
         for it in items:
             if not isinstance(it, dict):
                 continue
+            # 键名合同容错：别名键仅当目标键空时回填；白名单外非空键记 dropped（禁静默丢）；
+            # _ 前缀引擎自有键豁免（scene 行重写回不产生假 WARN）
+            eff = dict(it)
+            item_dropped = False
+            for k, v in it.items():
+                if k.startswith("_"):
+                    continue
+                tgt = self.WEB_KEY_ALIASES.get(k)
+                if tgt and v and not eff.get(tgt):
+                    eff[tgt] = v
+                    mapped_total += 1
+                elif k not in self.WEB_ITEM_KEYS and v not in (None, ""):
+                    dropped_keys.add(k)
+                    item_dropped = True
+            dropped_items += item_dropped
             row = {
-                "topic": str(it.get("topic", "")),
-                "value": it.get("value"),
-                "provider": str(it.get("provider", "")),   # exa / web_reader / tavily
-                "url": str(it.get("url", "")),
-                "query": str(it.get("query", "")),
+                "topic": str(eff.get("topic", "")),
+                "value": eff.get("value"),
+                "provider": str(eff.get("provider", "")),   # exa / web_reader / tavily
+                "url": str(eff.get("url", "")),
+                "query": str(eff.get("query", "")),
                 "_source": "llm_web_research",
                 "_verified": False,
             }
@@ -553,10 +577,15 @@ class DataSnapshot:
             url_only += row["_url_only"]
             norm.append(row)
         status = "ok" if norm else "missing"
+        params = {"topic_hint": topic_hint, "items": len(norm),
+                  "url_only": url_only, "substantive": len(norm) - url_only}
+        if mapped_total:
+            params["mapped"] = mapped_total
+        if dropped_keys:
+            params["dropped_keys"] = sorted(dropped_keys)
         self._fetch_log.append({
             "api": "llm_web_research",
-            "params": {"topic_hint": topic_hint, "items": len(norm),
-                       "url_only": url_only, "substantive": len(norm) - url_only},
+            "params": params,
             "status": status, "source": "llm_web_research", "time": datetime.now().isoformat(),
         })
         warnings = [] if norm else ["[web_research] 空 items——LLM 未提供 websearch 发现"]
@@ -564,6 +593,10 @@ class DataSnapshot:
             warnings.append(
                 f"[web_research] URL-only {url_only}/{len(norm)} 条（value/topic/provider 全空，仅存 URL 快照）"
                 "——发现层产出未结构化，报告引用须标「未核实」")
+        if dropped_keys:
+            warnings.append(
+                f"[web_research] {dropped_items}/{len(norm)} 条含白名单外非空键 {sorted(dropped_keys)}——已丢弃"
+                f"（白名单={list(self.WEB_ITEM_KEYS)}；content/text/finding→value、title→topic、source→provider 自动映射）")
         return {
             "scene": "web_research_findings",
             "data": {"status": "ok" if norm else "missing", "source": "llm_web_research",

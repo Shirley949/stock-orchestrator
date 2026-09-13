@@ -27,6 +27,15 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-11 F4 键名合同批：web_research 写回 content 静默丢根修（603256 自检 RCA；宪法⑧适用）
+
+- **背景（4 次生产复发实证，回溯自 transcript/快照/双仓日志）**：688270 09-02（14/14 URL-only→E批#13 只做形态显性化即收口）→ 09-09 会话（transcript 实锤已自行推导「键名不匹配，adapter 只保 5 键」并人肉重写）→ 600105 09-10（12 条 URL-only，「content was dropped」人肉绕过）→ 603256 09-11（14/14 URL-only，自检「写回实质率」项曝光）。每次均会话内从头重诊断+人肉补救；诊断从未落 trap_ledger（当时全库 0 条 F4 档）→ 复发计数恒 0、engine_pending 不可见。
+- **根因（三层）**：①orchestrator SKILL.md F8 节示例 schema `{source,title,url,published,content}` 与 adapter 白名单 `{topic,value,provider,url,query}`（正确文档面=m10-forecast.md，仅 JIT 加载）合同断裂——调用方照入口文档逐字传参即触雷，必读面恰是错误面；②adapter 白名单构造 `.get(默认值)` 对未知键静默丢；③写回 stdout 成功面（`items=N, status=ok`——status 门槛只看 norm 非空）+ URL-only WARN 只进快照 `_warnings` 延后至 precheck exit 3/G72 才见=反馈环断裂。E批#13「零新 gate+既有通道」裁决只堵披露义务侧未堵输入合同侧，且落码时未 grep 反查 SKILL.md 的第二份硬编码 schema 副本（键名映射裸字符串合同纪律的存量违例形态）。
+- **改动（三层同批）**：①`data_snapshot.fetch_web_research` 键名合同容错：别名 {content,text,finding→value；title→topic；source→provider} 仅当目标键空回填（防覆盖）；白名单外非空键命名 WARN（入 `_warnings`→precheck/G72 既有披露通道）+ fetch_log params `dropped_keys`/`mapped` 条件记账（空输入形状恒等，既有测试零扰动）；`_` 前缀引擎自有键豁免（scene 行重写回零假 WARN）。②runner `web_research` 写回 stdout 如实报 substantive/url_only + `_warnings` 即时 stderr（成功面=落盘实质；`--verify` 保留）。③SKILL.md:204 schema 改白名单 5 键+别名披露（根因层）。
+- **验证**：先红后绿（envelope 4 新测试修复前 3 FAIL→修后 9/9；603256 首轮真实形态作真实极）；CLI 全链路重放（旧 schema 载荷→快照→snapshot_view 读回）两极过；parity 3 票 byte-parity 零漂移（canonical 形态零扰动）；run_regression.sh REGRESSION_EXIT=0（64 门漏报=0；engine_pending=2 均为 G58 前存欠账）。
+- **落账**：trap_ledger 立案 `F4#web_writeback:key_alias_contract`（status=landed，root_cause=engine，计数面=G72×web_research，count=0=冻结日 sidecar 实测）。
+- **残余（显式在案）**：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持——真「发现层未结构化」形态仍走 G72/precheck 披露义务）。
+
 ## 2026-09-03 P1c 批：checklist 硬化 + 文档去硬编码（retrospective_audit_20260902 提案⑤/议程 E·F·D2·D3）
 
 > 病类 P（程序性）→ 消费层（checklist/文档），全部「内联产生真相的命令，不内联真相的当前值」。

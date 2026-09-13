@@ -41,6 +41,59 @@ def _bare_ds():
     return ds
 
 
+LEGACY_DOC_ITEM = {   # 2026-09-11 603256 首轮生产实锤：照 orchestrator SKILL.md 旧 schema 逐字传参
+    "source": "财联社", "title": "宏和科技上半年电子布均价同比+147.61%",
+    "url": "https://www.cls.cn/detail/2453864", "published": "2026-08-13",
+    "content": "平均售价 11.91 元/米，同比+147.61%；原材料进价同比+229.21%",
+}
+
+
+class WebResearchKeyAliasContract(unittest.TestCase):
+    """键名合同容错（F4 trap：入口文档旧 schema content/title/source 系 4 次生产复发）。
+
+    别名键仅当目标键空时回填（防覆盖）；白名单外非空键不静默——命名 WARN + fetch_log 记账；
+    引擎自有键（_ 前缀）豁免——scene 行重写回不产生假 WARN。
+    """
+
+    def test_legacy_doc_keys_aliased(self):
+        """真实极：旧文档 schema 五键传入 → 自动映射 substantive=1，非 URL-only"""
+        ds = _bare_ds()
+        res = ds.fetch_web_research([dict(LEGACY_DOC_ITEM)])
+        it = res["data"]["items"][0]
+        self.assertEqual(it["topic"], "宏和科技上半年电子布均价同比+147.61%")
+        self.assertIn("11.91", str(it["value"]))
+        self.assertEqual(it["provider"], "财联社")
+        self.assertFalse(it["_url_only"])
+        self.assertEqual(res["data"]["substantive"], 1)
+        self.assertNotIn("URL-only", str(res["_warnings"]))
+
+    def test_unmapped_key_dropped_loud(self):
+        """静默kill根因：白名单外非空键（published）必须命名 WARN + fetch_log 记账，禁无声丢"""
+        ds = _bare_ds()
+        res = ds.fetch_web_research([dict(LEGACY_DOC_ITEM)])
+        self.assertTrue(any("published" in w for w in res["_warnings"]))
+        self.assertEqual(ds._fetch_log[-1]["params"].get("dropped_keys"), ["published"])
+        self.assertEqual(ds._fetch_log[-1]["params"].get("mapped"), 3)
+
+    def test_alias_collision_prefers_canonical(self):
+        """目标键已有值 → 别名值不覆盖、并入 dropped 命名（禁丢弃已持有信息）"""
+        ds = _bare_ds()
+        item = dict(STRUCTURED_ITEM, title="重复标题")
+        res = ds.fetch_web_research([item])
+        self.assertEqual(res["data"]["items"][0]["topic"], "全球供需预测")
+        self.assertTrue(any("title" in w for w in res["_warnings"]))
+
+    def test_engine_own_keys_exempt(self):
+        """scene 行重写回（_ 前缀引擎自有键）→ 零假 WARN 零 dropped 记账"""
+        ds = _bare_ds()
+        first = ds.fetch_web_research([dict(STRUCTURED_ITEM)])
+        rewrite = _bare_ds().fetch_web_research([dict(first["data"]["items"][0])])
+        self.assertEqual(rewrite["_warnings"], [])
+        params = ds._fetch_log[-1]["params"]
+        self.assertNotIn("dropped_keys", params)
+        self.assertNotIn("mapped", params)
+
+
 class WebResearchUrlOnlyEnvelope(unittest.TestCase):
     def test_real_shape_url_only(self):
         """真实极：URL-only → flag True + WARN「URL-only 1/1」+ substantive=0；

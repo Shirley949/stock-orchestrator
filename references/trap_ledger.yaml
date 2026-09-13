@@ -459,4 +459,15 @@ entries:
     status: landed
     blocked: false
     fix: "（2026-09-01 收官批 B2 落地，补注册 2026-09-10）并行会话互覆 /tmp 固定路径报告/快照——verify_gates 验的是 A 的报告 × B 的快照，静默串档。已 landed：报告/快照路径 run-scoped（analysis_report_<code>）+ verify_gates CLI 层 mtime 闸（报告 mtime < 快照 mtime → exit 2『陈旧拷贝』，两极实测：早于拦截/新于放行；主条目 REFACTOR_LOG:139）+ mode 段叠加（2026-09-09 模式隔离批：mode<A|B> 段，同模式才可覆盖）。残余（显式记录在案）：同 code 同 mode 跨日碰撞 day-scoped 不足——mtime 闸兜底拦截，未见复发实锤"
+  - signature: F4#web_writeback:key_alias_contract
+    gate: G72
+    subcheck: web_writeback
+    reason_class: key_alias_contract
+    match: "web_research"
+    count: 0
+    last_seen: "2026-09-11"
+    status: landed
+    blocked: false
+    root_cause: engine
+    fix: "（603256 实锤 2026-09-11，回溯实证同型 4 次：688270 09-02→E批#13 只做形态显性化、09-09 会话 transcript 已自行推导键名不匹配、600105 09-10、603256 09-11——每次会话内人肉补救，诊断从未落账）调用方照 orchestrator SKILL.md F8 节旧 schema 传 {source,title,url,published,content}，adapter 白名单只收 {topic,value,provider,url,query}——content 静默丢、status=ok+stdout 成功面、URL-only WARN 只进快照 _warnings 延后至 precheck/G72 才见=反馈环断裂。已 landed 三层：①adapter 键名合同容错（别名 content/text/finding→value、title→topic、source→provider 仅当目标键空回填；白名单外非空键命名 WARN + fetch_log dropped_keys/mapped 记账；_ 前缀引擎自有键豁免防 scene 行重写回假 WARN）②runner 写回 stdout 如实报 substantive/url_only + _warnings 即时 stderr ③根因层 SKILL.md:204 schema 改白名单 5 键。先红后绿：envelope 603256 真实形态反例修复前必 FAIL；parity 3 票 byte-parity 零漂移。残余（显式在案）：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持）。主条目=两仓 REFACTOR_LOG 2026-09-11"
 
