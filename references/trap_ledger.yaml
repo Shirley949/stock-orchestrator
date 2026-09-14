@@ -471,3 +471,14 @@ entries:
     root_cause: engine
     fix: "（603256 实锤 2026-09-11，回溯实证同型 4 次：688270 09-02→E批#13 只做形态显性化、09-09 会话 transcript 已自行推导键名不匹配、600105 09-10、603256 09-11——每次会话内人肉补救，诊断从未落账）调用方照 orchestrator SKILL.md F8 节旧 schema 传 {source,title,url,published,content}，adapter 白名单只收 {topic,value,provider,url,query}——content 静默丢、status=ok+stdout 成功面、URL-only WARN 只进快照 _warnings 延后至 precheck/G72 才见=反馈环断裂。已 landed 三层：①adapter 键名合同容错（别名 content/text/finding→value、title→topic、source→provider 仅当目标键空回填；白名单外非空键命名 WARN + fetch_log dropped_keys/mapped 记账；_ 前缀引擎自有键豁免防 scene 行重写回假 WARN）②runner 写回 stdout 如实报 substantive/url_only + _warnings 即时 stderr ③根因层 SKILL.md:204 schema 改白名单 5 键。先红后绿：envelope 603256 真实形态反例修复前必 FAIL；parity 3 票 byte-parity 零漂移。残余（显式在案）：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持）。主条目=两仓 REFACTOR_LOG 2026-09-11"
 
+  - signature: TD#backtest:sell_win_direction_blind
+    gate: TD
+    subcheck: backtest
+    reason_class: sell_win_direction_blind
+    match: "td9_sell"
+    count: 0
+    last_seen: "2026-09-14"
+    status: landed
+    blocked: false
+    root_cause: engine
+    fix: "（603011 实锤 2026-09-14）td_analyzer._backtest(setups, closes, direction) 的 direction 参数收而不用，win 判据硬编码 r>0（涨=胜），买/卖两臂共用——td9_sell（9 天抬升衰竭→预期跌）的胜率被算成『续涨率』：603011 实测 td9_sell.5d 66.7→33.3，『TD9卖胜率66.7%(有效)』实为 3 次信号后 5 日 2 涨 1 跌，方向性结论反向。median 无辜（收益中位数方向中性）；effectiveness 阈值(≥55% 有效)只对 buy 臂成立。已 landed：win 判据按 direction 分支——sell 臂 win=r<0（跌=胜），buy 臂不变；周线 _compute_weekly_resonance 同函数复用自动覆盖。先红后绿：test_sell_backtest_win_is_fall_rate 修复前必 FAIL、修复后过；买臂守恒测恒绿；parity 3 票 byte-parity 零漂移（pureraw 烘焙 td 不重算）；206 份真实快照 dry-run diff-scope ⊆ {td9_sell winrate, effectiveness_sell, action_hint} 且 td9_buy 全等。td9_sell.winrate 现行语义=下跌胜率，报告按此直读，勿再反读。主条目=routing REFACTOR_LOG 2026-09-14"
