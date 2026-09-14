@@ -758,3 +758,9 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 ## 2026-09-13 视图信封合同哨兵测试
 
 - **新增**：`regression-tests/test_view_envelope_contract.py` 并入 run_regression.sh 契约层——钉「VIEW_PATHS 挂载视图终端节点必带 {view, status} 头」：构建器产出带头+投影键面不回退（hermetic 单元）+ --list 挂载列带头视图显示 ok/缺席显示 ❌/全列零 None（合成快照端到端两极）。构建器本体修在 financial-data-routing 仓（同日条目）。
+
+## 2026-09-14 G68 凯利写法修复：禁裸星号 f*（补记）
+
+- **背景**：发布链服务端转义裸 `*`（markdown 强调符），报告凯利行按旧 gate 文案写 `f*=N` 时星号被转义 → G68 needle 校验（凯利行含 f* 数值 ±0.01）落空 FAIL，写也死。
+- **改动**：`gate_definitions.py` G68 四处文案（GATE_DESCS / docstring / requires / fail_hint）统一改「凯利仓位系数=N」写法、禁裸星号；±0.01 容差与执法逻辑零变。
+- **验证**：全量回归 exit 0（gate_fixture_test 64 门漏报=0，含 G68；2026-09-14 随 TD 批回归一并跑绿）。

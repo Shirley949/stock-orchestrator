@@ -104,7 +104,7 @@ GATE_DESCS = {
     "G65": "模式B方向预测对拍（direction/confidence/probability ±0.03 + sample_win_rate 同源；insufficient_history/failed 禁出方向；neutral 必现区间）",
     "G66": "模式B周期状态表（月/周/日/60m ≥3 周期 + resonance_level 原样 + 行级反义对拍）",
     "G67": "模式B量价分档消费（量比/成交倍数 ±5% 对拍 + amplified/pullback_shrink 键值如实）",
-    "G68": "模式B分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利 f* ±0.01）",
+    "G68": "模式B分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利仓位系数 ±0.01，禁裸星号）",
     "G69": "模式B筹码资金结构 ≥3 维 [src:] 消费（资金流/融资/估值分位/获利盘四维）",
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
@@ -4162,7 +4162,7 @@ def check_g67(report: str, data: dict) -> bool:
 
 
 def check_g68(report: str, data: dict) -> bool:
-    """G68: 分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利 f* 对拍）。HARD(weight2)。
+    """G68: 分级止损对拍（≥3 档价位 ±5% + ATR 止损必现 + 凯利仓位系数对拍）。HARD(weight2)。
     真相源：s4.data.short_term_enrich.risk_control。"""
     if not _b_gate_active(data):
         return True
@@ -4216,7 +4216,7 @@ def check_g68(report: str, data: dict) -> bool:
         if not kelly_lines or not any(abs(n - kf) <= 0.01 for n in kelly_nums):
             return GateResult(passed=False, reasons=[
                 f"凯利仓位未引用/不一致：kelly_fraction={kf}（risk_control.kelly 原样引用，"
-                "凯利行须含 f* 数值 ±0.01）"])
+                "凯利行写「凯利仓位系数=N」数值 ±0.01；禁写裸星号 f*——发布链服务端转义裸星号会让该行 needle 校验落空）"])
     return True
 
 
@@ -4971,8 +4971,8 @@ GATE_REGISTRY = {
             "fail_hint": "量价分档数值未消费或键值错标"},
     "G68": {"checker": check_g68, "weight": 2, "owner": ["m6"],
             "data_dim": "s4_technical.data.short_term_enrich.risk_control",
-            "requires": "止损表行 ≥3 档（±1% 逐档，表式见 m6 模式B收口）+ ATR 止损行 + 凯利 f*（±0.01）",
-            "fail_hint": "止损表档数/价位不达标（支撑位数字不能冒充止损档），ATR 或凯利缺失"},
+            "requires": "止损表行 ≥3 档（±1% 逐档，表式见 m6 模式B收口）+ ATR 止损行 + 凯利仓位系数行（±0.01，写法「凯利仓位系数=N」禁裸星号 f*）",
+            "fail_hint": "止损表档数/价位不达标（支撑位数字不能冒充止损档），ATR 或凯利仓位系数行缺失"},
     "G69": {"checker": check_g69, "weight": 1, "owner": ["m37"],
             "data_dim": "s3_fund_flow+s_margin+valuation_snapshot+s4 chip",
             "requires": "四维（资金流/融资/估值分位/获利盘）≥3 维 [src:] 锚消费",
