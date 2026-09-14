@@ -754,3 +754,7 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **load_skeleton 并行会话绑错 bug（12:52 实证→已修）**：缺省 `--latest` 在多会话并行时绑到工程会话（翻页 0 项）；修法=hook 注入文本内联本会话 transcript_path，会话照抄命令即正确绑定；幂等性同场验证（重跑翻页 0 项、零重复计）。遗留建议（未落码）：load_skeleton 缺省行为在并行会话环境应显式报错提示传 --transcript，而非静默绑最新。
 - **杂项**：tmux 驱动会话 send-keys 提交不稳定（需补发 Enter）；heredoc 内含 `json.dumps({...multi-line...})` 两次同点截断（环境侧怪象，绕开=单行/函数调用）。
 - **验证**：run_regression.sh exit 0（test_c2_inject 11/11 + test_skeleton_schema 22/22 + 全量）；settings 终态=model haiku（用户 /model 所置）+hooks.SessionStart(compact)+env 无 inert 声明。plan 五批全部收官。
+
+## 2026-09-13 视图信封合同哨兵测试
+
+- **新增**：`regression-tests/test_view_envelope_contract.py` 并入 run_regression.sh 契约层——钉「VIEW_PATHS 挂载视图终端节点必带 {view, status} 头」：构建器产出带头+投影键面不回退（hermetic 单元）+ --list 挂载列带头视图显示 ok/缺席显示 ❌/全列零 None（合成快照端到端两极）。构建器本体修在 financial-data-routing 仓（同日条目）。

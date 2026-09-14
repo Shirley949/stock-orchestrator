@@ -51,6 +51,8 @@ echo "[① 契约层] test_g28_dupont.py（G28 纯快照完整性两极+东财 f
 python3 "$HERE/test_g28_dupont.py" 2>&1 | tail -3
 echo "[① 契约层] test_report_views_kline.py（kline 视图内存态类型回归+except 加法式保 raw）"
 python3 "$ROUTING/test_report_views_kline.py" 2>&1 | tail -3
+echo "[① 契约层] test_view_envelope_contract.py（视图信封合同：挂载视图终端必带{view,status}头+--list 挂载列零 None 两极）"
+python3 "$HERE/test_view_envelope_contract.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"
 python3 "$ROUTING/test_lixinger_client.py" 2>&1 | tail -1
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
