@@ -764,3 +764,12 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **背景**：发布链服务端转义裸 `*`（markdown 强调符），报告凯利行按旧 gate 文案写 `f*=N` 时星号被转义 → G68 needle 校验（凯利行含 f* 数值 ±0.01）落空 FAIL，写也死。
 - **改动**：`gate_definitions.py` G68 四处文案（GATE_DESCS / docstring / requires / fail_hint）统一改「凯利仓位系数=N」写法、禁裸星号；±0.01 容差与执法逻辑零变。
 - **验证**：全量回归 exit 0（gate_fixture_test 64 门漏报=0，含 G68；2026-09-14 随 TD 批回归一并跑绿）。
+
+## 2026-09-16 web_research 多批 merge 落地配套（引擎修主条目=financial-data-routing 仓同日）
+
+- `phase-protocols.md` §P2 补多批合并/修剪语义（D2 教学面：不带 topic=保留，删行用 --replace）。
+- `SKILL.md` websearch 节补「多批直接重跑即可（默认按 topic 合并）；故意删行/推倒重建才 --replace」。
+- `regression-tests/test_web_research_merge_writeback.py` 新增 13 用例挂 run_regression.sh 契约层：纯函数层（upsert/空 topic/反模糊合并/幂等/扩键无损/防腐化）+ 子进程 E2E（三批 20 零丢失/union 重发内容中性/API scene 字节隔离/空批 exit2 零写入/URL-only 跨批存活/修正覆盖留痕/--replace 重建）。
+- fixture `fixtures/web_research_merge_300179/` 三批文件保真度如实记录：内容级=生产盘 20 条 5 键逐条全等（2026-09-16 对拍实证）；批切分 [12,4,4]=生产 fetch_log params 计数吻合；原始 @file 逐字节载荷不可考（transcript 提取），保真标准=内容等价非字节等价。
+- `trap_ledger.yaml` F4#web_writeback:multicall_overwrite pending→landed；写作侧规避条款按失效条件（引擎 merge 落地批）同批删除。
+- C1 决策（书面记录）：「scene items = Σfetch_log」不作为常设探测器，理由与实证见 financial-data-routing 仓 REFACTOR_LOG 同日条目。

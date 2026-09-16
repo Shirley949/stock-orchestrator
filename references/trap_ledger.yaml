@@ -471,6 +471,18 @@ entries:
     root_cause: engine
     fix: "（603256 实锤 2026-09-11，回溯实证同型 4 次：688270 09-02→E批#13 只做形态显性化、09-09 会话 transcript 已自行推导键名不匹配、600105 09-10、603256 09-11——每次会话内人肉补救，诊断从未落账）调用方照 orchestrator SKILL.md F8 节旧 schema 传 {source,title,url,published,content}，adapter 白名单只收 {topic,value,provider,url,query}——content 静默丢、status=ok+stdout 成功面、URL-only WARN 只进快照 _warnings 延后至 precheck/G72 才见=反馈环断裂。已 landed 三层：①adapter 键名合同容错（别名 content/text/finding→value、title→topic、source→provider 仅当目标键空回填；白名单外非空键命名 WARN + fetch_log dropped_keys/mapped 记账；_ 前缀引擎自有键豁免防 scene 行重写回假 WARN）②runner 写回 stdout 如实报 substantive/url_only + _warnings 即时 stderr ③根因层 SKILL.md:204 schema 改白名单 5 键。先红后绿：envelope 603256 真实形态反例修复前必 FAIL；parity 3 票 byte-parity 零漂移。残余（显式在案）：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持）。主条目=两仓 REFACTOR_LOG 2026-09-11"
 
+  - signature: F4#web_writeback:multicall_overwrite
+    gate: G72
+    subcheck: web_writeback
+    reason_class: multicall_overwrite
+    match: "web_research"
+    count: 0
+    last_seen: "2026-09-15"
+    status: landed
+    root_cause: engine
+    blocked: false
+    fix: "（四方达 300179 实锤 2026-09-15）runner web_research 每次调用整体替换 snapshot items 而非合并——同票三批拉取（全球供需 12 条 → 补充 4 条 → PDF 批 4 条）后 snapshot 仅存最后一批 4 条，前两批 16 条静默蒸发（status=ok + stdout 成功面，同 F4 反馈环断裂形态；发现于写作期取数）。landed（2026-09-16，financial-data-routing 8973f9a）：写回默认 merge-by-topic upsert（exact-topic strip 整行替换、空 topic 只追加、无模糊匹配；_merge_web_research_items 纯函数）；--replace 显式重建（保 S1 清警告语义）；stdout mode/existing/incoming/appended/updated 诚实计数；--verify 写后读盘对拍；告警=状态函数（URL-only/空场跨批存活、修正后自清）；覆盖旧行 _warnings 留痕旧值→新值。回归=test_web_research_merge_writeback.py 13 用例（run_regression.sh 契约层恒跑）+变异抽查红极实证。写作侧规避条款已按失效条件（引擎 merge 落地批）同批删除，现行用法=直接重跑同命令多批累积，删行用 --replace。主条目=两仓 REFACTOR_LOG 2026-09-16"
+
   - signature: TD#backtest:sell_win_direction_blind
     gate: TD
     subcheck: backtest

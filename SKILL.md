@@ -189,9 +189,11 @@ runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_
 python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_research <code> \
   --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
   --items '<json | @findings.json>'     # [{topic,value,provider,url,query}, ...]（白名单 5 键；content/title/source 系别名自动映射，白名单外非空键丢弃并 WARN）
+# 多批分次拉取直接重跑同命令即可：默认按 topic 合并（同 topic 整行替换=修正后到）；
+# 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。细节 → references/phase-protocols.md §P2
 ```
 
-- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单细节 → `references/phase-protocols.md` §P2。
+- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
 
 ---
 

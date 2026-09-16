@@ -137,6 +137,8 @@ echo "[① 契约层] test_market_context_order.py（market_context 排序契约
 python3 "$HERE/test_market_context_order.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_web_research_envelope.py（E批#13：web_research URL-only 拦截标记 两极+真实形态冻结）"
 python3 "$HERE/test_web_research_envelope.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_web_research_merge_writeback.py（F4#multicall_overwrite：多批 merge upsert 零丢失+幂等+API scene 隔离+--replace/空批/URL-only 存活/覆盖留痕）"
+python3 "$HERE/test_web_research_merge_writeback.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
 python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
