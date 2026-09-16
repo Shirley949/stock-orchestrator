@@ -514,6 +514,56 @@ def main():
                 "gap": (first[0] - ct) if first else -1,
                 "cmd": (first[2] or "")[:60] if first else ""})
 
+    # ---- v5（P0.3）：数据驻留在册量——逐轮「存活数据类 result chars」滚动和 ----
+    # 存活 = 产生轮 < 当前轮（同 :343 cost 的 turn 序）；compact 段起点处重置累计
+    # （段前产出视为已逐出），峰值取各段最大。数据类白名单：视图:any/视图:<name>/
+    # 视图:list/raw/复合命令/websearch/runner/xq + 手写 fetch 桶；
+    # 模块文件 Read / Skill加载 / thinking / 手写 extract·gate 桶不在册（不驻留为数据）。
+    def _resident_group(cat):
+        if cat.startswith("视图:") or cat == "复合命令(view+提取)":
+            return "视图"
+        return {"websearch": "websearch", "runner拉取": "runner", "xq拉取": "xq"}.get(cat, "")
+
+    _units = ([(b["turn"], b["chars"], _resident_group(b["cat"])) for b in blocks
+               if b.get("kind") == "result" and _resident_group(b["cat"])]
+              + [(h["turn"], h["chars"], "fetch") for h in hw_fetch])
+    _seg_starts = [0] + sorted(set(compact_turns))
+    _mod_read_events = sorted((t, m.rstrip("-")) for m, ts in module_reads.items() for t in ts)
+
+    def _seg_start(t):
+        s = 0
+        for x in _seg_starts:
+            if x <= t:
+                s = x
+        return s
+
+    def resident_at(t):
+        st = _seg_start(t)
+        return sum(ch for (tt, ch, _g) in _units if st <= tt < t)
+
+    def chapter_at(t):
+        last = "—"
+        for tt, m in _mod_read_events:
+            if tt <= t:
+                last = m
+            else:
+                break
+        return last
+
+    resident_by_turn = {t: resident_at(t) for t in range(T)}
+    p3s, p3e = phase_start.get("P3写作"), phase_start.get("P4gate", T)
+    p3_turns = [t for t in range(T)
+                if p3s is not None and p3s <= t < p3e]
+    peak_scope = p3_turns or list(range(T))
+    resident_peak_t = max(peak_scope, key=lambda t: resident_by_turn[t])
+    resident_peak = resident_by_turn[resident_peak_t]
+    _pst = _seg_start(resident_peak_t)
+    resident_breakdown = defaultdict(int)
+    for (tt, ch, g) in _units:
+        if _pst <= tt < resident_peak_t:
+            resident_breakdown[g] += ch
+    resident_peak_chapter = chapter_at(resident_peak_t)
+
 
     # ---- A4：总账行 + 环比历史（TOKEN_AUDIT_NO_HISTORY=1 时回归测试防污染） ----
     total_pull = cli_chars + hw_chars
@@ -738,11 +788,20 @@ def main():
                      + f" | 段内手写 {s['hw_n']} 处"
                      + (f" | {s['cmd']}" if s["cmd"] else ""))
 
+    _bd = " + ".join(f"{g} {resident_breakdown[g]:,}c" for g in
+                     ("视图", "websearch", "runner", "xq", "fetch")
+                     if resident_breakdown[g]) or "0c"
+    L.append(f"- ℹ️ 数据驻留在册量（v5·P0.3，P3 窗口；判据线 ≤20K chars）："
+             f"**峰值 {resident_peak:,}c@轮{resident_peak_t}**（章≈{resident_peak_chapter}"
+             f"｜峰值构成 {_bd}"
+             + (f"｜compact 重置 {len(compact_turns)} 段" if compact_turns else "") + "）")
+
     L.append("\n## ④ Top-15 最贵内容块（context 压力）\n")
-    L.append("| 轮 | Phase | 类别 | chars | 压力% | 内容 |")
-    L.append("|----|-------|------|-------|------|------|")
+    L.append("| 轮 | Phase | 类别 | chars | 在册@轮 | 压力% | 内容 |")
+    L.append("|----|-------|------|-------|--------|------|------|")
     for b in sorted(blocks, key=lambda x: -x["cost"])[:15]:
         L.append(f"| {b['turn']} | {b['phase']} | {b['cat']} | {b['chars']:,} | "
+                 f"{resident_by_turn.get(b['turn'], 0):,}c | "
                  f"{100*b['cost']/total_cost:.1f} | {b['desc'][:60]} |")
 
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -763,6 +822,8 @@ def main():
           + f"| gate源码Bash侧 {gate_src_bash_n} 次/{gate_src_bash_chars:,}c | "
           f"--field {field_calls} 次/{field_chars:,}c"
           + (f" | fetch 注入写 {fetch_inj_n} 处" if fetch_inj_n else ""))
+    print(f"   [v5] 在册量峰值 {resident_peak:,}c@轮{resident_peak_t}（章≈{resident_peak_chapter}；"
+          f"构成 {'/'.join(f'{g}{resident_breakdown[g]:,}' for g in ('视图', 'websearch', 'runner', 'xq', 'fetch') if resident_breakdown[g]) or '—'}）")
     if compact_segs:
         print("   [v4] compact锚定: " + " | ".join(
             f"c{i}{'⚠️' if s['kind'] == '手写' else ''}{s['kind']}"
