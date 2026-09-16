@@ -1,0 +1,90 @@
+
+########## 威派格 S1: 报告写入动作（Bash heredoc / Edit on report）##########
+L170 Write→report (单体!): /tmp/analysis_report_603956_modeA.md
+L215 Edit→report: heads=['## 二、公司概况'] | new[:100]='**分析结论的适用边界**：本股当前是"主题驱动 + 基本面亏损"的高波动标的，防御股的低波动假设暂不成立，仓位与风控框架应按主题股处理（详见 §九、§十一）。\n\n## 二、公司概况\n\n**一句话定位'
+L308 Edit→report: heads=['## 三、财务分析', '## 3.1 多季度利润表趋势（近 8 个报告期，累计口径）', '## 3.2 收入结构拆解（2026H1 分产品）'] | new[:100]='**同行差异化（为什么关注它/为什么警惕它）**：东财专用设备同业 6 家对照中，威派格毛利率 43.84% 居第 2（仅低于美亚光电 53.92%），但 ROE -6.27% 为唯一负值档，PE -'
+L320 Edit→report: heads=['## 3.10 资产安全检查'] | new[:100]='**SGR 可持续增长率**：📅 SGR 基于 20251231（年报）数据。请注意与杜邦分析（2026-06-30）的报告期差异（杜邦=结构比率快照，SGR=年化容量速率）。SGR 不适用（ROE='
+L337 Edit→report: heads=['## 3.11 行业位置与成长性'] | new[:100]='判定 level=⚠️，flags："cash_to_debt=0.72(0.5-1) 货币资金偏紧" [src: snapshot.computed_metrics.asset_safety]。解读'
+L371 Edit→report: heads=['## 四、订单质量诊断'] | new[:100]='**组合判断（毛利率 × 景气）**：主导业务毛利率 44.11%（高毛利档）× 主业景气下行（PMI 49.8 + 收入 -57.4%）= **毛利侵蚀象限**——高毛利在该行业不构成护城河，因为需'
+L426 Bash append: ['## 五、技术面分析', '## 5.1 TD 序列四步 [src: snapshot.s2_', '## 5.2 多指标交叉验证 [src: snapshot.s2_'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 五、技术面分析\n\n**分析环境前置**：DMI"
+L531 Bash append: ['## 六、消息面与重大事件时间线', '## 6.1 舆论与情绪扫描', '## 6.2 重大事件时间线（大事提醒，近 180 天）'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 六、消息面与重大事件时间线\n\n### 6.1 "
+L566 Bash append: ['## 七、估值分析', '## 7.1 绝对估值 [src: snapshot.valuat', '## 7.2 相对估值（同业对比，东财 F10 行业自动发现 6 '] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 七、估值分析\n\n### 7.1 绝对估值 [s"
+L589 Bash append: ['## 十一、综合研判（收口裁决）', '## 11.1 证据全景（14 维盘点，非计分卡）', '## 11.2 四镜头收口（筹码面加减仓）'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 十一、综合研判（收口裁决）\n\n### 11.1"
+L638 Bash append: ['## 十、公司治理与股东回报', '## 10.1 分红与股东回报（D4） [src: snapsho', '## 10.2 股东结构与治理（D5）'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 十、公司治理与股东回报\n\n### 10.1 分"
+L671 Bash append: ['## 九、风险提示与反转假设', '## 9.1 核心风险清单', '## 9.2 政策传导链（定性研判，无结构化数据源）'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 九、风险提示与反转假设\n\n### 9.1 核心"
+L693 Bash append: ['## 十二、数据时效与局限性', '## 八、机构共识与盈利预测', '## 8.1 分析师评级分布'] | "cat >> /tmp/analysis_report_603956_modeA.md << 'EOF'\n\n## 十二、数据时效与局限性\n\n📅 数据截止：202"
+L839 Bash append: ['## 十二、数据时效与局限性'] | "python3 - <<'PYEOF'\nimport re\np = '/tmp/analysis_report_603956_modeA.md'\ns = ope"
+
+########## 威派格 S2: update_checklist 台账 ##########
+L178: check ['c60'] 
+L183: check ['c60'] 
+L222: check ['c_m1'] 
+L315: check ['c61'] 
+L323: check ['c_d2_safety'] 
+L341: check ['c_d3_growth'] 
+L378: check ['c62'] 
+L462: check ['c63'] 
+L540: check ['c64'] 
+L575: check ['c65'] 
+L599: check ['c66'] 
+L643: check ['c_d4_dividend', 'c_d5_governance'] 
+L677: check ['c67'] 
+L702: check ['c68', 'c_m10'] 
+L716: check ['c68b'] 
+L863: check [] 
+L875: check ['c_xq_delta', 'c70'] 
+L955: check ['c80'] 
+L996: check ['$c'] 
+
+########## 威派格 S3: 清单文件 Read ##########
+L39 Read checklist
+
+########## 威派格 S7: load_skeleton / skeleton 调用 ##########
+
+########## 东材4b S1: 报告写入动作（Bash heredoc / Edit on report）##########
+L221 Bash append: ['## 一、标的分类与分析框架'] | "cat > /tmp/analysis_report_601208_modeA.md <<'EOF'\n# 东材科技（601208）全量分析报告\n\n📅 数据截止："
+L243 Bash append: ['## 二、公司概况'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n## 二、公司概况\n\n**标的属周期股**（置信度 0"
+L301 Bash append: ['## 三、财务分析', '## 3.1 多季度利润表趋势（累计口径 8 期）', '## 3.2 收入结构拆解（2026H1 分产品，东财 SEGME'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n## 三、财务分析\n\n### 3.1 多季度利润表趋势"
+L323 Bash append: ['## 3.10 资产安全检查'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n### 3.10 资产安全检查\n\n| 指标 | 数值 "
+L326 Bash append: ['## 3.11 行业位置与成长性'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n### 3.11 行业位置与成长性\n\n**产品毛利 ×"
+L348 Bash append: ['## 四、订单质量诊断'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n## 四、订单质量诊断\n\n📦 **订单口径（周期股·模"
+L382 Bash append: ['## 五、技术面分析', '## 5.1 TD 序列（4 步工作流）', '## 5.2 多指标交叉（现值印证 signals.state）'] | "cat >> /tmp/analysis_report_601208_modeA.md <<'EOF'\n\n## 五、技术面分析\n\n**环境前置（ADX）**：`"
+L476 Bash append: ['## 六、消息面与重大事件时间线', '## 6.1 舆论与情绪扫描', '## 6.2 重大事件时间线（东财 F10 大事提醒·近 180 '] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 六、消息面与重大事件时间线\n\n###"
+L503 Bash append: ['## 七、估值分析', '## 7.1 绝对估值（三源直取，2026-09-16）', '## 7.2 相对估值（同业 6 家，东财 F10 行业自动发现）'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 七、估值分析\n\n> 分类框架前置：分"
+L541 Bash append: ['## 十一、综合研判（收口裁决）', '## 11.1 证据全景（14 维盘点清单，非计分卡）', '## 11.2 四镜头收口（筹码面加减仓）'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 十一、综合研判（收口裁决）\n\n###"
+L566 Edit→report: heads=[] | new[:100]='**⚠️ 致命红牌事件 = 0 条**（非标审计/破产重整/ST/退市/重大违法均无，G30 surface 达成）；无解禁事件；关键风险信号：董监高减持计划 ongoing（窗口至 2026-09-'
+L568 Edit→report: heads=[] | new[:100]='**口径明示（G62 分歧披露）**：引擎 13 维参考锚 = 偏多 6 / 中性 6 / 偏空 1（不含⑭千股千评，数字在后为引擎口径引用）；本表裁决 6/3/5，'
+L598 Bash append: ['## 十、公司治理与股东回报', '## 10.1 分红与股东回报（D4）', '## 10.2 股东结构与治理（D5）'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 十、公司治理与股东回报\n\n### 1"
+L626 Bash append: ['## 九、风险提示与反转假设', '## 9.1 核心风险清单', '## 9.1.1 事件/风险估值传导（m7 独占量化）'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 九、风险提示与反转假设\n\n### 9"
+L637 Bash append: ['## 十二、数据时效与局限性'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 十二、数据时效与局限性\n\n📅 数据截"
+L653 Bash append: ['## 八、机构共识与盈利预测', '## 8A.1 分析师评级分布', '## 8A.2 目标价共识'] | "cat >> /tmp/analysis_report_601208_modeA.md << 'EOF'\n\n---\n\n## 八、机构共识与盈利预测\n\n### 8"
+
+########## 东材4b S2: update_checklist 台账 ##########
+L207: check ['$c'] 
+L226: check ['c60'] 
+L250: check ['c_m1'] 
+L323: check ['c_d2_safety'] 
+L326: check ['$c'] 
+L386: check ['c63'] 
+L408: check ['c62'] 
+L483: check ['c64'] 
+L509: check ['c65'] 
+L576: check ['c66'] 
+L605: check ['c_d4_dividend', 'c_d5_governance'] 
+L631: check ['c67'] 
+L637: check ['c68'] 
+L671: check ['c_m10'] 
+L679: check ['c_m10'] 
+L709: check ['c68b'] 
+L721: check ['c_d4_dividend'] 
+L728: check ['c_pdf_research', 'c_analyst_forecast'] 
+L740: check ['c50', 'c51'] 
+L744: check ['c19b'] 
+L863: check ['c70'] 
+L909: check ['c_xq_delta'] 
+L956: check ['c70b'] 
+
+########## 东材4b S3: 清单文件 Read ##########
+L37 Read checklist
+
+########## 东材4b S7: load_skeleton / skeleton 调用 ##########

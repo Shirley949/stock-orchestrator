@@ -1,0 +1,19 @@
+
+### 威派格 T1锚行(禁PE框架/classification)
+### 威派格 步骤定义咨询(checklist grep -A) post-compact
+L462: {"command": "CK=\"python3 $HOME/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py\"; $CK --check c63 --
+L465: {"command": "grep -B1 -A3 'c64' /tmp/analysis_checklist_603956_modeA_20260916_213703.md | head -14", "description": "读c64步骤定义"}
+L599: {"command": "CK=\"python3 $HOME/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py\"; $CK --check c66 --
+L677: {"command": "CK=\"python3 $HOME/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py\"; $CK --check c67 --
+L716: {"command": "CK=\"python3 $HOME/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py\"; $CK --check c68b -
+L727: {"command": "grep -E 'xqcheck|Phase 4.5|求证' /tmp/analysis_checklist_603956_modeA_20260916_213703.md | grep -E '^\\- \\[|^[0-9]+\\.
+L871: {"command": "grep -n 'c_xq_delta\\|<!--c70-->\\|<!--c70b-->\\|<!--c80-->\\|<!--c50-->' /tmp/analysis_checklist_603956_modeA_202609
+  (post-L400 步定义 grep 次数≈7)
+
+### 东材4b T1锚行(禁PE框架/classification)
+### 东材4b 步骤定义咨询(checklist grep -A) post-compact
+L509: {"command": "python3 /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py --check c65 --file 
+L709: {"command": "python3 /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py --file /tmp/analysi
+L863: {"command": "python3 /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py --file /tmp/analysi
+L956: {"command": "python3 /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py --file /tmp/analysi
+  (post-L400 步定义 grep 次数≈4)

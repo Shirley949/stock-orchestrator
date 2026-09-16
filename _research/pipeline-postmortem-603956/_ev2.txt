@@ -1,0 +1,61 @@
+
+### 威派格 — SOP/tdx-publish
+L13 THINKING: …ort pipeline).
+
+Let me also read the trigger 分册: tooling-playbook.md for websearch (Exa first), and SOP.md for 发布 (Tencent docs upload).
+
+Let me start. First, load the orchestrator SKILL.md and other entry files in parallel.
+
+Also per CLAUDE.md: 发布动作前 read…
+L51 THINKING: … → runner web_research write-back to snapshot.
+2. 最后以md格式写入腾讯文档 → 发布链 (tdx_publish.py prepare + SOP 五步闸)
+3. Title=cc-v22-glm5.3f-股票名 → 腾讯文档标题参数
+4. websearch 优先使用exa → 链路序遵守 CLAUDE.md 工具红线 (Exa → Firecrawl/豆包 → 内置/Tavily → Playwright)
+5. 还要检查整改拉取-保存-读取-写…
+L69 TOOLUSE[TaskCreate] SOP/tdx-publish: …{"subject": "Phase 5: 腾讯文档发布 Title=cc-v22-glm5.3f-威派格(c80)", "description": "读tdx-publish-v4/SOP.md+report-ui-guide→tdx_publish prepare→五步闸→create Title=cc-v22-glm5.3f-威派格", "activeForm": "发布到腾讯文档"}…
+L878 THINKING: …lta → CK c70 → cp。cp 在两个 CK 之后，所以归档的清单是最新版 18/51。✓
+
+Phase 4 完成（#8 done）。进入 Phase 5（#9）：发布前强制 Read ~/tdx-publish-v4/SOP.md。…
+L886 TOOLUSE[Read] SOP/tdx-publish: …{"file_path": "/home/ubuntu/tdx-publish-v4/SOP.md"}…
+L890 TEXT: …SOP 五步闸明确。Step 1 — prepare：…
+L940 TOOLUSE[Bash] SOP/tdx-publish: …tdx_out_603956/prep-report.json; echo \"verify exit=$?\"", "description": "全量读回+五步闸verify"}…
+L1003 TEXT: …完成。报告已发布：**[cc-v22-glm5.3f-威派格](https://docs.qq.com/aio/DT1NrYXBPR0Z0YUtv)**（file_id=`OSkapOGFtaKo`，五步闸 verify PASS：232/232 needle 命中、泄漏 0、无回跳、块数 1142≥202）。
+
+## 你的四个问题·一句话答案
+
+| 问题 | 结论 |
+|---|---|
+| **值得买吗** | **观望**。亏损防御股：H1 营收 1.41 亿（-57.4%）、归母 -1.30 …
+
+### 威派格 — tooling-playbook Read
+L13 THINKING: …没有问题" — check and fix the whole fetch-save-read-report pipeline).
+
+Let me also read the trigger 分册: tooling-playbook.md for websearch (Exa first), and SOP.md for 发布 (Tencent docs upload).
+
+Let me start. First, load the orchestrator SKILL.md and other entry files in …
+L37 THINKING: …t runner A 603956 in background (it takes minutes)
+3. While waiting, create task list per 约束2, read tooling-playbook (for Exa websearch) and check company identity.
+
+The runner command:
+python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py A 603956…
+L51 THINKING: …'ll create ~20 tasks covering all checklist items with clear mapping.
+
+Then while runner runs, read tooling-playbook.md (needed for Exa websearch) — trigger: "任一工具动作前". Since I'll do websearch soon, read it now.
+
+Also verify company identity once runner finishes (c0…
+L73 TOOLUSE[Read] tooling-playbook Read: …{"file_path": "/home/ubuntu/.claude/docs/tooling-playbook.md"}…
+
+### 东材4b — SOP/tdx-publish
+L959 THINKING: …c80 = 发布到腾讯文档 — outward-facing action, needs user confirmation per the system prompt and per SOP (~/tdx-publish-v4/SOP.md 五步闸流程 before 发布动作).
+
+Update tasks #2/#4/#5 completed, #6 completed (token audit done; c80 pending user decision). Then deliver the final answer to…
+L970 TEXT: …tion 全绿≠全量绿”已沉淀进 memory
+- 站内求证：15 条核心结论独立会话对撞，支持 2/反对 0，无强制修订
+
+剩最后一步 **c80：写入腾讯文档**——这是对外发布动作，按 SOP 五步闸走，需要你确认再执行。要发吗？…
+
+### 东材4b — tooling-playbook Read
+L43 THINKING: …ecrawl / 豆包 → 内置 WebSearch / Tavily → Playwright 兜底. And the tooling playbook is at `~/.claude/docs/tooling-playbook.md` — I should read that before doing any search action (per the 触发分册索引).
+
+Let me first create the task list, then read the tooling playbook to figur…
+L64 TOOLUSE[Read] tooling-playbook Read: …{"file_path": "/home/ubuntu/.claude/docs/tooling-playbook.md"}…

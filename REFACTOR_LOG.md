@@ -815,3 +815,9 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - fixture `fixtures/web_research_merge_300179/` 三批文件保真度如实记录：内容级=生产盘 20 条 5 键逐条全等（2026-09-16 对拍实证）；批切分 [12,4,4]=生产 fetch_log params 计数吻合；原始 @file 逐字节载荷不可考（transcript 提取），保真标准=内容等价非字节等价。
 - `trap_ledger.yaml` F4#web_writeback:multicall_overwrite pending→landed；写作侧规避条款按失效条件（引擎 merge 落地批）同批删除。
 - C1 决策（书面记录）：「scene items = Σfetch_log」不作为常设探测器，理由与实证见 financial-data-routing 仓 REFACTOR_LOG 同日条目。
+
+## 2026-09-17 c_pdf_research 清单步退役（研报 L2 PDF 退役联动；引擎主条目=financial-data-routing 仓同日）
+
+- `generate_checklist.py` 删 `c_pdf_research` 步；`update_checklist.py` 证据映射表删 `c_pdf_research→s35_research_reports.data` 行。该步 desc「PDF 已下载（≥3份）」与引擎实况（Top1）早已漂移，步名即叙述融合误导源（300450 会话「研报 PDF 3 份 ✓」=覆盖计数 3 与该步 ✓ 相邻融合；威派格反而双账一致：未勾+三处真空披露）。
+- s35 L1 消费面不变：`c_analyst_forecast`（consensus_forecast）+ m4/m10 [src:] 锚 + G21 路径执法；契约 s35 块零改形；run_regression.sh exit 0。
+- 同日归档：`_research/pipeline-postmortem-603956/`（复盘官 8 件交付 + 5 证据件 + 执行者回测报告桥接件，威派格第三票复盘终局台账）。
