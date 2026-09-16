@@ -31,6 +31,13 @@
 
 - **对账面与结论**：CLAUDE.md 旧措辞/死引用 grep 零残留；唯一修正=加载顺序段「A 12 模块」→「A 13 模块」（:114，批1 补注册 m9 后的化石）；行号引用零漂移（批1 已去行号化）；spot-check 三条实命令过（run_regression.sh 路径/触发分册三文件/snapshot_view --list 命令形）。memory 目录旧措辞 grep 零残留、零修正；本次新 gotcha 三分归置自检=无一达落盘门槛（REFACTOR_LOG 吞标题 n=1、classification.primary_type=None 为 engine 自述合法三态、勾选双形已在 probe docstring）；白名单升级触发器=本会话无 ≥2 复发项。八站点终 grep=新措辞全在/旧措辞零残留。
 
+## 2026-09-16 流水架构批 4：4a 诱导实测 + 4b 东材 rerun 判定（序贯停止）
+
+- **改动**：`preflight_precompact_logger.py` null-crash 一行修（hook stdin `custom_instructions` 真实形态可 null，`or ""` 共汇；诱导实测抓出；两极验证 + 回归 exit 0）。探针用毕已 `--uninstall`（settings 复原仅 SessionStart），日志读后焚。
+- **4a**（受控会话 d30dfe07，三次 /compact=章间 1+章内 2）：三态全命中正确臂——章内「未勾+在场」→补跑④⑤**零重写**；恢复取数全投影级 7.9-13.1K（基线病理 24-67K）；无 ≥2 章全量重拉。诚实观察：恢复步数字面 >3（C2 强制 `--list` 仪式 + gate 外科补跑所致，原子①②③ 精神保持）。
+- **4b 判定**（11f32cf4，对件3）：9 项达标——gate profile_full FAIL=0/修复轮 0、在册峰值 **15,031c**（基线 65,300，**-77%**）、总取数 **73,551c**（-31%）、归档Read 0、thinking 836/9,241（阈 1,313/21,973）、compact 2 段=基线、手写 0、一致性抽检 5/5（capstone 63.78 vs §三 64.2=快照双层精度 mainfinadata 全精度 vs report_view 舍入，可溯源非错值）；**2 破线**——长度 87,076B **+15.2%**（带 71,789–79,345；分章归因 m25 +4.2K 最大单因 2.6×、二/六/七 +2.5-3.1K、三/九/十一反缩 -6.2K；排除题眼差/m25 模块增厚/恢复重写/取数膨胀后定性=同题 rerun 输出层自然方差，±5% 带 n=1 标定窄于 rerun 方差）；raw **28.3%**＞20%（14 次 raw/field 调用逐一归因全为清单 baked 投影目标、零即兴——判据口径未随 v1.1 baked 投影机制更新）；拆窗 1 处（m3 Read@156 先于 m25 勾@205，compact 恢复期补跑④⑤重排，非批读回潮）。**序贯停止：蓝晓 300487 不跑，留待判据修订**（候选：长度带加 rerun 方差余量 / raw 改清单符合性口径——用户裁决项）。判定书 /tmp/b4_4b_verdict_11f32cf4.md。
+- **B2**：600352 modeB 12/12 门 PASS + 发布 + 归档 = B 面零触碰实证。
+
 ## 2026-09-16 流水架构批 3：harness 三件（token_audit v5 在册量 + atomic_step_probe + preflight 两脚本）
 
 - **改动**：`token_audit.py` 增 v5「数据驻留在册量」（P0.3 算法：数据类 result chars 逐轮滚动和，compact 段起点重置取各段最大；白名单=视图:any/named/list·raw/复合命令/websearch/runner/xq+手写 fetch 桶；输出=③区新 ℹ️ 行（峰值@轮+章≈+构成+判据线 ≤20K）+ ④ Top-15 新「在册@轮」列 + stdout `[v5]` 汇总行）；新 `regression-tests/atomic_step_probe.py`（D5 章级三动作探针：Read 模块→章内视图→勾选闭合；下章 Read 先于上章勾=拆窗逐处记账；同章复读/章内视图拉取不判；勾选识别两形=`--check cXX` 字面+`for c in …`循环展开（`--check $c` 变量形落回循环），迟到勾选回闭最早未闭合章；--fail-on-interleave CI 位）；新 `regression-tests/preflight_c2_sessionstart.py`（4a 前置①：hook 真实 stdin 直调 c2 断言首行 `[C2·`+路由+≤2KB）+ `regression-tests/preflight_precompact_logger.py`（4a 前置②：PreCompact(matcher:manual) logger，--install/--uninstall 临时装拆+自动备份，不入常驻 settings）。

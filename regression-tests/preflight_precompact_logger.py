@@ -38,7 +38,7 @@ def hook_mode():
     rec = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"),
            "source": d.get("source", "?"),
            "transcript": Path(d.get("transcript_path", "")).name,
-           "custom": d.get("custom_instructions", "")[:80]}
+           "custom": (d.get("custom_instructions") or "")[:80]}
     with LOG.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
