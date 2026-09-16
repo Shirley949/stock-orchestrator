@@ -127,10 +127,11 @@ class TestThreeWaySingleSource(unittest.TestCase):
         self.assertEqual(issues, [], "三方漂移:\n" + "\n".join(issues))
 
     def test_v6l_alignment(self):
-        """批1 收尾断言永久化：A=12+m11deferred；B=6（含 m39 无 m11）"""
+        """批1 收尾断言永久化：A=13+m11deferred（流水架构批1 补注册 m9-governance，12→13）；B=6（含 m39 无 m11）"""
         main_a, deferred_a = mech_modules("A")
         main_b, deferred_b = mech_modules("B")
-        self.assertEqual(len(main_a), 12)
+        self.assertEqual(len(main_a), 13)
+        self.assertIn("m9", main_a)
         self.assertEqual(deferred_a, {"m11"})
         self.assertIn("m39", main_b)
         self.assertNotIn("m11", main_b)

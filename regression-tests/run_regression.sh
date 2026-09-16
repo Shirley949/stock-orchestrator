@@ -77,6 +77,8 @@ echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+�
 python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
 echo "[① 契约层] test_verify_section.py（批0.5 --section 逐章旁路：正例逐章零假FAIL+⊆终验 / 缺章反例G30 / 残段--partial / 锚未命中fail-loud+sidecar不覆写+dispatch形状）"
 python3 "$HERE/test_verify_section.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR|SKIP)' | tail -3
+echo "[① 契约层] test_pipeline_atomic_steps.py（批1 原子步：N1 16步序冻结+步-锚schema逐锚locate命中+渲染件+modeB零触碰冻结+m12插顶端到端劫持封闭+速览禁词+N8+D1站点678）"
+python3 "$HERE/test_pipeline_atomic_steps.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR|SKIP)' | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
 python3 "$HERE/test_freshness_helper.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 presence + G38 分红有效性）"

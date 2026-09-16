@@ -96,11 +96,12 @@ MODE_SCENARIO_FILES = {
     ],
 }
 
-# 模式 → 报告模块（quality references/modules；顺序=JIT 表报告章节顺序）
-# A = 12 模块 + m11 延迟读；B = 6 模块（m11 依 JIT B 行「同上」延迟读——不入 B 装载集，即其延迟表示）
+# 模式 → 报告模块（quality references/modules；顺序=JIT 写作序）
+# A = 13 模块 + m11 延迟读，序 = 原子步写作序（checklist 步-锚映射表同源）：
+#   m0→m1→m2→m25→m3→m4→m5→m6→m9→m7→m8→m10→m12（m12 速览写作序末位、版面插顶）
+# B = 6 模块（m11 依 JIT B 行「同上」延迟读——不入 B 装载集，即其延迟表示）
 MODE_MODULE_FILES = {
     "A": [
-        {"path": "stock-analysis-quality/references/modules/m12-summary.md"},
         {"path": "stock-analysis-quality/references/modules/m0-classification.md"},
         {"path": "stock-analysis-quality/references/modules/m1-narrative.md"},
         {"path": "stock-analysis-quality/references/modules/m2-financial.md"},
@@ -109,9 +110,11 @@ MODE_MODULE_FILES = {
         {"path": "stock-analysis-quality/references/modules/m4-sentiment.md"},
         {"path": "stock-analysis-quality/references/modules/m5-valuation.md"},
         {"path": "stock-analysis-quality/references/modules/m6-decision.md"},
+        {"path": "stock-analysis-quality/references/modules/m9-governance.md"},
         {"path": "stock-analysis-quality/references/modules/m7-risk.md"},
         {"path": "stock-analysis-quality/references/modules/m8-disclaimer.md"},
         {"path": "stock-analysis-quality/references/modules/m10-forecast.md"},
+        {"path": "stock-analysis-quality/references/modules/m12-summary.md"},
         {"path": "stock-analysis-quality/references/modules/m11-gates.md", "load": "deferred"},
     ],
     "B": [

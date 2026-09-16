@@ -36,7 +36,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_check
   --skeleton-out /tmp/analysis_skeleton_{code}_mode{X}.md   # A-only：加载骨架台账（B 豁免，自动跳过）
 ```
 不跑清单 = 不知道该做什么 = 不能开始分析。
-A 模式同时产出**加载骨架台账**（模块 JIT 序 × 已读状态）：compact/续接后先看骨架——已读项勿重读；翻页走 `load_skeleton.py <骨架> [--transcript <jsonl>]`（出内容+翻台账同一命令，禁手工 Edit）。
+A 模式同时产出**加载骨架台账**（模块 JIT 序 × 已读状态）：compact/续接后先看骨架——台账仅记历史（读过≠在context），重读将写章节合法；翻页走 `load_skeleton.py <骨架> [--transcript <jsonl>]`（出内容+翻台账同一命令，禁手工 Edit）。
 → 原因：清单是 Phase 判断的唯一依据。跳过清单会导致后续 Phase 不知道该拉哪些数据、加载哪些模块，最终产出质量不可控。
 
 ### 约束 2：清单项必须跟踪
@@ -201,11 +201,11 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 
 ### ⚠️ 模块 JIT 加载（2026-08-20 起，替代「Phase 3 开始全量 Read」）
 
-**写某模块的章节前才 Read 该模块文件**，不提前批量加载。按报告章节顺序（m12→m0→m1→m2→m25→m3→m4→m5→m6→m7→m8→m10）逐个即时加载——后段模块推迟 100+ 轮暴露，省 token 零信息损失（各 m* 内嵌硬约束提示已覆盖写作期避错）。
+**写某模块的章节前才 Read 该模块文件**，不提前批量加载。按原子步写作序（m0→m1→m2→m25→m3→m4→m5→m6→m9→m7→m8→m10→m12）逐个即时加载——m12 速览写作序末位、版面插顶；写作序≠版面序处（m10 版面 §八）以 checklist 步-锚映射表为准。每步五动作：① 读本章模块 → ② 本章投影 → ③ append 章节 → ④ `verify_gates --section <锚>` → ⑤ 勾选（详见 checklist 头部原子步纪律）。
 
 | 模式 | 报告涉及模块（按此顺序 JIT） | 延迟加载 |
 |------|------------------------------|---------|
-| **A** | m12 / m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m7 / m8 / m10 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
+| **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m9 / m7 / m8 / m10 / m12 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
 | **B** | m38 / m39 / m3 / m36 / m37 / m6 | 同上 m11（m38=核心结论头块，B 报告置顶必写；m39=站内声量节，xqvoice status=ok 必写） |
 
 ### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
@@ -226,7 +226,7 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json consensus   # 一致预期�
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json peer        # 同业：核心6指标表+rank+行业中位+相对大盘
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json annual      # 年报维度：D3分红/D4前十大/D7客户供应商/D8员工
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json news        # 新闻 high+medium 标题级
-python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json events      # 大事提醒投影
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json timeline    # 大事提醒投影=timeline（events 视图无 A 面消费者，勿拉）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json holder      # 股东户数信号期
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json short_term    # B：短期多周期预计算信号（读结论勿自算）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json market_context # B：大盘 regime + 板块环境

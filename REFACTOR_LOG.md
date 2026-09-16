@@ -27,6 +27,14 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-16 流水架构批 1：原子步 checklist + 新序 + C1 站点 6/7/8 + 预算表 v2 + budget_probe
+
+- **改动**：`generate_checklist.py` PHASE_STEPS[A] phase_3 14 步→16 原子步（c59 删、m12 改 c68b 挪末位、新增 c_m1/c_m10；每步五动作 ①读模块→②投影(预算 baked)→③append→④$VG --section→⑤勾选）+ 头部三行（原子步纪律/护栏/恢复三步）+ 尾部步-锚映射三列表（PHASE3_STEP_ANCHORS，§n 终值=东材归档版面复核）+ Runner 块增 $SNAP/$SV/$VG 记号（A-only）；`skill_dep_graph.py` MODE_MODULE_FILES[A] 重排为写作序 + **补注册 m9-governance.md（原缺失，12→13）**；SKILL.md JIT 行新序+m12 末位插顶注、:229 `events`→`timeline` 演示命令、:39 骨架句（站点 7）；generate_checklist.py:281 骨架用法句（站点 6）；CLAUDE.md:242（站点 8，已 cp 备份 `_research/CLAUDE-md-backup-20260916.md`）；新 `scripts/budget_probe.py`（预算表 v2 全命令干跑对拍，>2× 或 rc≠0 exit 1）；新 `regression-tests/test_pipeline_atomic_steps.py`（11 用例）挂契约层。
+- **基线刷新**：`test_load_set_single_source.py::test_v6l_alignment` A 装载集冻结计数 12→13（m9 补注册为有意变更；三方一致性断言 test_real_sources_consistent 同批过 = JIT 行已同步）。
+- **N8 核对结论**：m6 文档「14 行（11 量化+3 定性）」×引擎 tally「13 维」口径已互注（⑭千股千评只入表），核对通过零修正。
+- **数据**：budget_probe 东材 48,074/58,000、星源 48,789/58,000 全绿；modeA 冒烟 44 步渲染正确；update_checklist 打勾 c_m1 两极 ✓；m12 插顶端到端=合成速览插顶后 capstone 定位仍锚 §十一 + 终验全绿；D1 站点 6/7/8 旧措辞零残留（站点 1-5=c2 系归批 2）；回归 exit 0。
+- **预算表 baked 真路径勘误**（plan 省略号→实测）：d5_moves/d2_analyst/d3_bullbear/d6_risk∈`xq_market_voice.data.answers.*`（contracts :715 消费方同源）；em_reports_count∈`s35_research_reports.data.layer1`；conclusions∈`s_stock_evaluation.data.processed`；governance=scene 顶层（`any governance`）。c68 计划文本「引 m6/m12」按实况写「引盘上已写章结论」（c68 时点 m12 未写）。
+
 ## 2026-09-16 流水架构批 0.5：verify_gates --section 逐章旁路 + 三 fixture
 
 - **改动**：`verify_gates.py` 增 `--section <锚>`/`--partial`（SECTION_ARM_DISPATCH 门级分派，不改 gate_definitions 门体/PROFILES；--section 无 sidecar 写入、逐章阈值=0、锚未命中 exit 2 fail-loud）；新 `regression-tests/test_verify_section.py`（4 用例）挂 run_regression.sh 契约层。

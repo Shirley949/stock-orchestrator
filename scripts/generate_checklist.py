@@ -144,20 +144,22 @@ PHASE_STEPS = {
             {"id": "c51", "desc": "缺失项已在'分析局限性'标注"},
         ],
         "phase_3": [
-            {"id": "c59", "desc": "m12 开头速览块（TL;DR 两段式：值得买吗+面价背离度，G11 声明后、首个章节前）"},
-            {"id": "c60", "desc": "m0 分类"},
-            {"id": "c61", "desc": "m2 财务（含扣非诊断 + 利润归因 + 现金流三件套）"},
-            {"id": "c_d2_safety", "desc": "m2.10 资产安全检查（货币资金 vs 有息负债 + 商誉）"},
-            {"id": "c_d3_growth", "desc": "m2.11 行业位置与成长性（行业景气度 + 市场份额 + 研发）"},
-            {"id": "c62", "desc": "m25 订单诊断（引用 snapshot 合同负债+segment_composition+中标事件）"},
-            {"id": "c63", "desc": "m3 技术（TD 4 步 + 多指标交叉）"},
-            {"id": "c64", "desc": "m4.1.1 事件扫描结果"},
-            {"id": "c65", "desc": "m5 估值（含历史分位 + 同业对比 + 机构一致预期）"},
-            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景研判 + 情景-动作矩阵）；写作第一步跑 helper 抽证据全景草稿（只抽值不打分）：python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot /tmp/runner_snapshot_<code>_mode<X>.json（m6:18）"},
-            {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性）"},
-            {"id": "c_d5_governance", "desc": "m9.2 股东结构与治理（控股股东 + 质押 + 关联交易）"},
-            {"id": "c67", "desc": "m7 风险 + 反转假设"},
-            {"id": "c68", "desc": "m8 局限性 ≥ 3 条"},
+            {"id": "c60", "desc": "m0 分类：① 读 modules/m0-classification.md → ② $SV any classification --depth 1（≤0.9K）→ ③ Edit 报告 append『## 一、标的分类与分析框架』→ ④ $VG --section '一、标的分类' → ⑤ 勾[x]（磁盘为准）"},
+            {"id": "c_m1", "desc": "m1 公司概览与叙事：① 读 modules/m1-narrative.md → ② $SV --raw xq_market_voice.data.answers.d1_intel（可选辅证 ≤0.7K）→ ③ append『## 二、公司概况』→ ④ $VG --section '二、公司概况' → ⑤ 勾[x]"},
+            {"id": "c61", "desc": "m2 财务（含扣非+利润归因+现金流）：① 读 modules/m2-financial.md → ② $SV cash_flow + income + balance + mainfina（四视图 ≤9.6K；FCF=本章全表现算 CFO−Capex，无 --field 依赖）→ ③ append『## 三、财务分析』章体（至 §3.9）→ ④ $VG --section '三、财务分析' → ⑤ 勾[x]"},
+            {"id": "c_d2_safety", "desc": "m2.10 资产安全检查（货币资金 vs 有息负债 + 商誉）：① 读 modules/m2-financial.md（同章续写，compact 后重读合法）→ ② 无新拉取（复用 c61 四视图在册投影）→ ③ append『### 3.10 资产安全检查』→ ④ $VG --section '3.10' → ⑤ 勾[x]"},
+            {"id": "c_d3_growth", "desc": "m2.11 行业位置与成长性（行业景气 + 份额 + 研发）：① 读 modules/m2-financial.md → ② 无新拉取（复用 c61）→ ③ append『### 3.11 行业位置与成长性』→ ④ $VG --section '3.11' → ⑤ 勾[x]"},
+            {"id": "c62", "desc": "m25 订单诊断（合同负债+segment_composition+中标事件）：① 读 modules/m25-orders.md → ② $SV --raw xq_market_voice.data.answers.d1_intel（对撞，可选 ≤0.7K）→ ③ append『## 四、订单质量诊断』→ ④ $VG --section '四、订单' → ⑤ 勾[x]"},
+            {"id": "c63", "desc": "m3 技术面（TD 4 步 + 多指标交叉）：① 读 modules/m3-technical.md → ② $SV kline + technical + any s3_fund_flow.data.fund_flow --depth 1 + --raw xq_market_voice.data.answers.d5_moves（≤6.3K）→ ③ append『## 五、技术面分析』→ ④ $VG --section '五、技术面' → ⑤ 勾[x]"},
+            {"id": "c64", "desc": "m4 市场情绪与消息面（含 4.1.1 事件扫描）：① 读 modules/m4-sentiment.md → ② $SV news + timeline + xqvoice + --raw s35_research_reports.data.layer1.em_reports_count + any northbound.data.processed（≤11.2K+exa 分量 P3 窗实测 0~4.4K，超 20K 先章内即时消化再检索前移视图化；timeline m4/m9 双拉=有意设计禁合并预拉）→ ③ append『## 六、消息面与重大事件时间线』→ ④ $VG --section '六、消息面' → ⑤ 勾[x]"},
+            {"id": "c65", "desc": "m5 估值（历史分位 + 同业对比 + 机构一致预期）：① 读 modules/m5-valuation.md → ② $SV valuation + consensus + peer（≤5.0K）→ ③ append『## 七、估值分析』→ ④ $VG --section '七、估值' → ⑤ 勾[x]"},
+            {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景 + 情景-动作矩阵）：① 读 modules/m6-decision.md → ② python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot $SNAP（3.4K）+ $SV --raw xq_conclusion_check.processed + --raw xq_market_voice.data.answers.d3_bullbear + 盘上 §2/§3/§5 结论段（grep '^#{2,3} .*(结论|小结|要点)' 子节，无则章区间末 20 行；合计 ≤10.7K）→ ③ append『## 十一、综合研判（收口裁决）』→ ④ $VG --section '十一、综合研判' → ⑤ 勾[x]"},
+            {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性；章头由本步建）：① 读 modules/m9-governance.md → ② $SV timeline + annual + holder + any s_esg.data + any governance（m9blk 两步合计 ≤5.0K；timeline 信封三件套已全覆盖）→ ③ append『## 十、公司治理与股东回报』+『### 10.1 分红与股东回报』→ ④ $VG --section '10.1' → ⑤ 勾[x]"},
+            {"id": "c_d5_governance", "desc": "m9.2 股东结构与治理（控股股东 + 质押 + 关联交易）：① 读 modules/m9-governance.md → ② 无新拉取（复用 c_d4 投影）→ ③ append『### 10.2 股东结构与治理』→ ④ $VG --section '10.2' → ⑤ 勾[x]"},
+            {"id": "c67", "desc": "m7 风险 + 反转假设：① 读 modules/m7-risk.md → ② $SV any classification + any s6_macro.data + any s_margin.data + any lhb + --raw s_stock_evaluation.data.processed.conclusions + --raw computed_metrics.tariff_vulnerability + --raw computed_metrics.concentration_composite + --raw xq_market_voice.data.answers.d6_risk（≤6.1K；对冲注记可选 + --raw xq_conclusion_check.processed ≤+1.6K）→ ③ append『## 九、风险提示与反转假设』→ ④ $VG --section '九、风险' → ⑤ 勾[x]"},
+            {"id": "c68", "desc": "m8 局限性 ≥3 条：① 读 modules/m8-disclaimer.md → ② 零拉取（纯文本，引盘上已写章结论）→ ③ append『## 十二、数据时效与局限性』→ ④ $VG --section '局限性' → ⑤ 勾[x]"},
+            {"id": "c_m10", "desc": "m10 机构观点与预测（版面 §八、写作序在 m8 后）：① 读 modules/m10-forecast.md → ② $SV --raw xq_market_voice.data.answers.d2_analyst + m10 白名单 --raw 小件（≤1.6K）→ ③ append『## 八、机构共识与盈利预测』→ ④ $VG --section '八、机构共识' → ⑤ 勾[x]"},
+            {"id": "c68b", "desc": "m12 速览（TL;DR 两段式：值得买吗+面价背离度）——版面插顶、写作序末位：① 读 modules/m12-summary.md → ② $SV --raw xq_market_voice.processed.summary（status=ok 时 ≤0.2K；聚合磁盘章节）→ ③ 插顶 Edit（G11 声明行后、『## 一、』前，非 append；措辞避开 综合研判/情景/三档/概率/研判 锚词）→ ④ $VG --section '速览' → ⑤ 勾[x]（插顶后必经 c70 终验）"},
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）"},
@@ -209,6 +211,38 @@ PHASE_STEPS = {
 # ============================================================
 # 清单生成
 # ============================================================
+
+# 批 1（流水架构 v1.1）步-锚映射三列表（P0.2 17 步表 baked；§n 终值=东材归档版面惯例复核）。
+# 形态锁定：m0/m1/m2/m25/m3/m4/m5/m6/m7/m8/m10 = ## 级；m2blk 三步 = ## 三 + ### 3.10/3.11；
+# m9blk 两步 = ### 10.1/10.2（章头由 c_d4 建）；m12 = 无编号锚（插顶）；终验步无锚。
+# 写作序 = 版面序除 m10（版面 §八、写作序在 m8 后）与 m12（插顶）外。
+PHASE3_STEP_ANCHORS = [
+    # (步id, 模块, 版面锚, --section 锚, 半章判定 grep)
+    ("c60", "m0", "## 一、标的分类与分析框架", "一、标的分类", r"^## 一、"),
+    ("c_m1", "m1", "## 二、公司概况", "二、公司概况", r"^## 二、"),
+    ("c61", "m2", "## 三、财务分析（至 §3.9）", "三、财务分析", r"^## 三、"),
+    ("c_d2_safety", "m2", "### 3.10 资产安全检查", "3.10", r"^### 3\.10"),
+    ("c_d3_growth", "m2", "### 3.11 行业位置与成长性", "3.11", r"^### 3\.11"),
+    ("c62", "m25", "## 四、订单质量诊断", "四、订单", r"^## 四、"),
+    ("c63", "m3", "## 五、技术面分析", "五、技术面", r"^## 五、"),
+    ("c64", "m4", "## 六、消息面与重大事件时间线", "六、消息面", r"^## 六、"),
+    ("c65", "m5", "## 七、估值分析", "七、估值", r"^## 七、"),
+    ("c66", "m6", "## 十一、综合研判（收口裁决）", "十一、综合研判", r"^## 十一、"),
+    ("c_d4_dividend", "m9", "## 十、公司治理与股东回报 + ### 10.1（章头由本步建）", "10.1", r"^### 10\.1"),
+    ("c_d5_governance", "m9", "### 10.2 股东结构与治理", "10.2", r"^### 10\.2"),
+    ("c67", "m7", "## 九、风险提示与反转假设", "九、风险", r"^## 九、"),
+    ("c68", "m8", "## 十二、数据时效与局限性", "局限性", r"^## .*局限"),
+    ("c_m10", "m10", "## 八、机构共识与盈利预测（版面 §八）", "八、机构共识", r"^## 八、"),
+    ("c68b", "m12", "速览（插顶：G11 声明行后、『## 一、』前）", "速览", r"^## .*速览"),
+]
+
+# phase_3 头部三行（C1 语义句 / 护栏句 / 恢复三步索引——plan 批 1a baked 全文）
+PHASE3_HEADER_LINES = [
+    "> **原子步纪律（流水架构 v1.1）**：compact 后重读将写章节的模块合法且必须——台账「已读」仅记历史，不代表仍在 context；恢复三步见下。",
+    "> 恢复只拉当前章投影；一次重拉 ≥2 章的全量视图 = 瀑布回潮，停下按预算表改投影（各步②括号内=预算实测值）。",
+    "> 恢复三步：① grep 当前步锚 + 对照勾选台账定状态（三态判定）② 按状态跳补跑④⑤或重跑① ③ 残段按节锚整节替换。",
+]
+
 
 def get_phase_name(phase_key: str) -> str:
     """Phase key → 中文名"""
@@ -278,7 +312,7 @@ def generate_skeleton(required_files: list, mode_steps: dict, stock_codes: str,
         f"- 生成时间：{ts}",
         "- 台账：本文件（翻页走 load_skeleton.py，禁手工 Edit）",
         f"- 执行清单：{checklist_path}",
-        "- 用法：compact/续接后先看本骨架——已读项勿重读；未读模块按 JIT 序写前才读",
+        "- 用法：compact/续接后先看本骨架——台账=读过≠在context，重读将写章节合法；未读模块按 JIT 序写前才读",
         "",
         "## 台账（加载集 × 已读状态）",
         "### 模块（JIT：写该模块章节前才 Read）",
@@ -391,6 +425,12 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         lines.append(f"# Step 2: 错码核对（不一致立即停——错码跑完全量拉取落盘后才在 [verify] 行暴露，白跑一次）")
         lines.append(f"grep '\\[verify\\]' /tmp/runner_stderr_{sc}_mode{mode}.log   # stock_code=…→stock_name=… × 任务书代码/公司名逐一比对")
         lines.append(f"python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}_mode{mode}.json --list   # 头部 code= 复核 + 全部视图挂载状态（合法视图以 --list 输出为准）")
+        if mode == "A":
+            # 批 1（流水架构 v1.1）：原子步记号展开一次，phase_3 步内 $SV/$VG/$SNAP 勿重写全路径
+            lines.append(f"# Step 3: 原子步记号（phase_3 各步②④用；$SNAP=本票快照，$VG --report=本票报告）")
+            lines.append(f'SNAP="/tmp/runner_snapshot_{sc}_mode{mode}.json"')
+            lines.append(f'SV="python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}_mode{mode}.json"')
+            lines.append(f'VG="python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py --report /tmp/analysis_report_{sc}_mode{mode}.md --data-snapshot /tmp/runner_snapshot_{sc}_mode{mode}.json"')
         lines.append("```")
         lines.append("")
 
@@ -439,8 +479,22 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
 
     # Phase 3
     lines.append(f"## {get_phase_name('phase_3')}")
+    # 批 1：原子步纪律头部三行（仅模式 A；B 面零触碰）
+    if mode == "A":
+        lines.extend(PHASE3_HEADER_LINES)
     for step in mode_steps["phase_3"]:
         lines.append(f"- [ ] <!--{step['id']}--> {step['desc']}")
+    if mode == "A":
+        # 批 1：步-锚映射三列表（B-2 baked）+ m12 插顶必经终验注（B-3）
+        lines.append("")
+        lines.append("### 步-锚映射（16 写作步 × 版面锚 × ④ --section 锚；写作序=版面序除 m10/m12 外）")
+        lines.append("")
+        lines.append("| 序 | 步 | 模块 | 版面锚 | ④ --section 锚 | 半章判定 grep |")
+        lines.append("|---|---|---|---|---|---|")
+        for i, (sid, mod, layout, sec_anchor, grep_pat) in enumerate(PHASE3_STEP_ANCHORS, 1):
+            lines.append(f"| {i} | {sid} | {mod} | {layout} | {sec_anchor} | `grep -cE '{grep_pat}'` |")
+        lines.append("")
+        lines.append("> m12（c68b）版面插顶、写作序末位；插顶后必经 c70 终验（mtime 合同：sidecar≥report，verify_gates.py check_pointer）。④ 每步未过不勾⑤；④ 全臂 FAIL 且 reason 属内容缺失类 → `--section <锚> --partial` 确认残段后按恢复三步走。")
     lines.append("")
 
     # Phase 4
