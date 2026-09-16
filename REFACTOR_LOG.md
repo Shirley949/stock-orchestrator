@@ -27,6 +27,12 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-16 流水架构批 0.5：verify_gates --section 逐章旁路 + 三 fixture
+
+- **改动**：`verify_gates.py` 增 `--section <锚>`/`--partial`（SECTION_ARM_DISPATCH 门级分派，不改 gate_definitions 门体/PROFILES；--section 无 sidecar 写入、逐章阈值=0、锚未命中 exit 2 fail-loud）；新 `regression-tests/test_verify_section.py`（4 用例）挂 run_regression.sh 契约层。
+- **引擎真相偏差（对 plan B-1 表，东材归档报告 13 章全扫实证）**：G12/G22 移 final（G12=全文局限词计数切片计数≠全文；G22=跨章合取——分业务措辞 §3.2 + segment_composition src 复引 §4/§11）；G16/G39/G59 加章标题适用锚（满足行分别在 §四订单[m2/m25 跨章分工] / §一分类 / §七估值——G59 候选级联在缺 §7 切片上会被弱候选劫持）。终验 57 门合同零变更。
+- **数据**：13 章逐章全 PASS + 全文 PASS/57 门；缺 capstone → G30 硬 FAIL（反例）；红演示=实现前 argparse 拒 `--section`；回归 exit 0（64 门漏报=0）。
+
 ## 2026-09-16 流水架构批前置归档（P0.1-P0.3，执行会话开工件）
 
 - **改动**：新建 `_research/pipeline-architecture-v1.1.md`（640 行，六件：P0.3 在册量算法+三票实测 / P0.2 序裁决+三 baked 件指针 / 4a-4b 判据文档 / v1 终裁包全文 / 数据驻留裁决包全文 / v1.1 补洞官报告全文——后三件自 transcript 5fa5acde L201·L644 与 9dfbf450 L233 字节级抄录，零手工转录）。

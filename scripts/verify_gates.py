@@ -40,6 +40,8 @@ from gate_definitions import (
     PROFILES, compute_score, get_profile, compute_self_score
 )
 from trap_ledger import load_acceptance  # noqa: E402  C-4 warn→硬断言翻转位
+from section_locator import (  # noqa: E402  批0.5 --section 旁路：章节切片复用同一实现
+    slice_of, locate)
 
 # C-4：翻转位缓存（mtime 感知——簿记文件低频写，热路径零 IO 放大）
 _ACC_STATE = {"path": None, "mtime": None, "flipped": False}
@@ -76,6 +78,81 @@ def _engine_receipt():
     except Exception:
         pass
     return receipt
+
+
+# ============================================================
+# 批 0.5（流水架构 v1.1）：--section 逐章旁路（plan sunny-petting-summit B-1 门分派合同）
+# ============================================================
+# 臂类两集（门级注册；双臂门 G52/G63 结构臂+快照臂均对切片可跑 → 门级并入两集）：
+#   chapter  = 逐章·章节锚定臂（结构/词表/对拍面；G52-G56/G59/G60/G62/G63/G64 自带
+#              「无段不执法」内锚，非本章切片上自豁免，镜像全文语义）
+#   snapshot = 条件逐章·快照一致性臂（数据源=snapshot 文件恒可跑；G65-67/G69 非 B 快照结构性 True）
+# 未列门（含显式 final 集）一律仅终验——保守默认：未获分派授权不进 --section；
+#   G11[:500]/G21 全文 [src:]/G80 分块 = 全文完整性门显式 final。
+# 「投影在场」的条件语义不在引擎判——checklist 步④必在同一步②之后（第五探针执法），禁引擎侧发明。
+SECTION_ARM_DISPATCH = {
+    "chapter": ["G30", "G52", "G53", "G54", "G55", "G56", "G59", "G60",
+                "G62", "G63", "G64"],
+    "snapshot": ["G16", "G28", "G38", "G39", "G65", "G66", "G67", "G69"],
+}
+# G12/G22 由 plan B-1 逐章集移入 final（引擎真相，东材归档报告实测）：
+#   G12=全文局限词计数（≥3），切片计数≠全文计数；G22=跨章合取（分业务措辞 §3.2 +
+#   segment_composition src 复引 §4/§11）。两门 pass 条件横跨章界，逐章跑必假 FAIL——
+#   终验兜底，语义无损。G11/G21/G80 = plan 原生 final 集。
+SECTION_FINAL_ONLY = ["G11", "G12", "G21", "G22", "G80"]
+# 无内锚门的适用性两级（切片含锚才交门；不含=「不适用」记 skipped，非 PASS 造假）：
+#   标题锚（章标题含词才交门——裸词正文散布不可作锚，如 L100「订单」出现在 §3 正文）：
+#     G16 home=订单章（m25）——合同负债 3.3.2 趋势在 §3、对齐消费行+[src:] 在 §4（m2/m25
+#       跨章分工），全文语义=任一行满足即可；切片版只在满足行所在章跑。
+#     G39 home=分类章（分类结论+估值框架同行处）；G59 home=估值章（§7.3 估值结论所在，
+#       其候选级联在缺 §7 的切片上会被弱候选劫持——切片版只在本章跑）。
+#   正文锚：无（G22 已移 final）。
+#   G30 home=capstone——用 section_locator.locate 验签判定（diag ok@* 才入；fallback/no_anchor
+#   =非 capstone 切片不适用，劫持形态仍由终验 G30 定位层 reason 兜底）。
+SECTION_HOME_HEADING_ANCHOR = {
+    "G16": re.compile(r"订单"),
+    "G39": re.compile(r"分类"),
+    "G59": re.compile(r"估值"),
+}
+SECTION_HOME_BODY_ANCHOR = {}
+
+
+def section_run_gates(profile_gates: list) -> list:
+    """--section 模式的候选门集 = 分派两集 ∩ profile 活跃门（未列门/final 门不进）。"""
+    allowed = set(SECTION_ARM_DISPATCH["chapter"]) | set(SECTION_ARM_DISPATCH["snapshot"])
+    return [g for g in profile_gates if g in allowed]
+
+
+def _section_gate_applies(gate: str, section_text: str, heading: str) -> bool:
+    """逐门适用性：标题锚/正文锚/ G30 capstone 验签/自锚定门恒真。"""
+    if gate == "G30":
+        _, diag = locate(section_text)
+        return diag in ("ok@heading", "ok@weak")
+    head_anchor = SECTION_HOME_HEADING_ANCHOR.get(gate)
+    if head_anchor is not None:
+        return bool(head_anchor.search(heading))
+    body_anchor = SECTION_HOME_BODY_ANCHOR.get(gate)
+    if body_anchor is not None:
+        return bool(body_anchor.search(section_text))
+    return True
+
+
+def locate_section_slice(report: str, anchor: str):
+    """按章锚定位切片（首个 ^#{1,4} 含锚标题，slice_of level-aware 切到下一同级/更高标题）。
+
+    返回 (slice, heading, line_no)；无锚 → exit 2 fail-loud（禁静默全文回退——静默回退会把
+    「锚写错」变成「对全报告跑门」，恰好伪造 --section 要防的假绿）。
+    """
+    for m in re.finditer(r"^#{1,4}\s+\S", report, re.MULTILINE):
+        nl = report.find("\n", m.start())
+        nl = len(report) if nl < 0 else nl
+        heading = report[m.start():nl].strip()
+        if anchor in heading:
+            line_no = report.count("\n", 0, m.start()) + 1
+            return slice_of(report, m), heading, line_no
+    print(f"❌ [--section] 章锚未命中任何 ^# 标题: 『{anchor}』——核对清单步-锚映射表"
+          "（禁静默全文回退）", file=sys.stderr)
+    sys.exit(2)
 
 
 def load_report(report_path: str) -> str:
@@ -157,7 +234,8 @@ def _lint_diag_fix(details: list) -> list:
     return warns
 
 
-def verify_gates(report: str, data: dict, profile_name: str) -> dict:
+def verify_gates(report: str, data: dict, profile_name: str,
+                 restrict_gates=None, section_anchor: str = None) -> dict:
     """
     执行 Gate 校验。
 
@@ -183,6 +261,9 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
     """
     profile = get_profile(profile_name)
     active_gates = profile["gates"]
+    if restrict_gates is not None:
+        # --section 逐章旁路：只跑分派臂中「适用」的门（未列入者=仅终验，不是 auto_pass）
+        active_gates = [g for g in active_gates if g in restrict_gates]
     auto_pass_gates = set(profile["auto_pass"])
 
     details = []
@@ -306,6 +387,10 @@ def verify_gates(report: str, data: dict, profile_name: str) -> dict:
         "action_required": _build_action_required(failed + errors, details),
     }
 
+    # 批0.5 --section 逐章旁路：结果自带章锚（消费方可辨「这是切片验证，非全文终验」）
+    if section_anchor is not None:
+        base_result["section"] = section_anchor
+
     # A2: 脚本化三维自评分（数据覆盖 / Gate通过 / SOURCE溯源）—— 禁止手填
     base_result["self_score"] = compute_self_score(report, data, base_result)
 
@@ -347,6 +432,9 @@ def print_report(result: dict):
     """打印校验报告"""
     print("=" * 60)
     print(f"Gate 校验报告 | Profile: {result['profile']} ({result['profile_desc']})")
+    if result.get("section"):
+        print(f"章锚（--section 逐章旁路，非全文终验）: {result['section']}"
+              f"｜活跃门 {result['active_gates']}/{result['total_gates']}")
     print("=" * 60)
     print()
 
@@ -538,6 +626,14 @@ def main():
                              "须配 --data-snapshot，免 --report。")
     parser.add_argument("--no-sidecar", action="store_true",
                         help="禁用 sidecar 自动写入（默认写 <report>.verified.json）")
+    parser.add_argument("--section", metavar="锚",
+                        help="批0.5 逐章旁路：仅对该章切片跑 SECTION_ARM_DISPATCH 分派臂门"
+                             "（未列门=G11/G21/G80 等全文完整性门，仅终验，不进）。"
+                             "无 sidecar 写入；逐章阈值=0（任一 FAIL 即 exit 1，软过不适用单章）。"
+                             "锚=章标题子串（步-锚映射表照抄，如 §5 → '技术面'）。")
+    parser.add_argument("--partial", action="store_true",
+                        help="仅结构确认模式（须配 --section）：只定位章锚+切片统计，零门执行"
+                             "——恢复三态表「残段确认」用，内容臂不跑防半章假 FAIL。")
     args = parser.parse_args()
 
     # preflight 模式：写作前要求清单，独立分支（先例 --check-pointer），不跑 Gate 不写 sidecar
@@ -579,7 +675,33 @@ def main():
 
     # 执行校验
     profile_name = f"profile_{args.profile}"
-    result = verify_gates(report, data, profile_name)
+
+    # 批0.5：--section 逐章旁路分支（--partial=仅结构确认，零门执行）
+    if args.section:
+        if args.partial:
+            slice_text, heading, line_no = locate_section_slice(report, args.section)
+            lvl = len(heading) - len(heading.lstrip("#"))
+            print(f"✅ [--partial] 章节结构确认：『{args.section}』→ L{line_no} {heading}")
+            print(f"   切片 {slice_text.count(chr(10)) + 1} 行 / {len(slice_text)} chars｜层级 h{lvl}"
+                  "｜零门执行（残段恢复判定用，内容臂不跑防假 FAIL）")
+            sys.exit(0)
+        run_gates = section_run_gates(get_profile(profile_name)["gates"])
+        slice_text, heading, line_no = locate_section_slice(report, args.section)
+        applied = [g for g in run_gates if _section_gate_applies(g, slice_text, heading)]
+        skipped = [g for g in run_gates if g not in applied]
+        if not args.quiet:
+            print(f"[--section] 『{args.section}』→ L{line_no} {heading}｜切片 {len(slice_text)} chars")
+            print(f"[--section] 门分派：跑 {len(applied)} 门，不适用跳过 {len(skipped)} 门"
+                  + (f"：{'、'.join(skipped)}" if skipped else "")
+                  + f"；全文完整性门不进（{'、'.join(SECTION_FINAL_ONLY)} 等）")
+        result = verify_gates(slice_text, data, profile_name,
+                              restrict_gates=applied, section_anchor=args.section)
+        # 逐章阈值=0：任一 FAIL 即 exit 1（步④不过不勾⑤；软过语义不适用单章）
+        if result["failed"] + result["errors"] > 0:
+            result["verdict"] = "FAIL"
+        result["threshold"] = 0
+    else:
+        result = verify_gates(report, data, profile_name)
 
     # 输出
     if not args.quiet:
@@ -592,7 +714,9 @@ def main():
             print(f"\n📝 详细结果已写入: {args.output}")
 
     # sidecar（默认写）：单一出口的核心产物，c70 打勾与 --check-pointer 都依赖它
-    if not args.no_sidecar:
+    # 批0.5：--section 模式禁写 sidecar——sidecar=全文终验真相源，切片验证覆写会污染
+    # check_pointer 合同（sidecar verdict 非全文语义），逐章结果只走 stdout/--output
+    if not args.no_sidecar and not args.section:
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         result["engine_receipt"] = _engine_receipt()
         sidecar_path = Path(args.report).with_suffix(".verified.json")

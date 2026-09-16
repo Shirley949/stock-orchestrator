@@ -75,6 +75,8 @@ echo "[① 契约层] test_checklist_hardening.py（P1c：checklist 内联真相
 python3 "$HERE/test_checklist_hardening.py" 2>&1 | tail -3
 echo "[① 契约层] test_section_locator.py（章节定位器：候选迭代+切片验签 劫持免疫+零回归边界）"
 python3 "$HERE/test_section_locator.py" 2>&1 | tail -3
+echo "[① 契约层] test_verify_section.py（批0.5 --section 逐章旁路：正例逐章零假FAIL+⊆终验 / 缺章反例G30 / 残段--partial / 锚未命中fail-loud+sidecar不覆写+dispatch形状）"
+python3 "$HERE/test_verify_section.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR|SKIP)' | tail -3
 echo "[① 契约层] test_freshness_helper.py（latest_period 数值对齐公共地基+户数 stale bug case）"
 python3 "$HERE/test_freshness_helper.py" 2>&1 | tail -3
 echo "[① 契约层] test_freshness_gate.py（G30#1 户数 stale + G37 宏观 presence + G38 分红有效性）"
