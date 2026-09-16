@@ -27,12 +27,16 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-16 流水架构批 5：终局对账（CLAUDE.md + memory，grep 驱动）
+
+- **对账面与结论**：CLAUDE.md 旧措辞/死引用 grep 零残留；唯一修正=加载顺序段「A 12 模块」→「A 13 模块」（:114，批1 补注册 m9 后的化石）；行号引用零漂移（批1 已去行号化）；spot-check 三条实命令过（run_regression.sh 路径/触发分册三文件/snapshot_view --list 命令形）。memory 目录旧措辞 grep 零残留、零修正；本次新 gotcha 三分归置自检=无一达落盘门槛（REFACTOR_LOG 吞标题 n=1、classification.primary_type=None 为 engine 自述合法三态、勾选双形已在 probe docstring）；白名单升级触发器=本会话无 ≥2 复发项。八站点终 grep=新措辞全在/旧措辞零残留。
+
 ## 2026-09-16 流水架构批 3：harness 三件（token_audit v5 在册量 + atomic_step_probe + preflight 两脚本）
 
 - **改动**：`token_audit.py` 增 v5「数据驻留在册量」（P0.3 算法：数据类 result chars 逐轮滚动和，compact 段起点重置取各段最大；白名单=视图:any/named/list·raw/复合命令/websearch/runner/xq+手写 fetch 桶；输出=③区新 ℹ️ 行（峰值@轮+章≈+构成+判据线 ≤20K）+ ④ Top-15 新「在册@轮」列 + stdout `[v5]` 汇总行）；新 `regression-tests/atomic_step_probe.py`（D5 章级三动作探针：Read 模块→章内视图→勾选闭合；下章 Read 先于上章勾=拆窗逐处记账；同章复读/章内视图拉取不判；勾选识别两形=`--check cXX` 字面+`for c in …`循环展开（`--check $c` 变量形落回循环），迟到勾选回闭最早未闭合章；--fail-on-interleave CI 位）；新 `regression-tests/preflight_c2_sessionstart.py`（4a 前置①：hook 真实 stdin 直调 c2 断言首行 `[C2·`+路由+≤2KB）+ `regression-tests/preflight_precompact_logger.py`（4a 前置②：PreCompact(matcher:manual) logger，--install/--uninstall 临时装拆+自动备份，不入常驻 settings）。
 - **数据**：东材 c587271b 冒烟=v5 在册峰值 **65,300c@轮231（章≈m9，构成全视图）**——旧路径瀑布堆积照形（新架构判据 ≤20K，4b 对照基线）；探针双票=东材 13 章/12 拆窗/13 全未闭合（勾选全在 P3 前轮 31/113/137=phase1/2 项，旧路径无逐章勾，如实）+ 蓝晓 928e6ef4 15 章/**13 拆窗**/m12@84 早读勾@124（与既有病理记录逐字吻合=探针自身正例）；preflight 两脚本冒烟 PASS（logger 落一行+checker 双 ✅）；run_regression exit 0（engine_pending 2 条 G58 pre-existing 不变）。3d/3e 判据文档已随 P0.1 归档（件3 :63-69），本批无新增改动。
 
-
+## 2026-09-16 流水架构批 2：C2 锚块升级（T1+三态+D2+2f）+ C1 站点 1-5 断言翻转
 
 - **改动**：`scripts/c2_compact_inject.py` A 版 render 重写——命脉四要素新措辞（站点 1 ②「写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）」/站点 2 ③「--list/any/--field 按需重取（禁复读风暴，非禁重读）」/站点 3 ④「台账仅记历史，compact 后重读走当前章原子步①」）+ T1 锚块（code/名称/classification+禁PE框架/现价（数据截止）/fatal#1+G30 surface 锚/中枢（capstone locate 提取，兜底「m6 未写」字面）/snapshot 路径）+ 进度行 D2 章节完成账（勾选台账×盘上锚三态判定：已勾在场=下一章、未勾在场=补跑④→⑤（--partial 残段通道）、未勾不在场=从①重跑+节锚删残段兜底、已勾不在场=⛔D3 异常停机）+ 当前章命令（BUDGET_TABLE 别名映射 c_d2/c_d3→c61、c_d4/c_d5→c_d4，未知=零命令禁误落他行）+ 裁剪次序（当前章>勾选表>T1>进度，超 2KB 先裁进度）+ 2f 写作前退化分支（报告缺/无 ## 章→只注 勾选表+清单指引+--list）+ stdout 首行 `[C2·` 合同；站点 4 B 版②仅去「勿整段重读」一词；classification.primary_type=None 时带 evidence.matched_rule 提示（LLM 兜底语义，四方达实测）。`regression-tests/test_c2_inject.py` 站点 5：旧措辞断言翻转（新措辞必在+「勿重读/勿整段重读/禁整段重读」必不在）+ 新增 [4] 块 12 项（T1 标量/数据截止/中枢两极/fatal/三态/D3/2f/预算，显式 fixture 路径不依赖 /tmp 现场态）。
 - **数据**：红演示=翻转断言对旧 render 3 红+TypeError 红；绿后 18 项全过；8 站点旧措辞 grep 零残留（唯一命中=测试负向断言执法本体）；A 版实测 1,715B/2,048B（东材 3/16 中态）；hook 真实路径目检=东材 fixture 三态 + 四方达在票（classification 未分类 ? 提示路径）+ B 版一词移除；run_regression exit 0（engine_pending 2 条 G58 pre-existing 不变）。
