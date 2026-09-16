@@ -27,6 +27,12 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-16 流水架构批前置归档（P0.1-P0.3，执行会话开工件）
+
+- **改动**：新建 `_research/pipeline-architecture-v1.1.md`（640 行，六件：P0.3 在册量算法+三票实测 / P0.2 序裁决+三 baked 件指针 / 4a-4b 判据文档 / v1 终裁包全文 / 数据驻留裁决包全文 / v1.1 补洞官报告全文——后三件自 transcript 5fa5acde L201·L644 与 9dfbf450 L233 字节级抄录，零手工转录）。
+- **数据**：在册量峰值实测 东材 71,469c / 星源 83,530c / 蓝晓 76,616c（≤20K 新线的病理基线）；exa 实拉全在 P2 拉取期，P3 窗 exa 0~4.4K，m4 窗 exa=0×3 票 → M-4 预案不触发；plan（sunny-petting-summit）增批 5 终局对账（CLAUDE.md+memory 全量检查，用户令）。
+- **用户规约（2026-09-16）**：B1=选项 B（writing_order.py 不实现，序 fixture 锁定）；病理定谳 n=7（件 4 ①节）；批序=批0→0.5→1→2→3→4→批5 对账；五件套/红先绿后/每批一 commit/B 面零触碰照 plan 纪律节。
+
 ## 2026-09-13 T1 phase 配方下沉批：SKILL.md 触发块化 + phase-protocols.md 新建（A/B 对照 t0↔t1 全绿）
 
 - **改动**：①新建 `references/phase-protocols.md`（§P1.5/§P2/§P4.5/§P6 四节，头部类别披露）②SKILL.md Phase 1/1.5/2/4.5/6 五块压成触发块（时序合同+命令+指针，细节下沉）③视图表 +6 行（short_term/market_context/fund_flow/b_head/xqvoice/xqcheck）④`test_checklist_hardening.py` +护栏 `test_phase_protocols_pointer`（ref 在仓+被指名，6/6 OK）。
