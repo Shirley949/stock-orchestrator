@@ -27,6 +27,12 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+## 2026-09-16 流水架构批 2：C2 锚块升级（T1+三态+D2+2f）+ C1 站点 1-5 断言翻转
+
+- **改动**：`scripts/c2_compact_inject.py` A 版 render 重写——命脉四要素新措辞（站点 1 ②「写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）」/站点 2 ③「--list/any/--field 按需重取（禁复读风暴，非禁重读）」/站点 3 ④「台账仅记历史，compact 后重读走当前章原子步①」）+ T1 锚块（code/名称/classification+禁PE框架/现价（数据截止）/fatal#1+G30 surface 锚/中枢（capstone locate 提取，兜底「m6 未写」字面）/snapshot 路径）+ 进度行 D2 章节完成账（勾选台账×盘上锚三态判定：已勾在场=下一章、未勾在场=补跑④→⑤（--partial 残段通道）、未勾不在场=从①重跑+节锚删残段兜底、已勾不在场=⛔D3 异常停机）+ 当前章命令（BUDGET_TABLE 别名映射 c_d2/c_d3→c61、c_d4/c_d5→c_d4，未知=零命令禁误落他行）+ 裁剪次序（当前章>勾选表>T1>进度，超 2KB 先裁进度）+ 2f 写作前退化分支（报告缺/无 ## 章→只注 勾选表+清单指引+--list）+ stdout 首行 `[C2·` 合同；站点 4 B 版②仅去「勿整段重读」一词；classification.primary_type=None 时带 evidence.matched_rule 提示（LLM 兜底语义，四方达实测）。`regression-tests/test_c2_inject.py` 站点 5：旧措辞断言翻转（新措辞必在+「勿重读/勿整段重读/禁整段重读」必不在）+ 新增 [4] 块 12 项（T1 标量/数据截止/中枢两极/fatal/三态/D3/2f/预算，显式 fixture 路径不依赖 /tmp 现场态）。
+- **数据**：红演示=翻转断言对旧 render 3 红+TypeError 红；绿后 18 项全过；8 站点旧措辞 grep 零残留（唯一命中=测试负向断言执法本体）；A 版实测 1,715B/2,048B（东材 3/16 中态）；hook 真实路径目检=东材 fixture 三态 + 四方达在票（classification 未分类 ? 提示路径）+ B 版一词移除；run_regression exit 0（engine_pending 2 条 G58 pre-existing 不变）。
+- **真实形状修正**：c2 测试初稿误标「3 勾→当前=c62」（实为 c_d2_safety）；中枢正则初版要求「数字+元」收尾，capstone 实形「中枢 51.5，推算」→ 去「元」收尾要求。
+
 ## 2026-09-16 流水架构批 1：原子步 checklist + 新序 + C1 站点 6/7/8 + 预算表 v2 + budget_probe
 
 - **改动**：`generate_checklist.py` PHASE_STEPS[A] phase_3 14 步→16 原子步（c59 删、m12 改 c68b 挪末位、新增 c_m1/c_m10；每步五动作 ①读模块→②投影(预算 baked)→③append→④$VG --section→⑤勾选）+ 头部三行（原子步纪律/护栏/恢复三步）+ 尾部步-锚映射三列表（PHASE3_STEP_ANCHORS，§n 终值=东材归档版面复核）+ Runner 块增 $SNAP/$SV/$VG 记号（A-only）；`skill_dep_graph.py` MODE_MODULE_FILES[A] 重排为写作序 + **补注册 m9-governance.md（原缺失，12→13）**；SKILL.md JIT 行新序+m12 末位插顶注、:229 `events`→`timeline` 演示命令、:39 骨架句（站点 7）；generate_checklist.py:281 骨架用法句（站点 6）；CLAUDE.md:242（站点 8，已 cp 备份 `_research/CLAUDE-md-backup-20260916.md`）；新 `scripts/budget_probe.py`（预算表 v2 全命令干跑对拍，>2× 或 rc≠0 exit 1）；新 `regression-tests/test_pipeline_atomic_steps.py`（11 用例）挂契约层。
