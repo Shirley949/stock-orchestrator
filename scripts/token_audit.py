@@ -173,30 +173,43 @@ PHASE_MARKS = [
 ]
 
 
-# ---- V2-10 E2E 成本块（判据 v5 口径）----
-# 价格表：GLM-5.3-Flash 官方 pricing 页实抓（五折限时促销，比例与折扣无关）；
-# 主判据 = CNY@w_real，w=0.1 降观测延续列；同权禁令输出模板 = 三元组 + 同 w 行全档。
-E2E_PRICES = {"input": 0.4 / 1e6, "cache": 0.115 / 1e6, "out": 1.4 / 1e6}
+# ---- V2-10 E2E 成本块（判据 v5 口径：EQ-Tokens 主判据）----
+# EQ = input + cache_ratio×cache_read + out_ratio×output（tokens 本位）。
+# 常数 = GLM 实价比率（模型特定）：flash = 0.2875/3.5，旗舰 = 0.25/3.5。
+# 促销免疫：两档价格三价比恒等（0.115/0.4 = 0.23/0.8；1.4/0.4 = 2.8/0.8）→ EQ 对价表变动不动。
+# CNY 降为导出行（附价表快照注记）；同权禁令输出模板 = 三元组 + 同 w 行不变。
+E2E_RATIOS = {"flash": {"cache": 0.2875, "out": 3.5}, "flagship": {"cache": 0.25, "out": 3.5}}
+E2E_PRICES = {"input": 0.4 / 1e6, "cache": 0.115 / 1e6, "out": 1.4 / 1e6}  # flash 五折快照 2026-09-17
 E2E_W_GRID = (0, 0.01, 0.05, 0.1, 0.25)
 
 
-def e2e_v210_block(tot_in, tot_cache, tot_out, prefix_series,
-                   input_series=None, text_chars=0, thinking_chars=0, tool_chars=0):
-    """纯函数：由三元组与水位序列产出 E2E 报告行（fixture 六票逐位复现）。
+def e2e_eq(tot_in, tot_cache, tot_out, model="flash"):
+    r = E2E_RATIOS[model]
+    return tot_in + r["cache"] * tot_cache + r["out"] * tot_out
 
+
+def e2e_v210_block(tot_in, tot_cache, tot_out, prefix_series,
+                   input_series=None, text_chars=0, thinking_chars=0, tool_chars=0,
+                   model="flash"):
+    """纯函数：由三元组与水位序列产出 E2E 报告行（fixture 七票逐位复现）。
+
+    主判据 = EQ-Tokens；CNY = 导出行（附价表快照注记）。
     compact 探针语义 = 非 cache 单请求 input >100K（prefix 含 cache 必然超限，禁作探针）。"""
     P = E2E_PRICES
     w_real = P["cache"] / P["input"]
     e2e = lambda w: tot_in + w * tot_cache + tot_out  # noqa: E731
+    eq = e2e_eq(tot_in, tot_cache, tot_out, model)
     cny = tot_in * P["input"] + tot_cache * P["cache"] + tot_out * P["out"]
-    L = ["", "## ⓪ E2E 成本（V2-10 · 主判据 CNY@w_real，w=0.1 观测延续列）", ""]
+    L = ["", "## ⓪ E2E 成本（V2-10 · 主判据 EQ-Tokens；CNY 降为导出行）", ""]
     L.append(f"- 三元组 (input, cache_read, output) = **({tot_in:,}, {tot_cache:,}, {tot_out:,})**")
+    L.append(f"- **EQ-Tokens（主判据，{model} 比率 {E2E_RATIOS[model]['cache']}/"
+             f"{E2E_RATIOS[model]['out']}）：{eq / 1e6:.4f}M**")
     rows = [f"w={w}:{e2e(w) / 1e6:.4f}M" for w in E2E_W_GRID]
     L.append("- 同权敏感性（E2E_cost(w)=input+w×cache_read+output）："
              + "；".join(rows)
-             + f"；**w_real={w_real:.4f}：{e2e(w_real) / 1e6:.3f}M**")
-    L.append(f"- **CNY 真账（五折 {P['input'] * 1e6:.2f}/{P['cache'] * 1e6:.3f}/"
-             f"{P['out'] * 1e6:.1f} 元/M，标准价×2）：{cny:.2f} 元**"
+             + f"；w_real={w_real:.4f}：{e2e(w_real) / 1e6:.3f}M")
+    L.append(f"- CNY 导出行（价表快照 2026-09-17：{P['input'] * 1e6:.2f}/{P['cache'] * 1e6:.3f}/"
+             f"{P['out'] * 1e6:.1f} 元/M；判据本体 = EQ，对价表变动免疫）：{cny:.2f} 元"
              f"｜w=0.1 观测列 {e2e(0.1) / 1e6:.3f}M")
     if prefix_series:
         tail = sorted(prefix_series[-50:])
