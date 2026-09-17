@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 
 _SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 for _p in (_SCRIPTS, os.path.join(_SCRIPTS, "lib")):
@@ -58,17 +59,28 @@ def _latest(paths):
     return c[-1] if c else None
 
 
+def _stock_scope(transcript_path: str) -> str:
+    """T15：transcript 股码 scoping——并行会话下全局 glob 会错挂他票工件。
+    取 transcript 内最高频 6 位码（pattern 与 token_audit 自提同款）；取不到 = 空串（回退全局，行为不变）。"""
+    try:
+        codes = re.findall(r"(?<!\d)\d{6}(?!\d)", _read(transcript_path))
+        return Counter(codes).most_common(1)[0][0] if codes else ""
+    except Exception:
+        return ""
+
+
 def render(mode: str, transcript_path: str = "", checklist: str = None,
            snapshot: str = None, report: str = None) -> str:
-    cl = checklist or _latest(glob.glob(f"/tmp/analysis_checklist_*_mode{mode}_*.md"))
+    code = _stock_scope(transcript_path)
+    cl = checklist or _latest(glob.glob(f"/tmp/analysis_checklist_{code or '*'}_mode{mode}_*.md"))
     if mode == "B":
         return "\n".join([
             "[C2·compact续接·模式B] ①首个取数动作=snapshot_view.py <最新快照> --list（禁 json.load 探查）",
             f"②B 模块 6 个 JIT（m38/m39/m3/m36/m37/m6）③清单：{cl or '未找到'}",
         ])
-    snap = snapshot or _latest(glob.glob("/tmp/runner_snapshot_*_modeA.json"))
-    rep = report or _latest(glob.glob("/tmp/analysis_report_*_modeA*.md"))
-    return _render_a(cl, snap, rep, transcript_path)
+    snap = snapshot or _latest(glob.glob(f"/tmp/runner_snapshot_{code or '*'}_mode{mode}.json"))
+    rep = report or _latest(glob.glob(f"/tmp/analysis_report_{code or '*'}_mode{mode}*.md"))
+    return _render_a(cl, snap, rep, transcript_path, code)
 
 
 def _read(path):
@@ -166,14 +178,14 @@ def _three_state_action(present):
     return "从①重跑整步（③ 前按节锚删残段兜底：先删『^<锚>.*?^(?=^#{1,2} )』区间再 append）"
 
 
-def _render_a(cl, snap, rep, tp):
+def _render_a(cl, snap, rep, tp, code=""):
     rep_text = _read(rep) if rep else ""
     lines = [
         "[C2·compact续接·模式A] ①首个取数动作=snapshot_view.py <最新快照> --list（重建视图认知，禁 json.load 全树探查）",
         "②模块 JIT：写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）；m11 仅首次 verify FAIL 才读",
         "③旧文按需重取走 --list/any/--field 投影（禁复读风暴，非禁重读）",
     ]
-    sk = _latest(glob.glob("/tmp/analysis_skeleton_*.md"))
+    sk = _latest(glob.glob(f"/tmp/analysis_skeleton_{code or '*'}*.md"))
     # transcript_path 内联：load_skeleton 缺省 --latest 在并行会话下绑错（12:52 实证）
     tail = f"④清单：{cl or '未找到'}"
     if sk:

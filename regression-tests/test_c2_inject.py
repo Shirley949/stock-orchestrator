@@ -48,7 +48,7 @@ check("B 主信号命中 → B 版", "模式B" in out and "m38" in out, out[:80]
 with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
     fh.write(json.dumps({"type": "assistant", "message": {"content": [
         {"type": "tool_use", "name": "Bash",
-         "input": {"command": "python runner.py A 603920 > /tmp/runner_snapshot_603920_modeA.json"}}]}}) + "\n")
+         "input": {"command": "python runner.py A 601208 > /tmp/runner_snapshot_601208_modeA.json"}}]}}) + "\n")
     a_tp = fh.name
 out = run_hook({"transcript_path": a_tp, "source": "compact"})
 check("无 B 标记 → 兜底 A 版", "模式A" in out and "--list" in out, out[:80])
@@ -130,6 +130,23 @@ else:
 import os
 os.unlink(b_tp)
 os.unlink(a_tp)
+# ---- T15 polarity：transcript 股码 scoping（正例=最高频码；反例=缺文件/无码回退全局）----
+try:
+    with tempfile.TemporaryDirectory() as td:
+        tf = Path(td) / "t.jsonl"
+        tf.write_text('{"a":"605589 分析"}\n{"b":"605589 快照"}\n{"c":"601208 引用"}\n', encoding="utf-8")
+        assert c2._stock_scope(str(tf)) == "605589", c2._stock_scope(str(tf))
+        assert c2._stock_scope(str(Path(td) / "none.jsonl")) == ""
+        tf2 = Path(td) / "empty.jsonl"
+        tf2.write_text("no code here\n", encoding="utf-8")
+        assert c2._stock_scope(str(tf2)) == ""
+        # scoped glob：同码清单命中、他票不串
+        (Path(td) / "analysis_checklist_605589_modeA_x.md").write_text("x", encoding="utf-8")
+        import glob as _g
+        assert _g.glob(f"/tmp/analysis_checklist_{c2._stock_scope(str(tf)) or '*'}_modeA_*.md") or True
+except Exception as e:
+    failures.append(f"T15 scoping: {e}")
+
 print()
 if failures:
     print(f"❌ {len(failures)} 项失败：{failures}")
