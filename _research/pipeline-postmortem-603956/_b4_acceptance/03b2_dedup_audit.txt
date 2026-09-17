@@ -1,0 +1,6 @@
+基线: 总 44198B | shingle25 冗余位 4489 (10.2%) | 精确重复行 3 行/140c
+   ×2 [src: snapshot.s1_financial.data.income_statement]
+   ×2 [src: snapshot.s1_financial.data.balance_sheet]
+   ×2 [src: snapshot.s3_fund_flow.data.fund_flow]
+4b: 总 51000B | shingle25 冗余位 5176 (10.1%) | 精确重复行 1 行/27c
+   ×2 | 日期 | 类型 | 摘要（LEVEL1 原样） |

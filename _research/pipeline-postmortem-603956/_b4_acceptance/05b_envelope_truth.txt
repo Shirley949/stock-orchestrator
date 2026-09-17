@@ -1,0 +1,2 @@
+B2: profile=profile_quick total_gates=64 active=12 passed=12 failed=0 errors=0 score=100 self=100
+4b东材: profile=profile_full total_gates=64 active=57 passed=57 failed=0 errors=0 score=100 self=100

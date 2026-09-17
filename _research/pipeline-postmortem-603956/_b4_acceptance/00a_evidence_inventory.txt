@@ -1,0 +1,34 @@
+=== 0a 证据体清点 2026-09-16 22:06:24 ===
+在场 2494197 B 2026-09-1 /home/ubuntu/.claude/projects/-home-ubuntu/11f32cf4-4d15-4480-8c88-b90dab80ccb9.jsonl
+在场 2065935 B 2026-09-1 /home/ubuntu/.claude/projects/-home-ubuntu--claude-projects--home-ubuntu/d30dfe07-250b-4e7b-b7e1-2c01f5addb58.jsonl
+在场 2805874 B 2026-09-1 /home/ubuntu/.claude/projects/-home-ubuntu/c587271b-20f1-4d71-880a-b43c3de3e552.jsonl
+在场 87076 B 2026-09-16  /tmp/analysis_report_601208_modeA.md
+在场 75567 B 2026-09-14  /tmp/b4_BACKUP_baseline_report_601208_20260916_201924.md
+在场 7717 B 2026-09-16 2 /tmp/b4_4b_verdict_11f32cf4.md
+在场 68495 B 2026-09-16  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/_research/pipeline-architecture-v1.1.md
+在场 26420 B 2026-09-16  /home/ubuntu/.claude/plans/sunny-petting-summit.md
+在场 19239 B 2026-09-16  /tmp/analysis_checklist_601208_modeA_1789560524.md
+在场 3650 B 2026-09-16 1 /tmp/b4_4a_watchdog.py
+在场 2636 B 2026-09-16 1 /tmp/b4_4a_watchdog2.py
+--- glob 族 ---
+-rw-r--r-- 1 ubuntu ubuntu 19025 Sep 16 20:04 /tmp/analysis_checklist_600580_modeA_20260916_190645.md
+-rw-r--r-- 1 ubuntu ubuntu 60951 Sep 16 20:07 /tmp/analysis_report_600580_modeA.md
+/home/ubuntu/.claude/projects/-home-ubuntu/928e6ef4-7bbe-47ca-b31d-cccc664e4c68
+/home/ubuntu/.claude/projects/-home-ubuntu/928e6ef4-7bbe-47ca-b31d-cccc664e4c68.jsonl
+/home/ubuntu/.claude/projects/-home-ubuntu/2621d1e2-86b5-49da-81ba-3e6322a50197.jsonl
+analysis_report-glm5.3f-东材科技-modeA-601208
+analysis_report-glm5.3f-东材科技-modeA-601208-20260916
+analysis_report-glm5.3f-浙江龙盛-600352
+analysis_report-glm5.3-浙江龙盛-modeB-600352
+--- 归档档内容 ---
+analysis_checklist_601208_modeA_20260914_180345.md
+analysis_report_601208_modeA.md
+analysis_report_601208_modeA.verified.json
+conclusions_601208.txt
+runner_snapshot_601208_modeA.json
+token_audit-601208-20260914-1925.md
+analysis_report-glm5.3-浙江龙盛-modeB-600352.md
+analysis_report-glm5.3-浙江龙盛-modeB-600352_publish.md
+analysis_report-glm5.3-浙江龙盛-modeB-600352.verified.json
+runner_snapshot_600352_modeB.json
+token_audit-600352-20260916-1902.md

@@ -1,0 +1,14 @@
+B2 verified.json: gates=17 FAIL=0 | self_score={'score': 100, 'dimensions': {'data_coverage': {'score': 100, 'hit': 4, 'total': 4}, 'gate_pass': {'score': 100}, 'source_traceability': {'score': 100, 'snapshot_tags': 63, 'bare_scene_tags': 0, 'websearch_tags': 0}}, 'weights': {'data_coverage': 0.4, 'gate_pass': 0.4, 'source_traceability': 0.2}, 'rubric_version': 'v2.1-script'} profile=profile_quick
+  归档件: analysis_report-glm5.3-浙江龙盛-modeB-600352.md 27735 B
+  归档件: analysis_report-glm5.3-浙江龙盛-modeB-600352.verified.json 3553 B
+  归档件: analysis_report-glm5.3-浙江龙盛-modeB-600352_publish.md 25751 B
+  归档件: runner_snapshot_600352_modeB.json 537850 B
+  归档件: token_audit-600352-20260916-1902.md 7234 B
+  发布件在场: True 25751
+B2 transcript: isCompactSummary 段= 0 | [C2· 注入= 0 | 模式B 标注= 225
+=== settings 终态 ===
+hooks: {'SessionStart': ['compact']}
+PreCompact 残留: False
+=== exa 分支行使 ===
+481
+搜索类工具调用: {}

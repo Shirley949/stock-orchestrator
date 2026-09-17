@@ -1,0 +1,39 @@
+########## L433 ts=2026-09-16T11:29:15.706Z attachment keys=['type', 'hookName', 'toolUseID', 'hookEvent', 'content', 'stdout']
+[C2·compact续接·模式A] ①首个取数动作=snapshot_view.py <最新快照> --list（重建视图认知，禁 json.load 全树探查）
+②模块 JIT：写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）；m11 仅首次 verify FAIL 才读
+③旧文按需重取走 --list/any/--field 投影（禁复读风暴，非禁重读）
+④清单：/tmp/analysis_checklist_600580_modeA_20260916_190645.md｜骨架翻页=load_skeleton.py /tmp/analysis_skeleton_600580_modeA.md --transcript /home/ubuntu/.claude/projects/-home-ubuntu--claude-projects--home-ubuntu/d30dfe07-250b-4e7b-b7e1-2c01f5addb58.jsonl（台账仅记历史，compact 后重读走当前章原子步①）
+[T1·锚] 600580 卧龙电驱 modeA | classification=成长股 禁PE框架=PB做主要 | 现价 26.68（2026-09-16）
+fatal#1: 无（G30 surface 锚=m4 事件扫描节）
+数据截止: 2026-09-16（G11 声明行照抄源）| snapshot: /tmp/runner_snapshot_600580_modeA.json
+中枢: m6 未写（源=m6 capstone；未写时原样照抄兜底词，禁空串禁编造）
+进度: 已写 2/16（一、标的分类·二、公司概况）｜待写 14（三、财务分析·3.10·3.11·四、订单·五、技术面·六、消息面·七、估值·十一、综合研判·10.1·10.2·九、风险·局限性·八、机构共识·速览）
+当前章 c61『## 三、财务分析（至 §3.9）』→ 从①重跑整步（③ 前按节锚删残段兜底：先删『^<锚>.*?^(?=^#{1,2} )』区间再 append）
+①Read modules/m2.md → ②SV cash_flow + SV income + SV balance + SV mainfina → ③Edit 报告 append『## 三、财务分析（至 §3.9）』 → ④$VG --section '三、财务分析' → ⑤勾[x]（磁盘为准）
+
+########## L739 ts=2026-09-16T11:55:44.997Z attachment keys=['type', 'hookName', 'toolUseID', 'hookEvent', 'content', 'stdout']
+[C2·compact续接·模式A] ①首个取数动作=snapshot_view.py <最新快照> --list（重建视图认知，禁 json.load 全树探查）
+②模块 JIT：写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）；m11 仅首次 verify FAIL 才读
+③旧文按需重取走 --list/any/--field 投影（禁复读风暴，非禁重读）
+④清单：/tmp/analysis_checklist_600580_modeA_20260916_190645.md｜骨架翻页=load_skeleton.py /tmp/analysis_skeleton_600580_modeA.md --transcript /home/ubuntu/.claude/projects/-home-ubuntu--claude-projects--home-ubuntu/d30dfe07-250b-4e7b-b7e1-2c01f5addb58.jsonl（台账仅记历史，compact 后重读走当前章原子步①）
+[T1·锚] 600580 卧龙电驱 modeA | classification=成长股 禁PE框架=PB做主要 | 现价 26.68（2026-09-16）
+fatal#1: 无（G30 surface 锚=m4 事件扫描节）
+数据截止: 2026-09-16（G11 声明行照抄源）| snapshot: /tmp/runner_snapshot_600580_modeA.json
+中枢: m6 未写（源=m6 capstone；未写时原样照抄兜底词，禁空串禁编造）
+进度: 已写 7/16（一、标的分类·二、公司概况·三、财务分析·3.10·3.11·四、订单·五、技术面）｜待写 9（六、消息面·七、估值·十一、综合研判·10.1·10.2·九、风险·局限性·八、机构共识·速览）
+当前章 c64『## 六、消息面与重大事件时间线』→ 从①重跑整步（③ 前按节锚删残段兜底：先删『^<锚>.*?^(?=^#{1,2} )』区间再 append）
+①Read modules/m4.md → ②SV news + SV timeline + SV xqvoice + SV --raw s35_research_reports.data.layer1.em_reports_count + SV any northbound.data.processed → ③Edit 报告 append『## 六、消息面与重大事件时间线』 → ④$VG --section '六、消息面' → ⑤勾[x]（磁盘为准）
+
+########## L849 ts=2026-09-16T12:02:49.581Z attachment keys=['type', 'hookName', 'toolUseID', 'hookEvent', 'content', 'stdout']
+[C2·compact续接·模式A] ①首个取数动作=snapshot_view.py <最新快照> --list（重建视图认知，禁 json.load 全树探查）
+②模块 JIT：写哪章读哪章；compact 后重读将写章节合法（台账=读过≠在context）；m11 仅首次 verify FAIL 才读
+③旧文按需重取走 --list/any/--field 投影（禁复读风暴，非禁重读）
+④清单：/tmp/analysis_checklist_600580_modeA_20260916_190645.md｜骨架翻页=load_skeleton.py /tmp/analysis_skeleton_600580_modeA.md --transcript /home/ubuntu/.claude/projects/-home-ubuntu--claude-projects--home-ubuntu/d30dfe07-250b-4e7b-b7e1-2c01f5addb58.jsonl（台账仅记历史，compact 后重读走当前章原子步①）
+[T1·锚] 600580 卧龙电驱 modeA | classification=成长股 禁PE框架=PB做主要 | 现价 26.68（2026-09-16）
+fatal#1: 无（G30 surface 锚=m4 事件扫描节）
+数据截止: 2026-09-16（G11 声明行照抄源）| snapshot: /tmp/runner_snapshot_600580_modeA.json
+中枢: m6 未写（源=m6 capstone；未写时原样照抄兜底词，禁空串禁编造）
+进度: 已写 7/16（一、标的分类·二、公司概况·三、财务分析·3.10·3.11·四、订单·五、技术面）｜待写 9（六、消息面·七、估值·十一、综合研判·10.1·10.2·九、风险·局限性·八、机构共识·速览）
+当前章 c64『## 六、消息面与重大事件时间线』→ 补跑④→⑤（1 grep+1 --section，不重写；④全臂 FAIL 且 reason 属内容缺失类→ --section '<锚>' --partial 确认残段→转重跑路径）
+①Read modules/m4.md → ②SV news + SV timeline + SV xqvoice + SV --raw s35_research_reports.data.layer1.em_reports_count + SV any northbound.data.processed → ③Edit 报告 append『## 六、消息面与重大事件时间线』 → ④$VG --section '六、消息面' → ⑤勾[x]（磁盘为准）
+

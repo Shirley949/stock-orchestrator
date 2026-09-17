@@ -1,0 +1,62 @@
+--- L500 tool_result ---
+[--section] 『三、财务分析』→ L57 ## 三、财务分析｜切片 11130 chars
+[--section] 门分派：跑 11 门，不适用跳过 4 门：G16、G30、G39、G59；全文完整性门不进（G11、G12、G21、G22、G80 等）
+============================================================
+Gate 校验报告 | Profile: profile_full (深度分析/整体分析/买不买/估值 → 全部活跃 Gate 实跑（= ALL_GATES，见本文件；勿硬编码计数）)
+章锚（--section 逐章旁路，非全文终验）: 三、财务分析｜活跃门 11/64
+============================================================
+
+✅ G28: 杜邦数据链路完整性（dupont.status=ok + 核心四字段非 None；拉到+存对；硬校验）
+✅ G38: 分红有效性（每股股利；有分红历史引旧值=FAIL；不分红真空豁免）
+✅ G52: m3 ATR 波动/破位全链路（s4_technical.data.atr；ok+atr14→须消费+止损/破位段+数值对齐；缺→禁编 ATR 值；never_traded 豁免）
+✅ G53: m3 换手率自身分位全链路（s4_technical.data.turnover.pct_250；高换手↔pct≥70/低换手↔pct≤30 enforcement；报告分位数须==snapshot；never_traded 豁免）
+✅ G54: m3 技术环境+正交信号(ADX/BIAS/OBV)全链路（s4_technical.data.signals.state.adx_state/bias_state/obv_trend；ADX 值须==snapshot technical.dmi.ADX；须有环境判定段；never_traded 豁免）
+✅ G55: m3 golden 结构+边界+VWAP
+
+--- L828 tool_result ---
+The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.
+
+--- L867 tool_result ---
+[--section] 『六、消息面』→ L495 ## 六、消息面与重大事件时间线｜切片 6119 chars
+[--section] 门分派：跑 11 门，不适用跳过 4 门：G16、G30、G39、G59；全文完整性门不进（G11、G12、G21、G22、G80 等）
+============================================================
+Gate 校验报告 | Profile: profile_full (深度分析/整体分析/买不买/估值 → 全部活跃 Gate 实跑（= ALL_GATES，见本文件；勿硬编码计数）)
+章锚（--section 逐章旁路，非全文终验）: 六、消息面｜活跃门 11/64
+============================================================
+
+✅ G28: 杜邦数据链路完整性（dupont.status=ok + 核心四字段非 None；拉到+存对；硬校验）
+✅ G38: 分红有效性（每股股利；有分红历史引旧值=FAIL；不分红真空豁免）
+✅ G52: m3 ATR 波动/破位全链路（s4_technical.data.atr；ok+atr14→须消费+止损/破位段+数值对齐；缺→禁编 ATR 值；never_traded 豁免）
+✅ G53: m3 换手率自身分位全链路（s4_technical.data.turnover.pct_250；高换手↔pct≥70/低换手↔pct≤30 enforcement；报告分位数须==snapshot；never_traded 豁免）
+✅ G54: m3 技术环境+正交信号(ADX/BIAS/OBV)全链路（s4_technical.data.signals.state.adx_state/bias_state/obv_trend；ADX 值须==snapshot technical.dmi.ADX；须有环境判定段；never_traded 豁免）
+✅ G55: m3 golden 结构+边界
+
+--- L490 Edit old(131c) ---
+站内辅证：【实锤】2026-09-03 与慕帆动力（AIDC 燃气轮机发电系统，规划 1GW 级基地）签署战略合作，未来三年合作订单总额预计超 7 亿元 [src: snapshot.xq_market_voice.data.answers.d1_intel]。
+--- L490 Edit new(11261c) head ---
+站内辅证：【实锤】2026-09-03 与慕帆动力（AIDC 燃气轮机发电系统，规划 1GW 级基地）签署战略合作，未来三年合作订单总额预计超 7 亿元 [src: snapshot.xq_market_voice.data.answers.d1_intel]。
+
+## 三、财务分析
+
+### 3.1 多季度利润表趋势（近 8 个报告期，累计口径）
+
+单位：亿元。同比/环比均为 runner 预计算值（禁自算口径）；毛利率/净利率为利润表推算口径 [src: snapshot.s1_financ
+
+--- L815 Edit old(307c) ---
+**站内归因互证**：站内对 8-20 单日 -9.0% 的归因为「宇树科技上市次日板块回调+《具身智能的金钱游戏》唱空文章」[src: snapshot.xq_market_voice.data.answers.d5_moves]，与我方「8 月主跌段（TD13 兑现+下跌放量）」归因一致；站内复盘帖称 9-07 因 OpenAI 自研人形机器人消息大涨「+9.21%」，**与 K 线实值冲突**（当日收盘 +0.73%、振幅不足 2%）——情绪驱动叙事可信、幅度数字不采信，技术读数以行情数据
+--- L815 Edit new(6426c) head ---
+**站内归因互证**：站内对 8-20 单日 -9.0% 的归因为「宇树科技上市次日板块回调+《具身智能的金钱游戏》唱空文章」[src: snapshot.xq_market_voice.data.answers.d5_moves]，与我方「8 月主跌段（TD13 兑现+下跌放量）」归因一致；站内复盘帖称 9-07 因 OpenAI 自研人形机器人消息大涨「+9.21%」，**与 K 线实值冲突**（当日收盘 +0.73%、振幅不足 2%）——情绪驱动叙事可信、幅度数字不采信，技术读数以行情数据
+
+=== 全 session 勾选序列 ===
+L94 11:08:24 勾: []
+L215 11:13:07 勾: []
+L265 11:16:17 勾: ['c50']
+L270 11:16:26 勾: ['c50b']
+L309 11:17:27 勾: ['c60']
+L352 11:21:15 勾: ['c_m1']
+L504 11:41:18 勾: ['c61']
+L507 11:41:23 勾: ['c61']
+L526 11:42:41 勾: ['c_d2_safety', 'c_d3_growth']
+L639 11:48:06 勾: ['c62']
+L711 11:52:41 勾: ['c63']
+L871 12:04:18 勾: ['c64']

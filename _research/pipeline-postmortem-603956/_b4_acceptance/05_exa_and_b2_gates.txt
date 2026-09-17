@@ -1,0 +1,2 @@
+4b 全工具频次: {'Skill': 1, 'Read': 21, 'Bash': 169, 'TaskCreate': 6, 'TaskUpdate': 9, 'Edit': 5}
+B2 gate ids: ['profile', 'profile_desc', 'total_gates', 'active_gates', 'auto_passed', 'passed', 'failed', 'errors', 'score', 'threshold', 'verdict', 'details', 'failed_gates', 'action_required', 'self_score', 'timestamp', 'engine_receipt']

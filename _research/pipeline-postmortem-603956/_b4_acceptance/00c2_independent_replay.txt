@@ -1,0 +1,6 @@
+[1] 在册量/总取数走 token_audit 侧；此处对拍:视图类输出=75760c
+[2] raw:纯--raw 6次/11105c + --field 8次/10322c = 合计14次/21427c | 占视图类 28.3%
+[3] thinking n=138 median=836 max=9241
+[4] 归档Read=0
+[5] compact 段(isCompactSummary)=2 | [C2· 注入行]=2
+[6] 工具频次 Top: [('Bash', 169), ('Read', 21), ('TaskUpdate', 9), ('TaskCreate', 6), ('Edit', 5), ('Skill', 1)]

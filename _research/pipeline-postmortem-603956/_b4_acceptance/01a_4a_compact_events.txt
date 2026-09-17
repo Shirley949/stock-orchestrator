@@ -1,0 +1,15 @@
+总行数 939
+L412 /compact 指令 ts=2026-09-16T11:26:21.563Z: '/compact'
+L422 COMPACT-SUMMARY ts=2026-09-16T11:29:15.336Z subtype=None
+L424 /compact 指令 ts=2026-09-16T11:26:21.578Z: '<command-name>/compact</command-name>\n            <command-message>compact</comm'
+L435 /compact 指令 ts=2026-09-16T11:29:16.020Z: '/compact'
+L442 /compact 指令 ts=2026-09-16T11:29:16.106Z: '<command-name>/compact</command-name>\n            <command-message>compact</comm'
+L719 /compact 指令 ts=2026-09-16T11:52:46.984Z: '/compact'
+L728 COMPACT-SUMMARY ts=2026-09-16T11:55:44.599Z subtype=None
+L730 /compact 指令 ts=2026-09-16T11:52:46.991Z: '<command-name>/compact</command-name>\n            <command-message>compact</comm'
+L741 /compact 指令 ts=2026-09-16T11:55:45.470Z: '/compact'
+L748 /compact 指令 ts=2026-09-16T11:55:45.572Z: '<command-name>/compact</command-name>\n            <command-message>compact</comm'
+L830 /compact 指令 ts=2026-09-16T11:59:38.382Z: '/compact'
+L838 COMPACT-SUMMARY ts=2026-09-16T12:02:49.156Z subtype=None
+L838 /compact 指令 ts=2026-09-16T12:02:49.156Z: 'This session is being continued from a previous conversation that ran out of con'
+L840 /compact 指令 ts=2026-09-16T11:59:38.389Z: '<command-name>/compact</command-name>\n            <command-message>compact</comm'

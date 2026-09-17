@@ -1,0 +1,32 @@
+L229 RAW 1472c | views=[] raw=['xq_market_voice.data.answers.d1_intel'] field=[]
+L265 FIELD 5021c | views=[] raw=['s1_financial.data.balance_sheet'] field=['合同负债']
+L280 FIELD 104c | views=[] raw=['s1_financial.data.financial_indicators.data_full', 's1_financial.data.financial_indicators.data_full', 's1_financial.data.financial_indicators.data_full'] field=[]
+L362 RAW 2223c | views=[] raw=['s_stock_evaluation.data.processed.conclusions'] field=[]
+L367 RAW 269c | views=[] raw=['xq_market_voice.data.answers.d5_moves'] field=[]
+L415 RAW 4203c | views=[] raw=['s35_research_reports.data.layer1.em_reports_count'] field=[]
+L421 FIELD 1417c | views=[] raw=['s5_events.data.risk_signals.processed.timeline'] field=['historical']
+L425 FIELD 721c | views=[] raw=['s5_events.data.risk_signals.processed.timeline'] field=['historical']
+L429 FIELD 998c | views=[] raw=['s5_events.data.risk_signals.processed.timeline'] field=['historical', '输出形态']
+L435 FIELD 970c | views=[] raw=['s5_events.data.risk_signals.processed.timeline', 's5_events.data.risk_signals.processed.timeline'] field=['historical', 'future']
+L439 FIELD 852c | views=[] raw=['s5_events.data.risk_signals.processed.timeline'] field=['risk']
+L448 FIELD 239c | views=[] raw=['s5_events.data.news', 's5_events.data.news'] field=['high_value', 'latest_period']
+L617 RAW 816c | views=[] raw=['xq_market_voice.data.answers.d6_risk'] field=[]
+L722 RAW 2122c | views=[] raw=['s35_research_reports.data'] field=[]
+
+=== 清单 baked raw/field 全集（对照）===
+ baked RAW: xq_market_voice.data.answers.d1_intel
+ baked RAW: xq_market_voice.data.answers.d1_intel
+ baked RAW: xq_market_voice.data.answers.d5_moves
+ baked RAW: s35_research_reports.data.layer1.em_reports_count
+ baked RAW: xq_conclusion_check.processed
+ baked RAW: xq_market_voice.data.answers.d3_bullbear
+ baked RAW: s_stock_evaluation.data.processed.conclusions
+ baked RAW: computed_metrics.tariff_vulnerability
+ baked RAW: computed_metrics.concentration_composite
+ baked RAW: xq_market_voice.data.answers.d6_risk
+ baked RAW: xq_conclusion_check.processed
+ baked RAW: xq_market_voice.data.answers.d2_analyst
+ baked RAW: 小件
+ baked RAW: xq_market_voice.processed.summary
+ baked FIELD: 依赖
+ baked 注记: ['c61 明注无 --field']
