@@ -821,3 +821,11 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - `generate_checklist.py` 删 `c_pdf_research` 步；`update_checklist.py` 证据映射表删 `c_pdf_research→s35_research_reports.data` 行。该步 desc「PDF 已下载（≥3份）」与引擎实况（Top1）早已漂移，步名即叙述融合误导源（300450 会话「研报 PDF 3 份 ✓」=覆盖计数 3 与该步 ✓ 相邻融合；威派格反而双账一致：未勾+三处真空披露）。
 - s35 L1 消费面不变：`c_analyst_forecast`（consensus_forecast）+ m4/m10 [src:] 锚 + G21 路径执法；契约 s35 块零改形；run_regression.sh exit 0。
 - 同日归档：`_research/pipeline-postmortem-603956/`（复盘官 8 件交付 + 5 证据件 + 执行者回测报告桥接件，威派格第三票复盘终局台账）。
+
+## 2026-09-18 1M 窗口审计收官：判据 v5.0（EQ-Tokens）+ 判据票前置机械化（T15/R9/V-D 接线）
+
+- **审计终谳**：GLM-5.3 窗口切 1M 后同票（东材 601208）隔离 = cache_read +112%、E2E 溢价 1.97×（w=0 亦 +30%）；1M 在 E2E 上从不纯赢（同权翻转点 w≈0.0005），价值 = 过程面质量 + 可收割溢价。**判据 v5.0 主判据 = EQ-Tokens**（input+0.2875×cache+3.5×output，比率本位对促销免疫），主判据线 ≤15.9709M（0.70× 基线 22.8156M），分程上沿 18.2525M；池三档：字面 V-D 16% / 扩容 modal 24-28% / 30% = 上沿事件（分程预案预武装）。
+- **引擎修三件**：① T15（`3f96947`）C2 注入工件发现改 transcript 股码 scoping，禁全局 glob 跨会话错挂；② R9 机械化（`d4bf3c6`）`check_section_order.py` 检查器（挂 c70 全票）+ 重排器（挂 c80 发布路径）——实证 n=4 票写作序直发（厦钨人工修、圣泉/东材1M/飞凯带缺陷上线）；③ V-D 复合执行令入清单模板（③④⑤烘焙链 = gate 败阻断勾选 = T2 顺带执法；②链式批取；管理轮禁令 = 禁 Task\* 清单即唯一状态）。token_audit E2E 块（`eda7067`+`f2a614d`）＝三元组正典 + EQ 主行 + CNY 导出 + R10 水位 + 隐性推理分量；fixture `test_e2e_v210` 七票逐位守卫。
+- **归档收敛**：`_research/pipeline-1m-impact-audit/` 八件套 → 唯一现存件 `v5.0-judgment-EQ-final.md`（判据计划 + 七票承重数字 + 排期），过程分析按用户令删除、要点即本条目；/tmp 本工作面测试件同步清理（递延台账制，历史票证据链件保守保留）。
+- **判据状态**：v5.0-rc4 = 冻结候选；硬门 = V1 账单比率复核（0.2875/3.5 两比率，圣泉 ≈19.70M EQ / 东材 1M-v1 ≈22.82M EQ）+ 用户终裁（⓪-⑥）。圣泉/飞凯/东材 1M-v1/4b = 回测·基线·观察票永不入标定。
+- **验证**：全量回归 exit 0（契约层 + 64 门漏报=0）；C2 注入器全绿（含 T15 两极）；R9 三态（FAIL/fix/PASS）+ 厦钨重发版 PASS 实测。
