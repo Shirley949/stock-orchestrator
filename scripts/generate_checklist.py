@@ -494,6 +494,10 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         for i, (sid, mod, layout, sec_anchor, grep_pat) in enumerate(PHASE3_STEP_ANCHORS, 1):
             lines.append(f"| {i} | {sid} | {mod} | {layout} | {sec_anchor} | `grep -cE '{grep_pat}'` |")
         lines.append("")
+        lines.append("**④⑤ 烘焙链速查（V-D；每步收尾=单命令，gate 败自动阻断勾选 = T2 执法）**：")
+        for sid, _mod, _layout, sec_anchor, _grep_pat in PHASE3_STEP_ANCHORS:
+            lines.append(f"- {sid}：`$VG --section '{sec_anchor}' && python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/update_checklist.py --check {sid} --file $FL`")
+        lines.append("")
         lines.append("> m12（c68b）版面插顶、写作序末位；插顶后必经 c70 终验（mtime 合同：sidecar≥report，verify_gates.py check_pointer）。④ 每步未过不勾⑤；④ 全臂 FAIL 且 reason 属内容缺失类 → `--section <锚> --partial` 确认残段后按恢复三步走。")
         if mode == "A":
             lines.append("> **V-D 复合执行令**：③④⑤ 烘焙单命令链（`③append && $VG --section '<锚>' && python3 …/update_checklist.py --check <cid> --file $FL`；gate 败自动阻断勾选 = T2 执法；gate 首败修复轮回流已预注册）；② 多视图一律单命令链式（`$SV a && $SV b`）；**管理轮禁令：禁 TaskCreate/TaskUpdate，清单即唯一状态（≤3 次兜底更新）**。")

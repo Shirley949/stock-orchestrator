@@ -65,6 +65,11 @@ check("A 版 ≤2KB", len(run_hook({"transcript_path": a_tp}).encode()) <= 2048)
 check("B 版 ≤2KB", len(run_hook({"transcript_path": b_tp}).encode()) <= 2048)
 
 print("[3] A 版命脉内容（compact 仪式四要素 · 批2 新措辞）")
+# 自包含骨架 fixture：T15 scoping 后 [3] 依赖 {code} 骨架在场；禁依赖 /tmp 现场态
+sk_live = Path("/tmp/analysis_skeleton_601208_modeA.md")
+_sk_created = not sk_live.exists()
+if _sk_created:
+    sk_live.write_text("# 骨架\n", encoding="utf-8")
 a_out = run_hook({"transcript_path": a_tp})
 check("首取数 --list 纪律在场", "--list" in a_out)
 check("模块 JIT 新措辞在场+旧措辞必不在",
@@ -146,6 +151,9 @@ try:
         assert _g.glob(f"/tmp/analysis_checklist_{c2._stock_scope(str(tf)) or '*'}_modeA_*.md") or True
 except Exception as e:
     failures.append(f"T15 scoping: {e}")
+
+if _sk_created:
+    os.unlink(sk_live)
 
 print()
 if failures:
