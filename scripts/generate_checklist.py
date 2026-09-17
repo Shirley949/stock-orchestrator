@@ -161,14 +161,14 @@ PHASE_STEPS = {
             {"id": "c68b", "desc": "m12 速览（TL;DR 两段式：值得买吗+面价背离度）——版面插顶、写作序末位：① 读 modules/m12-summary.md → ② $SV --raw xq_market_voice.processed.summary（status=ok 时 ≤0.2K；聚合磁盘章节）→ ③ 插顶 Edit（G11 声明行后、『## 一、』前，非 append；措辞避开 综合研判/情景/三档/概率/研判 锚词）→ ④ $VG --section '速览' → ⑤ 勾[x]（插顶后必经 c70 终验）"},
         ],
         "phase_4": [
-            {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）"},
+            {"id": "c70", "desc": "运行 verify_gates.py 产出 sidecar，用其路径打勾（verdict=PASS + self_score≥80 由代码强制）；R9 章序检查 = $SO（违例 exit 1 = 先 $SO --fix 修序再 publish，写作序是写作面事实、显示序才是产品合同）"},
             {"id": "c70b", "desc": "失败轮关闭且引擎侧未修 → 落 ledger/memory 后再开下一股（写侧纪律：修完即走 = 教训不落笔，下批同法再撞）"},
         ],
         "phase_4_5": [
             {"id": "c_xq_delta", "desc": "增量逐条过堂：d1-d6+check 每维增量逐条显式落点（利空→m7 §7.1、利好→对撞行/观察清单）或写明弃用理由（漏填=修订未完）"},
         ],
         "phase_5": [
-            {"id": "c80", "desc": "报告写入腾讯文档"},
+            {"id": "c80", "desc": "报告写入腾讯文档（发布前先 $SO --fix 重排至显示序——R9 硬合同）"},
         ],
     },
     "B": {
@@ -430,6 +430,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f'SNAP="/tmp/runner_snapshot_{sc}_mode{mode}.json"')
             lines.append(f'SV="python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/snapshot_view.py /tmp/runner_snapshot_{sc}_mode{mode}.json"')
             lines.append(f'VG="python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.py --report /tmp/analysis_report_{sc}_mode{mode}.md --data-snapshot /tmp/runner_snapshot_{sc}_mode{mode}.json"')
+            lines.append(f'SO="python3 ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/check_section_order.py --report /tmp/analysis_report_{sc}_mode{mode}.md"')
         lines.append("```")
         lines.append("")
 
@@ -494,6 +495,8 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"| {i} | {sid} | {mod} | {layout} | {sec_anchor} | `grep -cE '{grep_pat}'` |")
         lines.append("")
         lines.append("> m12（c68b）版面插顶、写作序末位；插顶后必经 c70 终验（mtime 合同：sidecar≥report，verify_gates.py check_pointer）。④ 每步未过不勾⑤；④ 全臂 FAIL 且 reason 属内容缺失类 → `--section <锚> --partial` 确认残段后按恢复三步走。")
+        if mode == "A":
+            lines.append("> **V-D 复合执行令**：③④⑤ 烘焙单命令链（`③append && $VG --section '<锚>' && python3 …/update_checklist.py --check <cid> --file $FL`；gate 败自动阻断勾选 = T2 执法；gate 首败修复轮回流已预注册）；② 多视图一律单命令链式（`$SV a && $SV b`）；**管理轮禁令：禁 TaskCreate/TaskUpdate，清单即唯一状态（≤3 次兜底更新）**。")
     lines.append("")
 
     # Phase 4
