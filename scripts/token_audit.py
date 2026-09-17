@@ -173,6 +173,49 @@ PHASE_MARKS = [
 ]
 
 
+# ---- V2-10 E2E 成本块（判据 v5 口径）----
+# 价格表：GLM-5.3-Flash 官方 pricing 页实抓（五折限时促销，比例与折扣无关）；
+# 主判据 = CNY@w_real，w=0.1 降观测延续列；同权禁令输出模板 = 三元组 + 同 w 行全档。
+E2E_PRICES = {"input": 0.4 / 1e6, "cache": 0.115 / 1e6, "out": 1.4 / 1e6}
+E2E_W_GRID = (0, 0.01, 0.05, 0.1, 0.25)
+
+
+def e2e_v210_block(tot_in, tot_cache, tot_out, prefix_series,
+                   input_series=None, text_chars=0, thinking_chars=0, tool_chars=0):
+    """纯函数：由三元组与水位序列产出 E2E 报告行（fixture 六票逐位复现）。
+
+    compact 探针语义 = 非 cache 单请求 input >100K（prefix 含 cache 必然超限，禁作探针）。"""
+    P = E2E_PRICES
+    w_real = P["cache"] / P["input"]
+    e2e = lambda w: tot_in + w * tot_cache + tot_out  # noqa: E731
+    cny = tot_in * P["input"] + tot_cache * P["cache"] + tot_out * P["out"]
+    L = ["", "## ⓪ E2E 成本（V2-10 · 主判据 CNY@w_real，w=0.1 观测延续列）", ""]
+    L.append(f"- 三元组 (input, cache_read, output) = **({tot_in:,}, {tot_cache:,}, {tot_out:,})**")
+    rows = [f"w={w}:{e2e(w) / 1e6:.4f}M" for w in E2E_W_GRID]
+    L.append("- 同权敏感性（E2E_cost(w)=input+w×cache_read+output）："
+             + "；".join(rows)
+             + f"；**w_real={w_real:.4f}：{e2e(w_real) / 1e6:.3f}M**")
+    L.append(f"- **CNY 真账（五折 {P['input'] * 1e6:.2f}/{P['cache'] * 1e6:.3f}/"
+             f"{P['out'] * 1e6:.1f} 元/M，标准价×2）：{cny:.2f} 元**"
+             f"｜w=0.1 观测列 {e2e(0.1) / 1e6:.3f}M")
+    if prefix_series:
+        tail = sorted(prefix_series[-50:])
+        probe = max(input_series) if input_series else 0
+        n_in = len(prefix_series)
+        head = (f"- R10 prefix 水位（观测列，不设线）：final {prefix_series[-1]:,}｜"
+                f"尾部50中位 {tail[len(tail) // 2]:,}｜均值 {sum(prefix_series) // n_in:,}")
+        L.append(head + ("｜compact 探针（单请求 input>100K）= 0 处" if probe <= 100000 else
+                         "｜⚠️ compact 探针命中（input>100K），人工复核"))
+    if tot_out:
+        # 可见内容估算 token：叙述/思考中文为主 0.5/字，tool JSON ASCII 为主 0.28/字
+        vis = int((text_chars + thinking_chars) * 0.5 + tool_chars * 0.28)
+        hidden = tot_out - vis
+        L.append(f"- 隐性推理分量（V3 口径【推算±30%】）：可见内容估算 ≈{vis:,} tokens｜"
+                 f"计费 output {tot_out:,}｜**隐性 ≈{hidden:,}（{hidden / tot_out * 100:.0f}%）**"
+                 "——网关侧不可见推理/计费，只能按轮次间接收割")
+    return L
+
+
 def main():
     ap = argparse.ArgumentParser(description="会话 token 事后审计")
     ap.add_argument("session", nargs="?", help="会话 JSONL 路径")
@@ -659,6 +702,15 @@ def main():
              f"（覆盖率 {view_cov_pct:.1f}%｜末次 gate FAIL {gate_fails if gate_fails >= 0 else '—'}"
              f"｜gate修复轮 {gate_fix_rounds}{'·已全过' if gate_converged else '·未收敛' if vg_result_texts else '·无verify'}"
              f"｜P4 dump {p4_dump_chars:,}c｜外科豁免 {len(hw_exempt)} 处）")
+    L.extend(e2e_v210_block(
+        tot_in, tot_cache, tot_out,
+        [t["usage"].get("input_tokens", 0) + t["usage"].get("cache_read_input_tokens", 0)
+         for t in turns if t["usage"]],
+        input_series=[t["usage"].get("input_tokens", 0) for t in turns if t["usage"]],
+        text_chars=sum(t["text"] for t in turns),
+        thinking_chars=sum(t["thinking"] for t in turns),
+        tool_chars=sum(len(json.dumps(inp, ensure_ascii=False))
+                       for t in turns for _, _, inp in t["tool_uses"])))
     if recent:
         # F7 注记（2026-09-01）：stock 为 '？' = 历史条目未存 stock 字段（旧版本写入），非识别失败
         # mode 为 None（2026-09-10 前旧条目）展示「迁移前」——禁 .get("mode","A") 注入默认值
