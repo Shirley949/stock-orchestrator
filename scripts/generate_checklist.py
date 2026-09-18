@@ -389,7 +389,14 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
     total_steps = sum(len(steps) for k, steps in mode_steps.items() if k != "phase_1_skipped")
     # 加上用户问题映射行数（每行带 c_map_N c-tag，可被 update_checklist 计数/打勾 → 与步骤分母同源）
     mapping_rows = len(question_result["matched"]) + len(question_result["unmapped"])
-    total_steps += mapping_rows
+    # 读侧协议 v3-S4: websearch 映射行存在时附加三个读侧验收子项（计入分母）
+    _ws_rows = [r for _, r in ([("matched", m) for m in question_result["matched"]]
+                               + [("unmapped", u) for u in question_result["unmapped"]])]
+    _has_websearch = any("websearch" in str(r.get("api_sources", "")).lower()
+                         or "exa" in str(r.get("api_sources", "")).lower()
+                         or "搜索" in str(r.get("segment", "")) or "搜索" in str(r.get("data_needs", ""))
+                         for r in _ws_rows)
+    total_steps += mapping_rows + (3 if _has_websearch else 0)
 
     # 构建清单
     lines = []
@@ -450,6 +457,14 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"| {row['segment'][:20]} | {row['data_needs'][:30]} | {apis} | 映射表 | [ ] <!--{cid}--> |")
         else:
             lines.append(f"| {row['segment'][:20]} | ⚠️ 待LLM判断 | — | [LLM兜底] | [ ] <!--{cid}--> |")
+
+    # 读侧协议 v3-S4: websearch 读侧验收子项（与分母同步 +3）
+    if _has_websearch:
+        lines.append("")
+        lines.append("**websearch 读侧验收子项（读侧协议 v3 · 写报告前逐项核对）**")
+        lines.append("- [ ] <!--c_webread_1--> B 级面覆盖：豆包读 Summary 全文 / Exa 读 Highlights 全文，禁 Title 扫读（索引仅用于弃读判定与追读 target，kept 必须引用 entry_id）")
+        lines.append("- [ ] <!--c_webread_2--> 消费披露：报告引用 webfindings 条数 < accounting.kept 时，未引用条目逐条给弃用理由（G81）")
+        lines.append("- [ ] <!--c_webread_3--> 口径互斥披露：accounting.caliber_flags 非空时，报告引用段带口径区间/分歧披露（G81-c）")
 
     lines.append("")
 
