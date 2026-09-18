@@ -85,9 +85,21 @@ print("[4] 批2 T1 锚块 + 三态判定（显式 fixture 路径，不依赖 /tm
 sys.path.insert(0, str(HERE.parent / "scripts"))
 import c2_compact_inject as c2  # noqa: E402
 
-FIX = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3-flash-东材科技-modeA-601208")
-FIX_REP = FIX / "analysis_report-glm5.3-flash-东材科技-modeA-601208.md"
-FIX_SNAP = FIX / "runner_snapshot_601208_modeA.json"
+# 自包含合成 fixture（去外部文件夹依赖：判据票重跑/改名两连炸教训——契约测试禁依赖 /home/ubuntu 现场态）
+FIX = Path(tempfile.mkdtemp(suffix="_c2_t1"))
+FIX_SNAP = FIX / "snap.json"
+FIX_REP = FIX / "rep.md"
+FIX_SNAP.write_text(json.dumps({
+    "stock_code": "601208", "stock_name": "东材科技",
+    "classification": {"primary_type": "周期股", "forbidden_metric": "PE",
+                       "evidence": {"matched_rule": "基础化工"}},
+    "s2_quote_kline": {"data": {"realtime_quote": {"current": 48.29}}},
+    "s5_events": {"data": {"risk_signals": {"processed": {"timeline": {"fatal_events": []}}}}},
+    "timestamp": "2026-09-14T15:00:00"}, ensure_ascii=False), encoding="utf-8")
+FIX_REP.write_text("## 一、标的分类与分析框架\n周期股框架。\n\n数据截止：2026-09-14。\n\n"
+                   "## 二、公司概况\n正文。\n\n## 三、财务分析（至 §3.9）\n正文。\n\n"
+                   "### 3.10 资产安全检查\n货币资金充裕。\n\n"
+                   "## 十一、综合研判（收口裁决）\n### 证据全景\n中枢≈51.5元。\n", encoding="utf-8")
 if FIX_REP.exists() and FIX_SNAP.exists():
     import generate_checklist as _gc  # noqa: E402
     _cl = Path(tempfile.mkstemp(suffix=".md")[1])
