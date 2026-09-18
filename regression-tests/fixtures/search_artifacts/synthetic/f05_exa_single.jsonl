@@ -1,0 +1,2 @@
+{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}}
+{"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "Title: A\nURL: https://a\nPublished: 2026-01-01\nAuthor: N/A\nHighlights:\n- hello"}]}}

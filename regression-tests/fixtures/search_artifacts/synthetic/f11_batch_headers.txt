@@ -1,0 +1,4 @@
+===== [Q1-中报] QUERY: 甲 2026中报 =====
+{"ResponseMetadata": {}, "Result": {"WebResults": [{"Id": "1", "SortId": 1, "Title": "q1a", "Url": "https://d1"}, {"Id": "2", "SortId": 2, "Title": "q1b", "Url": "https://d2"}]}}
+===== [Q2-份额] QUERY: 甲 份额 =====
+{"ResponseMetadata": {}, "Result": {"WebResults": [{"Id": "3", "SortId": 1, "Title": "q2a", "Url": "https://d3"}, {"Id": "4", "SortId": 2, "Title": "q2b", "Url": "https://d4"}, {"Id": "5", "SortId": 3, "Title": "q2c", "Url": "https://d5"}]}}

@@ -1,0 +1,2 @@
+{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05"}}
+{"jsonrpc": "2.0", "id": 3, "result": {"_meta": {"ai.exa/rateLimited": true}, "isError": true, "content": [{"type": "text", "text": "You've hit Exa's free MCP rate limit. To continue using without limits, create your own Exa API key."}]}}
