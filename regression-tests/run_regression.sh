@@ -143,6 +143,9 @@ echo "[① 契约层] test_web_research_envelope.py（E批#13：web_research URL
 python3 "$HERE/test_web_research_envelope.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_web_research_merge_writeback.py（F4#multicall_overwrite：多批 merge upsert 零丢失+幂等+API scene 隔离+--replace/空批/URL-only 存活/覆盖留痕）"
 python3 "$HERE/test_web_research_merge_writeback.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_web_research_autodiscovery.py（D3 自动发现：无文件WARN/窗内携账/窗外留痕）"
+python3 "$HERE/test_web_research_autodiscovery.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+
 echo "[① 契约层] test_search_artifact_parser.py（读侧协议：解析矩阵/002273 回放 92=74+18/对账 M+K==N+waive/对撞预筛/追读登记）"
 python3 "$HERE/test_search_artifact_parser.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_g81_webfindings.py（G81 三臂：引用完整性/数字一致性/口径披露+反向消费，豁免=G80 同款）"
