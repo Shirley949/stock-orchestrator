@@ -204,5 +204,22 @@ class TestFollowupAndManifest(unittest.TestCase):
             self.assertEqual(len(d["entries"]), 2, f"两批须累积=2, 实得 {len(d['entries'])}")
             self.assertEqual(len({e["file"] for e in d["entries"].values()}), 2)
 
+    def test_blevel_dumps_full_text(self):
+        """S8b 第二票(002048)偷懒漏洞加固: blevel 子命令一键输出全部 B 级面全文（禁关键词行提取的合法替代路径）"""
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            out = f"{td}/entries.json"
+            cli = str(ROUTING / "search_artifact_parser.py")
+            subprocess.run([sys.executable, cli, "parse", "--files", str(FIX / "synthetic/f05_exa_single.jsonl"),
+                            "--json", out], capture_output=True, text=True)
+            r = subprocess.run([sys.executable, cli, "blevel", "--entries", out],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            e0 = json.load(open(out))["entries"]
+            eid0 = list(e0)[0]
+            self.assertIn("████", r.stdout)
+            self.assertIn(eid0, r.stdout)
+            self.assertIn(e0[eid0]["blevel_text"].strip()[:20], r.stdout, "须输出 blevel 全文（非摘要）")
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
