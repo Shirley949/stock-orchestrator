@@ -86,7 +86,7 @@ sys.path.insert(0, str(HERE.parent / "scripts"))
 import c2_compact_inject as c2  # noqa: E402
 
 FIX = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3-flash-东材科技-modeA-601208")
-FIX_REP = FIX / "analysis_report_601208_modeA.md"
+FIX_REP = FIX / "analysis_report-glm5.3-flash-东材科技-modeA-601208.md"
 FIX_SNAP = FIX / "runner_snapshot_601208_modeA.json"
 if FIX_REP.exists() and FIX_SNAP.exists():
     import generate_checklist as _gc  # noqa: E402
