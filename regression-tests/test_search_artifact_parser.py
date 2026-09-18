@@ -189,5 +189,20 @@ class TestFollowupAndManifest(unittest.TestCase):
             self.assertIn("/tmp/002549/followup_", a["path"])
 
 
+    def test_parse_json_accumulates_across_calls(self):
+        """S8b 首票实战(688716)缺陷修: 多批 parse --json 同路径须累积合并, 末批禁覆盖前批"""
+        import json as _json, subprocess, sys, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            out = f"{td}/entries.json"
+            cli = str(ROUTING / "search_artifact_parser.py")
+            for name in ("f05_exa_single.jsonl", "f06_exa_emptytitle.jsonl"):
+                r = subprocess.run([sys.executable, cli, "parse",
+                                    "--files", str(FIX / "synthetic" / name),
+                                    "--json", out], capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+            d = _json.load(open(out))
+            self.assertEqual(len(d["entries"]), 2, f"两批须累积=2, 实得 {len(d['entries'])}")
+            self.assertEqual(len({e["file"] for e in d["entries"].values()}), 2)
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

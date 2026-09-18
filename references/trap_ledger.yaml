@@ -494,3 +494,23 @@ entries:
     blocked: false
     root_cause: engine
     fix: "（603011 实锤 2026-09-14）td_analyzer._backtest(setups, closes, direction) 的 direction 参数收而不用，win 判据硬编码 r>0（涨=胜），买/卖两臂共用——td9_sell（9 天抬升衰竭→预期跌）的胜率被算成『续涨率』：603011 实测 td9_sell.5d 66.7→33.3，『TD9卖胜率66.7%(有效)』实为 3 次信号后 5 日 2 涨 1 跌，方向性结论反向。median 无辜（收益中位数方向中性）；effectiveness 阈值(≥55% 有效)只对 buy 臂成立。已 landed：win 判据按 direction 分支——sell 臂 win=r<0（跌=胜），buy 臂不变；周线 _compute_weekly_resonance 同函数复用自动覆盖。先红后绿：test_sell_backtest_win_is_fall_rate 修复前必 FAIL、修复后过；买臂守恒测恒绿；parity 3 票 byte-parity 零漂移（pureraw 烘焙 td 不重算）；206 份真实快照 dry-run diff-scope ⊆ {td9_sell winrate, effectiveness_sell, action_hint} 且 td9_buy 全等。td9_sell.winrate 现行语义=下跌胜率，报告按此直读，勿再反读。主条目=routing REFACTOR_LOG 2026-09-14"
+  - signature: RD#readside:entries_overwrite
+    subcheck: readside_parse
+    reason_class: multicall_overwrite
+    match: "search_artifact_parser"
+    count: 0
+    last_seen: "2026-09-18"
+    status: landed
+    blocked: false
+    root_cause: engine
+    fix: "（688716 实锤 2026-09-18，S8b 首票）search_artifact_parser parse --json 每次调用整文件覆盖——exa 两批分次解析后 entries.json 只剩末批 16/32，会话内人肉发现重解析自愈。同 F4#multicall_overwrite 家族（写回层 300179 同型病理的解析层翻版）。已 landed：--json 同路径按 entry_id upsert 累积、failed 按本批文件替换、caliber_flags 按 (file,q,unit,min,max) 去重合并；stdout 报 本批 n/累积 n。先红后绿：test_parse_json_accumulates_across_calls 两批同路径须=2；变异（撤合并改覆盖）红→恢复绿；parser 14 用例+G81 11 用例+全量回归 exit0。主条目=REFACTOR_LOG 2026-09-18"
+  - signature: RD#readside:api_overlap_search
+    subcheck: readside_presearch
+    reason_class: api_first_violation
+    match: "websearch|web_research"
+    count: 0
+    last_seen: "2026-09-18"
+    status: pending
+    blocked: false
+    root_cause: process
+    fix: "（688716 实锤 2026-09-18）runner/client API 已验证可得的数据（本票年报财务/s36/peer 等 scene 面）仍走 websearch 搜一遍、读一遍、存一遍、写一遍=4×浪费，且挤占引擎读面预算（32 条中 ~20 条属此类或噪音）。写侧规避条款（宪法②，工单=本签名）：**每次构造 search query 前逐需求反查 data-source-registry catalog 与 runner scene 表，API 已验证可得的数据禁入 websearch query**；境外同业（runner 不可达口径）留 websearch 合法。失效条件=搜前反查机械化落地（checklist 强制子项执法或引擎 scene 表预检）之批次，本条同批复审删除/降级。引擎化候选：query 构造步注入 scene 表清单对照。"

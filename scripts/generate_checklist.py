@@ -396,7 +396,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
                          or "exa" in str(r.get("api_sources", "")).lower()
                          or "搜索" in str(r.get("segment", "")) or "搜索" in str(r.get("data_needs", ""))
                          for r in _ws_rows)
-    total_steps += mapping_rows + (3 if _has_websearch else 0)
+    total_steps += mapping_rows + (4 if _has_websearch else 0)
 
     # 构建清单
     lines = []
@@ -462,6 +462,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
     if _has_websearch:
         lines.append("")
         lines.append("**websearch 读侧验收子项（读侧协议 v3 · 写报告前逐项核对）**")
+        lines.append("- [ ] <!--c_webread_4--> **搜前 API 覆盖反查（trap: RD#readside:api_overlap_search）**：逐需求对照 data-source-registry catalog 与 runner scene 表——API 已验证可得的数据禁入 websearch query（搜/读/存/写 4×浪费）；境外同业等 runner 不可达口径才走 websearch")
         lines.append("- [ ] <!--c_webread_1--> B 级面覆盖：豆包读 Summary 全文 / Exa 读 Highlights 全文，禁 Title 扫读（索引仅用于弃读判定与追读 target，kept 必须引用 entry_id）")
         lines.append("- [ ] <!--c_webread_2--> 消费披露：报告引用 webfindings 条数 < accounting.kept 时，未引用条目逐条给弃用理由（G81）")
         lines.append("- [ ] <!--c_webread_3--> 口径互斥披露：accounting.caliber_flags 非空时，报告引用段带口径区间/分歧披露（G81-c）")
