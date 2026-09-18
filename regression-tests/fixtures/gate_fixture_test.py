@@ -119,6 +119,7 @@ EXPECTED = {
     # 雪球站内声量三臂门（2026-09-09 plan B4）：池票快照无 xq scene（voice/check 均缺席）
     # → status≠ok 全臂豁免恒 True；两极执法由 SECTION_PROBES 带构造快照的 G80 探针覆盖
     "G80": {"000988": True,  "002008": True,  "300394": True},
+    "G81": {"000988": True,  "002008": True,  "300394": True},   # 冻结池零 webfindings 引用→scene缺+无引用=豁免
 }
 
 # Level C：段内省略探针（段存在但内容缺席 → 必 FAIL；内容合规 → PASS）
@@ -301,6 +302,52 @@ SECTION_PROBES = [
                                  "data": {"reason": "xqSearch 剩余 30 < 40"},
                                  "processed": {},
                                  "latest_period": {"date": "2026-09-09", "period_type": "day", "days_old": 0}}},
+    ),
+    # —— G81 webfindings 消费三臂（读侧协议 v3-S6）两极 + 旧快照豁免极，第 4 元素 = 构造快照 ——
+    (
+        "G81",   # a+c+反向执法极：accounting.caliber_flags 非空 + 引用行无披露 token + 另一 kept 未消费 → 必 FAIL
+        "## 五、行业\n食品级CO2全球规模88亿美元 [src: web_research_findings 食品级CO2全球规模]。\n",
+        False,
+        {"web_research_findings": {"data": {"items": [
+            {"topic": "食品级CO2全球规模@FMI@2026", "value": "2026年$88亿", "provider": "exa",
+             "url": "https://fmi", "query": "q", "_url_only": False},
+            {"topic": "2026中报业绩", "value": "营收3.16亿(-60.75%归母)", "provider": "doubao",
+             "url": "https://e", "query": "q", "_url_only": False}],
+            "accounting": {"raw_n_total": 20, "kept": 2, "discarded_total": 18,
+                           "caliber_flags": [{"file": "exa_a", "q": 1, "unit": "B",
+                                              "min": 3.23, "max": 14.6, "n_values": 4}]},
+            "status": "ok", "substantive": 2}, "status": "ok"}},
+    ),
+    (
+        "G81",   # 全臂合规极：披露 token + 双条目消费（一引用一弃用）→ PASS
+        "## 五、行业\n食品级CO2全球规模 2026 年 $88亿，机构间口径分歧区间 $3.23Bn~$14.6Bn，本文采 FMI 口径 "
+        "[src: web_research_findings 食品级CO2全球规模]。\n\n"
+        "2026中报业绩条目以 runner 财务为准（web 版弃用）。\n",
+        True,
+        {"web_research_findings": {"data": {"items": [
+            {"topic": "食品级CO2全球规模@FMI@2026", "value": "2026年$88亿", "provider": "exa",
+             "url": "https://fmi", "query": "q", "_url_only": False},
+            {"topic": "2026中报业绩", "value": "营收3.16亿", "provider": "doubao",
+             "url": "https://e", "query": "q", "_url_only": False}],
+            "accounting": {"raw_n_total": 20, "kept": 2, "discarded_total": 18,
+                           "caliber_flags": [{"file": "exa_a", "q": 1, "unit": "B",
+                                              "min": 3.23, "max": 14.6, "n_values": 4}]},
+            "status": "ok", "substantive": 2}, "status": "ok"}},
+    ),
+    (
+        "G81",   # 旧快照豁免极：无 accounting → 反向臂+c 臂豁免（b 臂仍执法且数字合规）→ PASS
+        "营收3.16亿元 [src: web_research_findings 2026中报业绩]\n",
+        True,
+        {"web_research_findings": {"data": {"items": [
+            {"topic": "2026中报业绩", "value": "营收3.16亿(+1.67%)", "provider": "doubao",
+             "url": "https://e", "query": "q", "_url_only": False}],
+            "status": "ok", "substantive": 1}, "status": "ok"}},
+    ),
+    (
+        "G81",   # a 臂执法极：引用但 scene 缺失 → 必 FAIL（引用了不存在的数据）
+        "行业规模见 [src: snapshot.web_research_findings.data.items]\n",
+        False,
+        {"s11_peer": {"data": {"items": []}, "status": "ok"}},
     ),
 ]
 

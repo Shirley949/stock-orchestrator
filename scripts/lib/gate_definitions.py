@@ -110,6 +110,7 @@ GATE_DESCS = {
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
     "G80": "雪球站内声量三臂（a 站内词+xq src 同段共现 / b 反对逐条处理段带证据 token / c 站内引文≥12字须为语料子串；status≠ok 全臂豁免，配额熔断/拉取失败禁编造）",
+    "G81": "webfindings 消费三臂（a 引用完整性+反向消费：topic 锚命中/未消费 kept 列清单；b 数字一致性：同行数字万/亿/B 换算后 ⊆ 条目 value∪对撞区间；c 口径披露：caliber_flags 非空须披露 token；accounting 缺=反向+c 豁免）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
 }
 
@@ -213,7 +214,7 @@ GATE_HINTS = {
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G80"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G80", "G81"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -4685,6 +4686,132 @@ def _check_g80_t1b(report: str, data: dict):
     return True
 
 
+# ============================================================
+# G81 — webfindings 消费三臂（读侧协议 v3-S6；数据源=runner --accounting 累积账本）
+# ============================================================
+
+_G81_CITE = re.compile(r"\[src:\s*([^\]]*web_research_findings[^\]]*)\]")
+_G81_PATH_JUNK = re.compile(r"^(?:snapshot\.)?web_research_findings(?:\.data)?(?:\.items)?\.?")
+_G81_DISCLOSURE = re.compile(r"口径|分歧|区间|机构间|各机构|不采信")
+_G81_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(亿美元|亿|万美元|万|Bn|B\b|billion|Million|M\b|百万|%|％|倍)")
+_G81_YI = {"亿": 1.0, "亿美元": 1.0, "万": 1e-4, "万美元": 1e-4, "B": 10.0, "Bn": 10.0,
+           "billion": 10.0, "M": 0.01, "Million": 0.01, "百万": 0.01}
+
+
+def _g81_norm(s) -> str:
+    return re.sub(r"[\s　·、，,。:：;；()（）\[\]「」『』\"'“”\-—_/\\*@#&$％%]+", "", str(s or "")).lower()
+
+
+def _g81_num_tokens(text):
+    """数字 token 集（D2 换算表: 万=1e4 亿=1e8 M=1e6 B=1e9 → 亿口径 canonical；%/倍 按原值带类）"""
+    out = set()
+    for m in _G81_NUM.finditer(str(text or "")):
+        v = float(m.group(1).replace(",", ""))
+        u = m.group(2)
+        if u in ("%"):
+            out.add(f"{v}%")
+        elif u == "倍":
+            out.add(f"{v}x")
+        else:
+            yi = _G81_YI.get(u)
+            out.add(f"yi:{round(v * yi, 4)}" if yi else f"{v}")
+    return out
+
+
+def _g81_flag_tokens(acc):
+    """对撞区间 min/max → 换算 token（披露句引用区间数字时 b 臂合法）"""
+    out = set()
+    for f in (acc or {}).get("caliber_flags") or []:
+        yi = _G81_YI.get(str(f.get("unit", "")))
+        for k in ("min", "max"):
+            try:
+                v = float(f.get(k))
+            except (TypeError, ValueError):
+                continue
+            out.add(f"yi:{round(v * yi, 4)}" if yi else f"{v:g}")
+    return out
+
+
+def check_g81(report: str, data: dict) -> bool:
+    """G81: webfindings 消费三臂。a 引用完整性（topic 锚须命中 items；scene 缺而引用=FAIL）
+    + 反向消费臂（accounting.kept topic 全程未现于报告 → FAIL 列清单）；b 数字一致性
+    （引用同行数字 D2 换算后 ⊆ 命中条目 value∪topic∪对撞区间）；c 口径披露
+    （caliber_flags 非空 → 引用行须含披露 token）。豁免：scene 缺且无引用=PASS；
+    accounting 缺=反向臂+c 臂豁免（G80 status≠ok 同款旧快照模式）。"""
+    scene = data.get("web_research_findings") or {}
+    items = ((scene.get("data") or {}).get("items")) or []
+    acc = (scene.get("data") or {}).get("accounting")
+    lines = report.splitlines()
+    cites = []
+    for li, ln in enumerate(lines, 1):
+        for m in _G81_CITE.finditer(ln):
+            cites.append((li, m.group(1), ln))
+    if cites and not items:
+        return GateResult(passed=False, reasons=[
+            f"报告出现 {len(cites)} 处 [src: …web_research_findings…] 引用（首处 L{cites[0][0]}:『{cites[0][2].strip()[:60]}』），"
+            "但 snapshot 无 web_research_findings scene——引用了不存在的数据。",
+            "💡 修法：先走 websearch 读侧三步流（落盘票号目录→parser parse→account→runner --accounting 写回）；"
+            "未执行 websearch 时禁标此 src，写「无补充覆盖」。"])
+    norm_topics = [(_g81_norm(it.get("topic")), it) for it in items]
+    a_bad, b_bad, matched_any = [], [], False
+    consumed_ids = set()
+    flag_toks = _g81_flag_tokens(acc) if isinstance(acc, dict) else set()
+    for li, anchor, ln in cites:
+        a2 = _G81_PATH_JUNK.sub("", anchor.strip()).strip()
+        if not a2:
+            continue                                    # 裸路径引用（[src: snapshot.web_research_findings]）无锚可查
+        na = _g81_norm(a2)
+        hits = [it for nt, it in norm_topics if na and (na in nt or nt in na)]
+        if not hits:
+            a_bad.append((li, a2))
+            continue
+        matched_any = True
+        consumed_ids.update(id(it) for it in hits)
+        pool = set(flag_toks)
+        for it in hits:
+            pool |= _g81_num_tokens(str(it.get("value", ""))) | _g81_num_tokens(str(it.get("topic", "")))
+        bad = _g81_num_tokens(ln) - pool
+        if bad:
+            b_bad.append((li, sorted(bad)[:4], hits[0].get("topic", "")))
+    reasons = []
+    if a_bad:
+        reasons.append(
+            f"a|引用完整性：{len(a_bad)} 处 topic 锚未命中 items（{'；'.join(f'L{l}:『{t}』' for l, t in a_bad[:3])}）；"
+            f"实际 items topics={[str(it.get('topic', ''))[:24] for it in items[:6]]}")
+        reasons.append("💡 修法：引用锚须为 items 真实 topic 的子串（如 [src: web_research_findings <topic锚>]），"
+                       "或改用裸路径 [src: snapshot.web_research_findings.data.items]。")
+    if b_bad:
+        reasons.append(
+            "b|数字一致性：引用同行数字未见于条目 value（"
+            + "；".join(f"L{l}:『{ln.strip()[:46]}』多出 {toks} vs 条目『{tp}』" for l, toks, tp in b_bad[:3])
+            + "）——疑似捏造/张冠李戴。")
+        reasons.append("💡 修法：webfindings 数字照抄条目 value 原值（万/亿/B 换算等价可）， derived 数字须另带 "
+                       "[src: snapshot.*] 或计算说明；区间披露请连同「口径分歧」字样。")
+    if isinstance(acc, dict) and acc.get("caliber_flags") and cites and matched_any:
+        if not any(_G81_DISCLOSURE.search(ln) for _, _, ln in cites):
+            fl = acc["caliber_flags"][0]
+            reasons.append(
+                f"c|口径披露：accounting.caliber_flags={len(acc['caliber_flags'])} 组（如 {fl.get('file')} q{fl.get('q')} "
+                f"unit={fl.get('unit')} 极差 {fl.get('min')}~{fl.get('max')}）但引用行无口径披露 token（口径/分歧/区间/机构间）。")
+            reasons.append("💡 修法：引用句内写「机构间口径分歧 X~Y，本文采 @口径」，或对每 flag 逐条给采信裁决。")
+    if isinstance(acc, dict):
+        repn = _g81_norm(report)
+        unc = [str(it.get("topic", "")) for it in items
+               if not it.get("_url_only") and len(_g81_norm(it.get("topic"))) >= 4
+               and id(it) not in consumed_ids
+               and _g81_norm(it.get("topic")) not in repn]
+        if unc:
+            reasons.append(
+                f"反向|消费完整性：accounting.kept={sum(1 for it in items if not it.get('_url_only'))} 条中 "
+                f"{len(unc)} 条全程未现于报告（首5: {unc[:5]}）——搜到、读到了、写回了、报告没消费（P9）。",
+                )
+            reasons.append("💡 修法：逐条补引用（[src: web_research_findings <topic>]）或在报告写弃用理由"
+                           "（「X 条目：口径以 runner 为准，web 版弃用」）。")
+    if reasons:
+        return GateResult(passed=False, reasons=reasons)
+    return True
+
+
 GATE_CHECKERS = {
     "G1": check_g1, "G6": check_g6, "G7": check_g7, "G8": check_g8,
     "G9": check_g9, "G11": check_g11, "G12": check_g12,
@@ -4716,7 +4843,7 @@ GATE_CHECKERS = {
     "G65": check_g65, "G66": check_g66, "G67": check_g67,
     "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
     "G72": check_g72,
-    "G80": check_g80,
+    "G80": check_g80, "G81": check_g81,
 }
 
 # ============================================================
@@ -4995,6 +5122,13 @@ GATE_REGISTRY = {
                         "站内引文≥12字归一化后为语料子串；status≠ok 全臂豁免",
             "fail_hint": "照 FAIL reason 修：a 臂补站内之声段+xq src；b 臂补反对处理段（标记+证据同段）；"
                          "c 臂引文逐字照抄语料、改写移出引号"},
+    "G81": {"checker": check_g81, "weight": 3, "owner": ["m5", "m10"],
+            "data_dim": "web_research_findings",
+            "requires": "webfindings 消费三臂：引用 topic 锚须命中 items（scene 缺而引用=FAIL）；"
+                        "引用同行数字换算后 ⊆ 条目 value∪对撞区间；caliber_flags 非空须披露 token；"
+                        "accounting.kept 未消费逐条列清单；accounting 缺=反向+c 豁免",
+            "fail_hint": "照 FAIL reason 修：a 臂改锚为 items 真实 topic 子串或改裸路径；b 臂数字照抄条目 value；"
+                         "c 臂引用句加「机构间口径分歧 X~Y，本文采 @口径」；反向臂逐条补引用或写弃用理由"},
 }
 
 # GATE_WEIGHTS 从注册表派生（单一来源；外部 import 面 GATE_WEIGHTS 名不变）

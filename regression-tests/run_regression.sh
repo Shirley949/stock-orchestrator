@@ -145,6 +145,8 @@ echo "[① 契约层] test_web_research_merge_writeback.py（F4#multicall_overwr
 python3 "$HERE/test_web_research_merge_writeback.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_search_artifact_parser.py（读侧协议：解析矩阵/002273 回放 92=74+18/对账 M+K==N+waive/对撞预筛/追读登记）"
 python3 "$HERE/test_search_artifact_parser.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_g81_webfindings.py（G81 三臂：引用完整性/数字一致性/口径披露+反向消费，豁免=G80 同款）"
+python3 "$HERE/test_g81_webfindings.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] parity/test_parity_gate.py（P5 纯处理段：3票 frozen 回放 确定性+==golden byte-parity+封socket纯度证明）"
 python3 "$HERE/parity/test_parity_gate.py" 2>&1 | grep -E '^(\[parity\]|OK|FAILED|Ran|ERROR)' | tail -5
 
