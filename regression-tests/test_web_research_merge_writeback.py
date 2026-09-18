@@ -228,5 +228,51 @@ class TestWritebackE2E(unittest.TestCase):
         self.assertEqual(warns, [])                         # URL-only 状态告警随状态消失（自清）
 
 
+class TestAccountingCumulation(unittest.TestCase):
+    """T12（S4·读侧协议）：--accounting 累积性——300179 防火。三批的账必须跨批累积，
+    末批 accounting 不得覆盖前批（同型病理：批内快照直写=搜到没存的账本版）。"""
+
+    def test_12_three_batches_ledger_cumulative(self):
+        tmp = tempfile.mkdtemp(prefix="wr_acc_t12_")
+        snap = str(Path(tmp) / "t12.json")
+        json.dump({"stock_code": "300179", "stock_name": "四方达", "ts": "t",
+                   "_warnings": [], "_data_summary": {"fetch_log": [], "total_fetches": 0}},
+                  open(snap, "w", encoding="utf-8"), ensure_ascii=False)
+        batches = [
+            (10, {"raw_n": 40, "kept": 10, "discarded": 30, "retention": 0.25,
+                  "discarded_detail": [{"id": "b1#q1e9", "rule": "dup_url", "reason": "首见 b1"}],
+                  "caliber_flags": [{"file": "exa_b1", "unit": "B", "min": 3.23, "max": 14.6}],
+                  "waivers": []}),
+            (4, {"raw_n": 12, "kept": 4, "discarded": 8, "retention": 0.33,
+                 "discarded_detail": [{"id": "b2#q1e2", "rule": "content", "reason": "弱相关"}],
+                 "caliber_flags": [], "waivers": [{"file": "f.json", "reason": "限流"}]}),
+            (4, {"raw_n": 8, "kept": 4, "discarded": 4, "retention": 0.5,
+                 "discarded_detail": [{"id": "b3#q1e1", "rule": "dup_url", "reason": "首见 b1"}],
+                 "caliber_flags": [], "waivers": []}),
+        ]
+        for bi, (n_items, acc) in enumerate(batches, 1):
+            items = str(Path(tmp) / f"b{bi}.json")
+            json.dump([{"topic": f"t{bi}-{k}", "value": f"v{bi}-{k}", "provider": "exa"} for k in range(n_items)],
+                      open(items, "w", encoding="utf-8"), ensure_ascii=False)
+            accf = str(Path(tmp) / f"acc{bi}.json")
+            json.dump(acc, open(accf, "w", encoding="utf-8"), ensure_ascii=False)
+            r = subprocess.run(
+                [sys.executable, str(RUNNER), "web_research", "300179", "--snapshot", snap,
+                 "--items", f"@{items}", "--accounting", f"@{accf}"],
+                capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+        d = json.load(open(snap, encoding="utf-8"))["web_research_findings"]["data"]
+        self.assertEqual(len(d["items"]), 18)
+        acc = d.get("accounting") or {}
+        self.assertEqual(acc.get("raw_n_total"), 60, f"三批 raw_n 须累积 40+12+8, 实得 {acc.get('raw_n_total')}")
+        self.assertEqual(len(acc.get("per_batch") or []), 3, "per_batch 须三批留痕")
+        b1_detail = [x for x in acc.get("discarded_detail", []) if x.get("id") == "b1#q1e9"]
+        self.assertTrue(b1_detail, "批1 弃读明细须在批3 写回后存活(300179 防火)")
+        self.assertTrue(acc.get("caliber_flags"), "批1 对撞 flag 须跨批存活")
+        self.assertEqual(len(acc.get("waivers") or []), 1)
+        fl = json.load(open(snap, encoding="utf-8")).get("_data_summary", {}).get("fetch_log", [])
+        self.assertTrue(fl and "raw_n" in fl[-1].get("params", {}), "fetch_log.params 须增 raw_n 摘要")
+
+
 if __name__ == "__main__":
     unittest.main()

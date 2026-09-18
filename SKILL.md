@@ -181,19 +181,29 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
 
-### ⚠️ websearch 素材落 snapshot
+### ⚠️ websearch 素材落 snapshot（读侧协议 v3）
 
-用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）：
+用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）。**读侧三步（全链路必走，缺一即断链）**：
 
 ```bash
+# ① 工件落盘（票号目录强制，禁 /tmp 根裸命名）: /tmp/<code>/<engine>_<topic>_<batch>.<ext>
+# ② 解析+清点（唯一合法读取面；禁手写解析/禁 text[:N] 截断打印当结果——Exa 流 json.load 必炸=「文本格式」错觉）
+python3 ~/.hermes/skills/stock-analysis/financial-data-routing/search_artifact_parser.py parse \
+  --files /tmp/<code>/<工件...> --session-stock <code> --json /tmp/<code>/entries.json
+# ③ 策展全处置对账（M+K==N 硬断言，缺处置=阻断；kept 引用 entry_id+value 含数字；弃读须规则+理由）
+python3 ~/.hermes/skills/stock-analysis/financial-data-routing/search_artifact_parser.py account \
+  --entries /tmp/<code>/entries.json --curation /tmp/<code>/curation_<batch>.json
+# ④ 写回（account 输出随 --accounting 落 snapshot.accounting，禁省略——对账与口径 flag 的执法数据源）
 python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_research <code> \
   --snapshot /tmp/runner_snapshot_<code>_mode<X>.json \
-  --items '<json | @findings.json>'     # [{topic,value,provider,url,query}, ...]（白名单 5 键；content/title/source 系别名自动映射，白名单外非空键丢弃并 WARN）
-# 多批分次拉取直接重跑同命令即可：默认按 topic 合并（同 topic 整行替换=修正后到）；
-# 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。细节 → references/phase-protocols.md §P2
+  --items '<json | @findings.json>' --accounting '@<accounting.json>'
+# 多批分次拉取直接重跑同命令：默认按 topic 合并（同 topic 整行替换=修正后到）；accounting 跨批累积；
+# 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。
 ```
 
-- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
+- 引擎读法（B 级面/已知坑/降级）**选定引擎后先读** `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`；索引（Title/URL）只准用于弃读判定与追读 target，kept 内容必须溯源 B 级面文本。
+- 口径对撞：解析器输出 `CALIBER_FLAG`（同 query 同单位极差 ≥3×）→ 策展期逐条裁决，真分歧写入条目并在报告披露区间（**引用段必带口径限定词**）；对撞 flag 清单在 `accounting.caliber_flags`。
+- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法；消费执法 → G81）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
 
 ---
 
