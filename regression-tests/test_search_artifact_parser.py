@@ -10,6 +10,7 @@
 """
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,9 @@ sys.path.insert(0, str(ROUTING))
 import search_artifact_parser as SAP  # noqa: E402
 
 FIX = HERE / "fixtures" / "search_artifacts"
+
+def cli_path():
+    return str(ROUTING / "search_artifact_parser.py")
 F2273 = sorted((FIX / "corpus/misc").glob("exa_*.json")) + \
     sorted((FIX / "corpus/misc").glob("doubao_[1-7]_*.json"))
 F2549 = sorted((FIX / "corpus/exa_002549").glob("batch*.json")) + \
@@ -220,6 +224,79 @@ class TestFollowupAndManifest(unittest.TestCase):
             self.assertIn("████", r.stdout)
             self.assertIn(eid0, r.stdout)
             self.assertIn(e0[eid0]["blevel_text"].strip()[:20], r.stdout, "须输出 blevel 全文（非摘要）")
+
+    def test_blevel_dual_field_content(self):
+        """v4-7(P-J): 全读面=blevel_text+content 双字段——豆包 content 富集条目须出现在输出中"""
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            out = f"{td}/entries.json"
+            cli = str(ROUTING / "search_artifact_parser.py")
+            subprocess.run([sys.executable, cli, "parse", "--files", str(FIX / "synthetic/f07_doubao_long.json"),
+                            "--json", out], capture_output=True, text=True)
+            r = subprocess.run([sys.executable, cli, "blevel", "--entries", out],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("──[content]──", r.stdout, "content 非空条目须输出 content 段")
+            self.assertIn("字" * 50, r.stdout, "content 全文须在场")
+
+
+    def test_v42_coverage_check_002048_repro(self):
+        """v4-2(P-G): kept→items 覆盖断言——002048 冻结复现（kept 26 vs items 20 → 7 缺口必报）"""
+        FIXT = FIX / "corpus/ticket_002048"
+        files = sorted(FIXT.glob("exa_*.json"))
+        r = subprocess.run([sys.executable, cli_path(), "parse", "--files", *[str(f) for f in files],
+                            "--json", f"{tempfile.mkdtemp()}/e.json"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        cur = json.load(open(str(FIXT / "curation_b12.json")))
+        items = json.load(open(str(FIXT / "findings.json")))
+        reg = {}
+        for f in files:
+            for e in SAP.parse_file(str(f)).entries:
+                reg[e.id] = e
+        unc, rc = SAP.coverage_check(reg, cur, items)
+        self.assertEqual(rc, 1)
+        self.assertEqual(len(unc), 7, f"冻结真值=7 缺口, 实得 {len(unc)}: {[u['id'] for u in unc][:3]}")
+        for c in cur["entries"]:
+            if c["disposition"] == "kept" and any(u["id"] == c["id"] for u in unc):
+                c["merged_into"] = "M"
+        unc2, rc2 = SAP.coverage_check(reg, cur, items)
+        self.assertEqual((rc2, len(unc2)), (0, 0))
+
+    def test_v42_cli_items_blocks(self):
+        """CLI e2e: account --items 对 002048 材料必 block（exit 1）"""
+        FIXT = FIX / "corpus/ticket_002048"
+        td = tempfile.mkdtemp()
+        files = sorted(FIXT.glob("exa_*.json"))
+        subprocess.run([sys.executable, cli_path(), "parse", "--files", *[str(f) for f in files],
+                        "--json", f"{td}/e.json"], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, cli_path(), "account", "--entries", f"{td}/e.json",
+                            "--curation", str(FIXT / "curation_b12.json"),
+                            "--items", str(FIXT / "findings.json")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1, r.stdout[-200:])
+        self.assertIn("kept→items", r.stdout)
+
+
+    def test_v43_flags_auto_merged(self):
+        """v4-3(P-G 复发防): entries.caliber_flags 自动并入 accounting——002048 重放 7→7"""
+        FIXT = FIX / "corpus/ticket_002048"
+        td = tempfile.mkdtemp()
+        files = sorted(FIXT.glob("exa_*.json"))
+        subprocess.run([sys.executable, cli_path(), "parse", "--files", *[str(f) for f in files],
+                        "--json", f"{td}/e.json"], capture_output=True, text=True)
+        cur = json.load(open(str(FIXT / "curation_b12.json")))
+        items = json.load(open(str(FIXT / "findings.json")))
+        for c in cur["entries"]:
+            if c["disposition"] == "kept":
+                c["merged_into"] = "M"   # 全申报 → 覆盖 PASS（本测试只验 flags）
+        cp = f"{td}/c.json"
+        json.dump(cur, open(cp, "w", encoding="utf-8"), ensure_ascii=False)
+        r = subprocess.run([sys.executable, cli_path(), "account", "--entries", f"{td}/e.json",
+                            "--curation", cp, "--items", str(FIXT / "findings.json")],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout[-200:])
+        acc = json.loads(r.stdout[r.stdout.index("{"):])
+        self.assertGreaterEqual(len(acc.get("caliber_flags") or []), 7,
+                                f"flags 须自动并入≥7, 实得 {len(acc.get('caliber_flags') or [])}")
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

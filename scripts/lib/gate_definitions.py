@@ -4693,9 +4693,9 @@ def _check_g80_t1b(report: str, data: dict):
 _G81_CITE = re.compile(r"\[src:\s*([^\]]*web_research_findings[^\]]*)\]")
 _G81_PATH_JUNK = re.compile(r"^(?:snapshot\.)?web_research_findings(?:\.data)?(?:\.items)?\.?")
 _G81_DISCLOSURE = re.compile(r"口径|分歧|区间|机构间|各机构|不采信")
-_G81_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(亿美元|亿|万美元|万|Bn|B\b|billion|Million|M\b|百万|%|％|倍)")
-_G81_YI = {"亿": 1.0, "亿美元": 1.0, "万": 1e-4, "万美元": 1e-4, "B": 10.0, "Bn": 10.0,
-           "billion": 10.0, "M": 0.01, "Million": 0.01, "百万": 0.01}
+_G81_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(亿美元|亿|万美元|万|Bn|B\b|billion|Million|M\b|m\b|百万|%|％|倍)", re.IGNORECASE)  # v4-1: 大小写不敏感（F15: Billion 长形式漏分词）
+_G81_YI = {"亿": 1.0, "亿美元": 1.0, "万": 1e-4, "万美元": 1e-4, "b": 10.0, "bn": 10.0,
+           "billion": 10.0, "m": 0.01, "million": 0.01, "百万": 0.01}  # v4-1: 小写化键（F20: billion 键缺失致长形式落默认）
 
 
 def _g81_norm(s) -> str:
@@ -4707,7 +4707,7 @@ def _g81_num_tokens(text):
     out = set()
     for m in _G81_NUM.finditer(str(text or "")):
         v = float(m.group(1).replace(",", ""))
-        u = m.group(2)
+        u = m.group(2).lower()
         if u in ("%"):
             out.add(f"{v}%")
         elif u == "倍":
@@ -4722,7 +4722,7 @@ def _g81_flag_tokens(acc):
     """对撞区间 min/max → 换算 token（披露句引用区间数字时 b 臂合法）"""
     out = set()
     for f in (acc or {}).get("caliber_flags") or []:
-        yi = _G81_YI.get(str(f.get("unit", "")))
+        yi = _G81_YI.get(str(f.get("unit", "")).lower())  # v4-1: 单位键小写化同步
         for k in ("min", "max"):
             try:
                 v = float(f.get(k))

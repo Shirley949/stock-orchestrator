@@ -867,3 +867,8 @@ SKILL.md「websearch 素材落 snapshot」节改读侧三步流（落盘票号�
 **验证面**：test_g81_webfindings.py 11 用例（反例 5 必 FAIL 先证+正例 6）挂 run_regression.sh；gate_fixture_test 增 4 极探针（a+c+反向执法极/全臂合规极/旧快照豁免极/a 臂 scene 缺失极）+恒 PASS 表行→65 门漏报=0 误伤=0；变异（a 臂禁用）红→恢复绿；全量回归真实 EXIT=0。坑记录：checker 定义须在 GATE_CHECKERS 之前（dict 字面量即时求值）；管道后 $? 是 tail 的（真实退出码须重定向后读）。
 ## 2026-09-18 读侧协议 S8b：搜前 API 反查（RD#readside:api_overlap_search pending）+ 累积测试 + trap_ledger 两条
 checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测）；SKILL.md websearch 节增 ⓪ 反查步与 parse 累积说明；trap_ledger 增 RD#readside:entries_overwrite（landed，引擎修同批）与 RD#readside:api_overlap_search（pending，写侧规避条款=搜前反查，失效条件=反查机械化落地批同批复审——宪法②）。test_search_artifact_parser 增累积用例（14 用例）。
+## 2026-09-19 读侧协议 v4.1 [A] 组②：G81-b 单位正则修复 + entry_id 白名单 + 契约测试扩容
+- G81-b（F15/F20）：_G81_NUM IGNORECASE（Billion 长形式漏分词=生产假 FAIL 实测复现）+ _G81_YI 小写键（billion 缺键）+ _g81_flag_tokens 同步小写；无 %附属容差（T11 对抗样本防假阴）。
+- data_snapshot WEB_ITEM_KEYS 第七键 entry_id（D1）+ row 字段；envelope 测试 2 用例。
+- 测试扩容：test_g81 3 例（等价 PASS/编造 FAIL/无附属容差）、parser 覆盖断言 2 例（002048 冻结复现 uncovered=7+CLI block）、merge 套件增 TestAccountingCumulation（S4 批）、test_web_research_autodiscovery.py 3 场景（组③随 runner push 挂载）。
+- 教学面：playbook 规则5 三用途版+双字段、exa/doubao 协议 B级面、checklist c_webread_1 双字段措辞、记忆 readside-protocol-v3。

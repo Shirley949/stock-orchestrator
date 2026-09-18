@@ -101,5 +101,34 @@ class TestG81(unittest.TestCase):
         self.assertTrue(GD.check_g81(rep, {"web_research_findings": _scene(ITEMS, ACC)}))
 
 
+    # —— v4-1 单位正则修复（F15/F20：大小写+刻度等价；无 %附属容差 S7）——
+
+    def test_v41_billion_case_equivalence(self):
+        """v4-1①: value 写 $68.1 Billion、报告写 $68.1B（等价缩写）→ 修前 FAIL（F15 复现红）修后 PASS"""
+        rep = "$68.1B [src: web_research_findings 市场规模]"
+        snap = {"web_research_findings": _scene(
+            [{"topic": "市场规模", "value": "市场 2026 年 $68.1 Billion（GII）", "provider": "exa",
+              "url": "u", "query": "q", "_url_only": False}],
+            accounting={"raw_n_total": 10, "kept": 1, "discarded": 9, "caliber_flags": []})}
+        self.assertTrue(GD.check_g81(rep, snap))
+
+    def test_v41_fabrication_still_fails(self):
+        """v4-1②: 编造 $99.9B 恒 FAIL（执法力零回退）"""
+        rep = "$99.9B [src: web_research_findings 市场规模]"
+        snap = {"web_research_findings": _scene(
+            [{"topic": "市场规模", "value": "市场 2026 年 $68.1 Billion（GII）", "provider": "exa",
+              "url": "u", "query": "q", "_url_only": False}],
+            accounting={"raw_n_total": 10, "kept": 1, "discarded": 9, "caliber_flags": []})}
+        self.assertFalse(bool(GD.check_g81(rep, snap)))
+
+    def test_v41_no_percent_attachment_tolerance(self):
+        """v4-1③(S7): 4.63%(增长率) vs value 4.63(份额) 恒 FAIL——附属容差不引入（防假阴）"""
+        rep = "增长 4.63% [src: web_research_findings 2026中报业绩]"
+        snap = {"web_research_findings": _scene(
+            [{"topic": "2026中报业绩", "value": "份额 4.63", "provider": "doubao",
+              "url": "u", "query": "q", "_url_only": False}])}
+        self.assertFalse(bool(GD.check_g81(rep, snap)))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

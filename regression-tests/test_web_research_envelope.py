@@ -143,5 +143,25 @@ class WebResearchUrlOnlyEnvelope(unittest.TestCase):
         self.assertFalse(res["data"]["items"][0]["_url_only"])
 
 
+class TestEntryIdPassthrough(unittest.TestCase):
+    """v4-2/D1（F21）：entry_id 白名单第七键——构造时携带溯源键，kept→items 覆盖断言的主匹配键。
+    301069 实证：40/40 items url 全空→URL 单腿溯源断裂；entry_id 必须在构造时穿过 adapter。"""
+
+    def test_entry_id_survives_adapter(self):
+        ds = _bare_ds()
+        scene = ds.fetch_web_research([
+            {"topic": "市场规模", "value": "68.1B", "provider": "exa",
+             "url": "https://e", "query": "q", "entry_id": "exa_a#q1e1"}], "")
+        row = scene["data"]["items"][0]
+        self.assertEqual(row.get("entry_id"), "exa_a#q1e1", "entry_id 须入 row（白名单第七键）")
+        dropped = ds._fetch_log[-1]["params"].get("dropped_keys") or []
+        self.assertNotIn("entry_id", dropped, "entry_id 不得进 dropped_keys")
+
+    def test_entry_id_absent_defaults_empty(self):
+        ds = _bare_ds()
+        scene = ds.fetch_web_research([{"topic": "t", "value": "v 1", "provider": "exa"}], "")
+        self.assertEqual(scene["data"]["items"][0].get("entry_id", "x"), "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

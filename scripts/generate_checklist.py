@@ -463,7 +463,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         lines.append("")
         lines.append("**websearch 读侧验收子项（读侧协议 v3 · 写报告前逐项核对）**")
         lines.append("- [ ] <!--c_webread_4--> **搜前 API 覆盖反查（trap: RD#readside:api_overlap_search）**：逐需求对照 data-source-registry catalog 与 runner scene 表——API 已验证可得的数据禁入 websearch query（搜/读/存/写 4×浪费）；境外同业等 runner 不可达口径才走 websearch")
-        lines.append("- [ ] <!--c_webread_1--> B 级面覆盖：跑 `search_artifact_parser.py blevel --entries entries.json` 一键全量阅读（豆包 Summary/Exa Highlights 全文），**禁 Title 扫读、禁关键词行提取替代全文**（002048 实证漏 TOP10 排名表；索引仅用于弃读判定与追读 target，kept 必须引用 entry_id）")
+        lines.append("- [ ] <!--c_webread_1--> B 级面覆盖：跑 `blevel --entries entries.json` 一键**双字段**全量阅读（blevel_text+content，301069 实证中报原文在 content），禁 Title 扫读、禁关键词行提取替代（002048 漏 TOP10 表；kept 必须引用 entry_id，items 载荷携带 entry_id）")
         lines.append("- [ ] <!--c_webread_2--> 消费披露：报告引用 webfindings 条数 < accounting.kept 时，未引用条目逐条给弃用理由（G81）")
         lines.append("- [ ] <!--c_webread_3--> 口径互斥披露：accounting.caliber_flags 非空时，报告引用段带口径区间/分歧披露（G81-c）")
 
