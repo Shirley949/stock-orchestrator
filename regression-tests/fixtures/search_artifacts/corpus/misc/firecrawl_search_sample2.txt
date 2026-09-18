@@ -1,0 +1,14 @@
+Environmental data and facts in the semiconductor manufacturing industry
+  URL: https://www.sciencedirect.com/science/article/pii/S2666445323000041
+  Overall, the total water withdrawal in 2021 was 7.89 2, 1.15 kWh/cm2, and 0.84 kg CO2 equivalent/cm2, respectively, based on announced data. Under severe water ...
+  Category: research
+
+(PDF) The “Semiconductor Crisis” as a Result of the COVID-19 Pandemic ...
+  URL: https://www.researchgate.net/publication/364448523_The_Semiconductor_Crisis_as_a_Result_of_the_COVID-19_Pandemic_and_Impacts_on_the_Automotive_Industry_and_Its_Supply_Chains
+  The so-called 'semiconductor crises' show exemplarily the overlapping of short-term supply chain disruptions with long-term structural features ...
+  Category: research
+
+[PDF] State of the semiconductor industry - PwC
+  URL: https://www.pwc.com/gx/en/industries/technology/state-of-the-semiconductor-industry-report.pdf
+  This led to a global chip shortage from the second half of. 2020 through to the end of 2022. Meanwhile, over supply and less demand resulted in excess inventory ...
+  Category: pdf

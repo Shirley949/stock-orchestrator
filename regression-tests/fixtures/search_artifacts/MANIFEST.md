@@ -1,4 +1,4 @@
-# 冻结语料 manifest（v3-S0 入仓 2026-09-18）
+# 冻结语料 manifest（v3-S0 入仓 2026-09-18）；S1b 增补 Firecrawl 实测样本 2026-09-18
 # 来源: /tmp/readside_verify_20260918 (v2) + 真实生产工件; 用途: search_artifact_parser 契约测试唯一依赖, 测试零依赖 /tmp
 31409ea43bbeb74fce1adbddafd2e6a0  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/corpus/doubao_002549/q1_h1.json
 d443c37f8e1d6385b6430936c59553a8  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/corpus/doubao_002549/q2_capacity.json
@@ -42,3 +42,7 @@ d6cc7f162d25da2d36a46e6b25a3edb2  /home/ubuntu/.hermes/skills/stock-analysis/sto
 e7133ec541e05179217eaf86bfd4f86c  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/synthetic/f12_truncated.jsonl
 cf68549b4d427117b3de2f2021df0769  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/synthetic/f13_doubao_empty_title.json
 efe68d8474fb25c3845a87c51306ceeb  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/synthetic/f14_doubao_content_embeds_title.json
+d4d689a84b76a5f8ccb498265ac7d9b6  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/synthetic/f15_tavily_both_empty.json  (S1 增补: tavily 双空告警分支)
+46368cacb195df74932f8ce85cc60852  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/corpus/misc/firecrawl_search_sample1.txt
+bf6e775ce573d569ecc96edef0cfddce  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/corpus/misc/firecrawl_search_sample2.txt
+61d7c6779c430bec759c4bdfe66d5936  /home/ubuntu/.hermes/skills/stock-analysis/stock-orchestrator/regression-tests/fixtures/search_artifacts/corpus/misc/firecrawl_scrape_sample.md

@@ -849,3 +849,5 @@ known-limits：①reasons top5 截断（尾注保总量可见）②`N/13` 整数
 - **失真修正（正确性，已落地 quality `b8b6966`）**：quality SKILL 溯源块「数值比对 5%/模块 2/2.5 检测」两条引擎没有的声明删除（G21 实际=路径逐层存在性+模块五段 ≥2 锚）+ 示例坏路径更换；分册重建逐字保真（搬家时微改写被抓→重建）。
 - **报告驻留观测（东材 1M-v1，355 轮，E2E 22.8156M EQ）**：报告 write 块 53 个/54.2K chars，char·turn 8.1M ≈ **0.9M EQ ≈ 3.9% E2E**；对照：thinking 31.3M char·turn ≈ 15.2%、固定层 3 SKILL 11.7M ≈ 5.7%（orchestrator 首读 19.7K chars@r3=最贵单件）、模块面 19.7M ≈ 9.6%（m2 单件 5.4%）。**校准结论：写作侧静态收缩（V-B+V-M 全部候选）合计 ≈2-3% E2E，非主杠杆；主杠杆仍在 V-D 轮次收割（thinking 驻留 ∝ 总轮数 + manage/fetch 轮压缩），判据票预期不得把 2% 杠杆当 20% 记。** V-B m2 外置实测换算 ≈53K EQ/票 ≈0.23%（compact 重读最高 ×3）。
 - **验证**：quality 仓六层验证弹全绿（特征串/路由覆盖/指针解析/真实 G28 案演练/回归+回放/逐字 diff）+ 本仓 run_regression 全绿 + 115 对归档回放零错误。工具链全局按 Exa 优先对齐（用户令）：运行层唯一倒置点 C4 已修，s5-events/quality/routing 本已 Exa 首选。
+## 2026-09-18 读侧协议 S0/S3：冻结语料入仓 + 契约测试挂载
+fixtures/search_artifacts/（43 文件 2.3MB：002273 事故票 11+002549 出样票 10+格式家族样本 7+Firecrawl 实测样本 3+合成边界 f01-f15+manifest）——测试资产脱离 /tmp 污染区（resp_5/6 蒸发实录）。test_search_artifact_parser.py 13 用例挂 run_regression.sh 契约层（解析矩阵/事故回放冻结真值 92=74+18+三信号/对账四态+waive/对撞预筛/追读登记）；消费执法面 G81 与 runner --accounting 见同日后续条目。
