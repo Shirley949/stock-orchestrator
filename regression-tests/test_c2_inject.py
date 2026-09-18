@@ -85,7 +85,7 @@ print("[4] 批2 T1 锚块 + 三态判定（显式 fixture 路径，不依赖 /tm
 sys.path.insert(0, str(HERE.parent / "scripts"))
 import c2_compact_inject as c2  # noqa: E402
 
-FIX = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3f-东材科技-modeA-601208")
+FIX = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3-flash-东材科技-modeA-601208")
 FIX_REP = FIX / "analysis_report_601208_modeA.md"
 FIX_SNAP = FIX / "runner_snapshot_601208_modeA.json"
 if FIX_REP.exists() and FIX_SNAP.exists():
