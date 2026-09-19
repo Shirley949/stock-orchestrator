@@ -872,3 +872,10 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 - data_snapshot WEB_ITEM_KEYS 第七键 entry_id（D1）+ row 字段；envelope 测试 2 用例。
 - 测试扩容：test_g81 3 例（等价 PASS/编造 FAIL/无附属容差）、parser 覆盖断言 2 例（002048 冻结复现 uncovered=7+CLI block）、merge 套件增 TestAccountingCumulation（S4 批）、test_web_research_autodiscovery.py 3 场景（组③随 runner push 挂载）。
 - 教学面：playbook 规则5 三用途版+双字段、exa/doubao 协议 B级面、checklist c_webread_1 双字段措辞、记忆 readside-protocol-v3。
+
+## 2026-09-19 读侧协议 v4-2 [B] 批：G81 段落级对拍 + entry_id 锚 + 家族等价 + stale-ln 诊断修（002915 会话落地）
+- G81-b 假阳根治（trap G81#b:line_number_attribution landed）：per-cite 整行对拍 → **段落级**（行按全部 [src:] 标签切片，每段数字只对拍段尾 webfindings 锚；snapshot 段豁免；行尾段对拍行内命中并集）。执法力零回退实证：单测 20 例（原 14+新 6 反例必 FAIL）+ 全量 35 票历史报告×快照双版对比 verdict 零变化。
+- G81-a 双锚：topic 锚 ∪ entry_id 锚（trap G81#cite:entry_id_anchor_rejected landed，002915 实锤 35 处坏路径假阳）。
+- G81 反向臂家族等价（trap G81#reverse:syndicated_family_no_dedup landed）：accounting.kept_detail[].merged_into——转载同文家族任一成员 topic 现于报告即全族满足；无 kept_detail 旧账本仍逐条执法（测试锁定零回退）。
+- 诊断修：b_bad 消息引用失败行本身（原循环残留 ln=最后一 cite 行，002915 排障实测误导）。
+- 未修（仍 pending）：G81#b:cjk_unit_boundary_asymmetry（tokenizer CJK 邻接）、G81#b:section_verify_blindspot（section 门集+lint 机械化）。

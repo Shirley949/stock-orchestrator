@@ -3481,9 +3481,13 @@ def check_g58(report: str, data: dict) -> bool:
                                           scales=(0.01,), tol=0.15):
                 _unsurfaced.append(f"{key}(真值 pct_5y={blk.get('pct_5y')})")
     if _unsurfaced:
+        def _pct(u):
+            import re as _re
+            m = _re.search(r"pct_5y=([\d.]+)", u)
+            return f"→ 照抄写「{float(m.group(1)) * 100:.1f}% 分位」" if m else ""
         return GateResult(passed=False, reasons=[
             f"m5 未 surface {u} 估值分位（applicable）——估值分析段须写「NN% 分位」且值对齐 "
-            "snapshot（分位值×0.01 口径，tol 15%），或行带 [src:] 锚" for u in _unsurfaced])
+            f"snapshot（分位值×0.01 口径，tol 15%），或行带 [src:] 锚 {_pct(u)}" for u in _unsurfaced])
     # ② 反编造：无分位数据（vp 整体空）却写具体分位百分比 → 编造
     if not vp:
         if "分位" in sec and re.search(r'[\d.]+\s*%', sec):
@@ -3895,7 +3899,27 @@ def check_g63(report: str, data: dict) -> bool:
                             "——照抄精确到分（MA/BOLL/收盘/VWAP/券商锚/主力成本），禁四舍五入改写")
             return (f"m3 技术位转录错：『{ln}』中 {n} ≈但≠ 真值 {near}（偏 {rel:.1%}）——"
                     "照抄 snapshot 真值（fib/S&R/筹码成本/ATR止损/TDST/MA/BOLL/券商锚），禁手抄改动")
-        reasons = [_v_reason(v) for v in violations[:5]]
+        # v4-4 来源归因：found 精确命中 s4_technical 其他字段值（如 ADX/RSI/KDJ 振荡量）
+        # → 直指「该数字是 <路径> 的值，误入技术位语境行」，附照抄真值与来源标签
+        def _flat_nums(node, path=""):
+            out = {}
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    out.update(_flat_nums(v, f"{path}.{k}" if path else str(k)))
+            elif isinstance(node, (int, float)) and node and abs(node) < 10000:
+                out[path] = round(float(node), 2)
+            return out
+        _flat_all = _flat_nums(s4d)
+        reasons = []
+        for v in violations[:5]:
+            n, near, rel, ln = v[0], v[1], v[2], v[3]
+            base = _v_reason(v)
+            src_hit = sorted(k for k, val in _flat_all.items() if abs(val - n) < 1e-9)
+            if src_hit:
+                base += (f"；✗ 归因：{n} 实为 s4_technical.{src_hit[0]} 的字段值"
+                         f"（非技术位真值）——从该行删除该数字或整句移出技术位语境；"
+                         f"正确真值={near}，照抄")
+            reasons.append(base)
         if len(violations) > 5:
             reasons.append(f"另有 {len(violations) - 5} 处同类转录错（全量见 sidecar diag.found）")
         # E9：焦点门原生 diag——expected=snapshot 真值，found=报告转录值（全量）
@@ -4693,7 +4717,7 @@ def _check_g80_t1b(report: str, data: dict):
 _G81_CITE = re.compile(r"\[src:\s*([^\]]*web_research_findings[^\]]*)\]")
 _G81_PATH_JUNK = re.compile(r"^(?:snapshot\.)?web_research_findings(?:\.data)?(?:\.items)?\.?")
 _G81_DISCLOSURE = re.compile(r"口径|分歧|区间|机构间|各机构|不采信")
-_G81_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(亿美元|亿|万美元|万|Bn|B\b|billion|Million|M\b|m\b|百万|%|％|倍)", re.IGNORECASE)  # v4-1: 大小写不敏感（F15: Billion 长形式漏分词）
+_G81_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(亿美元|亿|万美元|万|Bn|B(?![A-Za-z0-9])|billion|Million|M(?![A-Za-z0-9])|m(?![A-Za-z0-9])|百万|%|％|倍)", re.IGNORECASE)  # v4-1: 大小写不敏感（F15: Billion 长形式漏分词）
 _G81_YI = {"亿": 1.0, "亿美元": 1.0, "万": 1e-4, "万美元": 1e-4, "b": 10.0, "bn": 10.0,
            "billion": 10.0, "m": 0.01, "million": 0.01, "百万": 0.01}  # v4-1: 小写化键（F20: billion 键缺失致长形式落默认）
 
@@ -4732,48 +4756,70 @@ def _g81_flag_tokens(acc):
     return out
 
 
-def check_g81(report: str, data: dict) -> bool:
-    """G81: webfindings 消费三臂。a 引用完整性（topic 锚须命中 items；scene 缺而引用=FAIL）
-    + 反向消费臂（accounting.kept topic 全程未现于报告 → FAIL 列清单）；b 数字一致性
-    （引用同行数字 D2 换算后 ⊆ 命中条目 value∪topic∪对撞区间）；c 口径披露
-    （caliber_flags 非空 → 引用行须含披露 token）。豁免：scene 缺且无引用=PASS；
-    accounting 缺=反向臂+c 臂豁免（G80 status≠ok 同款旧快照模式）。"""
-    scene = data.get("web_research_findings") or {}
-    items = ((scene.get("data") or {}).get("items")) or []
-    acc = (scene.get("data") or {}).get("accounting")
-    lines = report.splitlines()
-    cites = []
-    for li, ln in enumerate(lines, 1):
-        for m in _G81_CITE.finditer(ln):
-            cites.append((li, m.group(1), ln))
-    if cites and not items:
-        return GateResult(passed=False, reasons=[
-            f"报告出现 {len(cites)} 处 [src: …web_research_findings…] 引用（首处 L{cites[0][0]}:『{cites[0][2].strip()[:60]}』），"
-            "但 snapshot 无 web_research_findings scene——引用了不存在的数据。",
-            "💡 修法：先走 websearch 读侧三步流（落盘票号目录→parser parse→account→runner --accounting 写回）；"
-            "未执行 websearch 时禁标此 src，写「无补充覆盖」。"])
+def _g81_local_arms(report: str, items: list, acc):
+    """G81 局部臂内核（a 引用完整性 + b 段落级数字一致性）——行级、切片安全。
+    check_g81 与 parser lint-report 共用此唯一实现（禁第二份分词/切片语义）。
+    返回 (reasons, matched_any, consumed_ids)；反向/c 全文臂不在本函数（切片上必假阳）。"""
+    reasons = []
     norm_topics = [(_g81_norm(it.get("topic")), it) for it in items]
+    norm_ids = [(_g81_norm(str(it.get("entry_id", ""))), it)
+                for it in items if str(it.get("entry_id", "")).strip()]
     a_bad, b_bad, matched_any = [], [], False
     consumed_ids = set()
     flag_toks = _g81_flag_tokens(acc) if isinstance(acc, dict) else set()
-    for li, anchor, ln in cites:
-        a2 = _G81_PATH_JUNK.sub("", anchor.strip()).strip()
-        if not a2:
-            continue                                    # 裸路径引用（[src: snapshot.web_research_findings]）无锚可查
-        na = _g81_norm(a2)
-        hits = [it for nt, it in norm_topics if na and (na in nt or nt in na)]
-        if not hits:
-            a_bad.append((li, a2))
-            continue
-        matched_any = True
-        consumed_ids.update(id(it) for it in hits)
-        pool = set(flag_toks)
-        for it in hits:
-            pool |= _g81_num_tokens(str(it.get("value", ""))) | _g81_num_tokens(str(it.get("topic", "")))
-        bad = _g81_num_tokens(ln) - pool
-        if bad:
-            b_bad.append((li, sorted(bad)[:4], hits[0].get("topic", "")))
-    reasons = []
+
+    def _pool(its):
+        p = set(flag_toks)
+        for it in its:
+            p |= _g81_num_tokens(str(it.get("value", ""))) | _g81_num_tokens(str(it.get("topic", "")))
+        return p
+
+    # 段落级对拍：行按全部 [src:] 标签切片，每段数字只对拍段尾 webfindings 锚的条目；
+    # snapshot 段（非 webfindings 标签）豁免——其数值由 G21/G63/G27 管辖；
+    # 行尾段归属末标签：webfindings → 对拍行内命中并集，snapshot → 豁免。
+    _ANY_SRC = re.compile(r"\[src:\s*[^\]]+\]")
+    for li in sorted({c[0] for c in _g81_cites(report)}):
+        ln = next(c[2] for c in _g81_cites(report) if c[0] == li)
+        spans, pos = [], 0
+        for m in _ANY_SRC.finditer(ln):
+            spans.append((m.group(0), ln[pos:m.start()]))
+            pos = m.end()
+        spans.append((None, ln[pos:]))
+        tags, all_hits = [], []
+        for tag, _seg in spans[:-1]:
+            am = _G81_CITE.search(tag)
+            if not am:
+                tags.append((False, None, [], _seg))
+                continue
+            a2 = _G81_PATH_JUNK.sub("", am.group(1).strip()).strip()
+            if not a2:
+                tags.append((True, None, [], _seg))     # 裸路径 wf 引用：段豁免、不计锚
+                continue
+            na = _g81_norm(a2)
+            hits = [it for nt, it in norm_topics if na in nt or nt in na]
+            if not hits:
+                hits = [it for nid, it in norm_ids if na in nid or nid in na]
+            if not hits:
+                a_bad.append((li, a2))
+            else:
+                matched_any = True
+                consumed_ids.update(id(it) for it in hits)
+                all_hits.extend(hits)
+            tags.append((True, a2, hits, _seg))
+        trailing = spans[-1][1]
+        union_pool = _pool(all_hits)
+        for is_wf, _a2, hits, seg in tags:
+            toks = _g81_num_tokens(seg)
+            if not toks or not is_wf or not hits:
+                continue                                # snapshot 段/裸路径段/未命中段：豁免或 a 臂已记
+            bad = toks - _pool(hits)
+            if bad:
+                b_bad.append((li, ln, sorted(bad)[:4], hits[0].get("topic", ""), hits))
+        ttoks = _g81_num_tokens(trailing)
+        if ttoks and tags and tags[-1][0] and tags[-1][1] and all_hits:
+            bad = ttoks - union_pool
+            if bad:
+                b_bad.append((li, ln, sorted(bad)[:4], all_hits[0].get("topic", ""), all_hits))
     if a_bad:
         reasons.append(
             f"a|引用完整性：{len(a_bad)} 处 topic 锚未命中 items（{'；'.join(f'L{l}:『{t}』' for l, t in a_bad[:3])}）；"
@@ -4782,11 +4828,84 @@ def check_g81(report: str, data: dict) -> bool:
                        "或改用裸路径 [src: snapshot.web_research_findings.data.items]。")
     if b_bad:
         reasons.append(
-            "b|数字一致性：引用同行数字未见于条目 value（"
-            + "；".join(f"L{l}:『{ln.strip()[:46]}』多出 {toks} vs 条目『{tp}』" for l, toks, tp in b_bad[:3])
-            + "）——疑似捏造/张冠李戴。")
-        reasons.append("💡 修法：webfindings 数字照抄条目 value 原值（万/亿/B 换算等价可）， derived 数字须另带 "
-                       "[src: snapshot.*] 或计算说明；区间披露请连同「口径分歧」字样。")
+            "b|数字一致性：引用段数字未见于段尾锚条目 value（"
+            + "；".join(f"L{l}:『{ln.strip()[:46]}』多出 {toks} vs 条目『{tp}』" for l, ln, toks, tp, *_ in b_bad[:3])
+            + "）——逐 token 修法见下。")
+        for _l, _ln, _toks, _tp, _hits in b_bad[:6]:
+            for _tok in _toks:
+                reasons.append(f"   ✗ L{_l} {_tok}（锚『{_tp[:30]}』）：{_g81_token_advice(_tok, _hits, items)}")
+    return reasons, matched_any, consumed_ids
+
+
+def _g81_cites(report: str):
+    """行内 webfindings 引用收集（li, anchor, line）——局部臂与 scene-missing 检查共用。"""
+    out = []
+    for li, ln in enumerate(report.splitlines(), 1):
+        for m in _G81_CITE.finditer(ln):
+            out.append((li, m.group(1), ln))
+    return out
+
+
+def _g81_token_advice(tok: str, hits: list, items: list) -> str:
+    """b 臂多出 token 的归因 → 可照抄修法（一次改过）：
+    ①他条目精确含 ②他条目近值（精度舍入形态）③本锚条目近值 ④无源（删/换锚/补快照锚）。"""
+    def _num(s):
+        try:
+            return float(str(s).rstrip("%").split(":")[-1])
+        except (TypeError, ValueError):
+            return None
+    def _rounds_to(report_tok, value_tok):
+        fa, fb = _num(report_tok), _num(value_tok)
+        if fa is None or fb is None:
+            return False
+        dec = len(str(fa).split(".")[1]) if "." in str(fa) else 0
+        return round(fb, dec) == round(fa, dec)
+    tpools = [(it, _g81_num_tokens(str(it.get("value", ""))) | _g81_num_tokens(str(it.get("topic", ""))))
+              for it in items]
+    for it, pool in tpools:                                   # ① 他条目精确含 → 锚挂错/需移段
+        if any(it is h for h in hits):
+            continue
+        if tok in pool:
+            return (f"实属条目『{str(it.get('topic', ''))[:36]}』→ 把该数字移入挂此锚的引用段，"
+                    "或本段补挂该条目锚")
+    for it, pool in tpools:                                   # ② 他条目近值 → 照抄其原值并挂其锚
+        if any(it is h for h in hits):
+            continue
+        for vt in sorted(pool):
+            if _rounds_to(tok, vt):
+                return (f"实属条目『{str(it.get('topic', ''))[:36]}』（value 写 {vt}）→ 照抄 {vt} 且挂/移至该条目锚")
+    for it in hits:                                           # ③ 本锚条目近值 → 照抄原值
+        for vt in sorted(_g81_num_tokens(str(it.get("value", ""))) | _g81_num_tokens(str(it.get("topic", "")))):
+            if _rounds_to(tok, vt):
+                return f"疑似精度舍入：本锚条目 value 为 {vt}，报告写 {tok} → 照抄 {vt}"
+    return "未见于该锚条目 value → 删该数字，或改写为条目原值，或确属快照数据则段尾加挂 [src: snapshot.*]"
+
+
+def check_g81(report: str, data: dict) -> bool:
+    """G81: webfindings 消费三臂。a 引用完整性（topic/entry_id 锚；scene 缺而引用=FAIL）
+    + 反向消费臂（accounting.kept topic 全程未现于报告 → FAIL 列清单）；b 数字一致性
+    （段落级对拍：段数字 ⊆ 段尾锚条目 value∪topic∪对撞区间）；c 口径披露
+    （caliber_flags 非空 → 引用行须含披露 token）。豁免：scene 缺且无引用=PASS；
+    accounting 缺=反向臂+c 臂豁免（G80 status≠ok 同款旧快照模式）。
+    局部臂（a/b）内核=_g81_local_arms（parser lint-report 逐章机械化共用同一实现）。"""
+    scene = data.get("web_research_findings") or {}
+    items = ((scene.get("data") or {}).get("items")) or []
+    acc = (scene.get("data") or {}).get("accounting")
+    cites = _g81_cites(report)
+    if cites and not items:
+        return GateResult(passed=False, reasons=[
+            f"报告出现 {len(cites)} 处 [src: …web_research_findings…] 引用（首处 L{cites[0][0]}:『{cites[0][2].strip()[:60]}』），"
+            "但 snapshot 无 web_research_findings scene——引用了不存在的数据。",
+            "💡 修法：先走 websearch 读侧三步流（落盘票号目录→parser parse→account→runner --accounting 写回）；"
+            "未执行 websearch 时禁标此 src，写「无补充覆盖」。"])
+    reasons, matched_any, consumed_ids = _g81_local_arms(report, items, acc)
+    fam_members = {}
+    if isinstance(acc, dict):
+        for d in (acc.get("kept_detail") or []):
+            root = str(d.get("merged_into") or d.get("id") or "").strip()
+            tp = _g81_norm(str(d.get("topic") or ""))
+            if root and tp:
+                fam_members.setdefault(_g81_norm(root), set()).add(tp)
     if isinstance(acc, dict) and acc.get("caliber_flags") and cites and matched_any:
         if not any(_G81_DISCLOSURE.search(ln) for _, _, ln in cites):
             fl = acc["caliber_flags"][0]
@@ -4796,10 +4915,25 @@ def check_g81(report: str, data: dict) -> bool:
             reasons.append("💡 修法：引用句内写「机构间口径分歧 X~Y，本文采 @口径」，或对每 flag 逐条给采信裁决。")
     if isinstance(acc, dict):
         repn = _g81_norm(report)
-        unc = [str(it.get("topic", "")) for it in items
-               if not it.get("_url_only") and len(_g81_norm(it.get("topic"))) >= 4
-               and id(it) not in consumed_ids
-               and _g81_norm(it.get("topic")) not in repn]
+        id2root, root_tops = {}, {}
+        for d in (acc.get("kept_detail") or []):
+            eid = _g81_norm(str(d.get("id") or ""))
+            root = _g81_norm(str(d.get("merged_into") or d.get("id") or ""))
+            tp = _g81_norm(str(d.get("topic") or ""))
+            if eid:
+                id2root[eid] = root
+            if root and tp:
+                root_tops.setdefault(root, set()).add(tp)
+        unc = []
+        for it in items:
+            if it.get("_url_only") or len(_g81_norm(it.get("topic"))) < 4:
+                continue
+            if id(it) in consumed_ids or _g81_norm(it.get("topic")) in repn:
+                continue
+            root = id2root.get(_g81_norm(str(it.get("entry_id", ""))))
+            if any(t in repn for t in root_tops.get(root, ())):
+                continue                        # 家族等价：同 root 成员 topic 已现于报告
+            unc.append(str(it.get("topic", "")))
         if unc:
             reasons.append(
                 f"反向|消费完整性：accounting.kept={sum(1 for it in items if not it.get('_url_only'))} 条中 "

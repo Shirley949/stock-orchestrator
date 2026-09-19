@@ -520,7 +520,7 @@ class DataSnapshot:
     # web_research items 键名合同（F4）：白名单 5 键 + 常见误传键别名。
     # 别名来自生产实锤（603256/600105 等照入口文档旧 schema 传 content/title/source 系）：
     # 仅当目标键为空才回填（防覆盖）；白名单外非空键不静默丢——命名 WARN + fetch_log 记账。
-    WEB_ITEM_KEYS = ("topic", "value", "provider", "url", "query", "entry_id")  # v4-2/D1: 第七键=溯源主键（F21: 301069 items 40/40 url 空致覆盖断言失腿）
+    WEB_ITEM_KEYS = ("topic", "value", "provider", "url", "query", "entry_id")  # v4-2/D1: 新增第 6 键=溯源主键（F21: 301069 items 40/40 url 空致覆盖断言失腿）
     WEB_KEY_ALIASES = {"content": "value", "text": "value", "finding": "value",
                        "title": "topic", "source": "provider"}
 

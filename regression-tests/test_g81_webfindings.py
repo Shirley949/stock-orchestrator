@@ -129,6 +129,65 @@ class TestG81(unittest.TestCase):
               "url": "u", "query": "q", "_url_only": False}])}
         self.assertFalse(bool(GD.check_g81(rep, snap)))
 
+    # —— v4-2 段落级对拍 + 家族等价 + entry_id 锚（转载家族/多源段落 实证批）——
+
+    def test_v42_segment_scoping_mixed_line_passes(self):
+        """v4-2①: 同行混排 snapshot 段数字 + wf 段数字——修前整行对拍必 FAIL（假阳），修后各段各拍 PASS"""
+        rep = ("公司 ROE 5.24% 垫底 [src: snapshot.s11_peer]"
+               "；产能 8 万吨 [src: web_research_findings HF供给格局]")
+        snap = {"web_research_findings": _scene(
+            [{"entry_id": "exa_a#q1e1", "topic": "HF供给格局", "value": "无水HF约8万吨/年",
+              "provider": "exa", "url": "u", "query": "q", "_url_only": False}],
+            accounting={"raw_n_total": 1, "kept": 1, "discarded_total": 0, "caliber_flags": [],
+                        "kept_detail": [{"id": "exa_a#q1e1", "topic": "HF供给格局", "merged_into": ""}]})}
+        self.assertTrue(GD.check_g81(rep, snap))
+
+    def test_v42_fabrication_in_wf_segment_still_fails(self):
+        """v4-2②: 编造数字落在 wf 段恒 FAIL（执法力零回退）"""
+        rep = ("公司 ROE 5.24% 垫底 [src: snapshot.s11_peer]"
+               "；产能 9.9 万吨 [src: web_research_findings HF供给格局]")
+        snap = {"web_research_findings": _scene(
+            [{"entry_id": "exa_a#q1e1", "topic": "HF供给格局", "value": "无水HF约8万吨/年",
+              "provider": "exa", "url": "u", "query": "q", "_url_only": False}],
+            accounting={"raw_n_total": 1, "kept": 1, "discarded_total": 0, "caliber_flags": []})}
+        self.assertFalse(bool(GD.check_g81(rep, snap)))
+
+    def test_v42_entry_id_anchor_matches(self):
+        """v4-2③: entry_id 作引用锚（稳定主键恢复合法地位）——命中与未命中双向"""
+        snap = {"web_research_findings": _scene(
+            [{"entry_id": "exa_a#q1e1", "topic": "HF供给格局", "value": "无水HF约8万吨/年",
+              "provider": "exa", "url": "u", "query": "q", "_url_only": False}],
+            accounting={"raw_n_total": 1, "kept": 1, "discarded_total": 0, "caliber_flags": []})}
+        rep_ok = "产能约 8 万吨/年 [src: web_research_findings exa_a#q1e1]"
+        self.assertTrue(GD.check_g81(rep_ok, snap))
+        rep_bad = "产能约 9.9 万吨/年 [src: web_research_findings exa_b#q1e9]"
+        self.assertFalse(bool(GD.check_g81(rep_bad, snap)))
+
+    def test_v42_merged_into_family_satisfies_reverse_arm(self):
+        """v4-2④: 转载家族 merged_into——canonical 被引用即全族满足反向臂；无 detail 时仍逐条 FAIL"""
+        items = [
+            {"entry_id": "exa_a#q1e1", "topic": "研报全文版", "value": "缺口 2.31 万吨",
+             "provider": "exa", "url": "u1", "query": "q", "_url_only": False},
+            {"entry_id": "exa_a#q1e2", "topic": "研报摘要版", "value": "缺口 2.31 万吨",
+             "provider": "exa", "url": "u2", "query": "q", "_url_only": False},
+        ]
+        acc = {"raw_n_total": 2, "kept": 2, "discarded_total": 0, "caliber_flags": [],
+               "kept_detail": [{"id": "exa_a#q1e1", "topic": "研报全文版", "merged_into": ""},
+                               {"id": "exa_a#q1e2", "topic": "研报摘要版", "merged_into": "exa_a#q1e1"}]}
+        rep = "内需缺口 2.31 万吨 [src: web_research_findings 研报全文版]"
+        self.assertTrue(GD.check_g81(rep, {"web_research_findings": _scene(items, acc)}))
+        # 同场景无 kept_detail（旧账本）→ 摘要版未消费仍 FAIL（执法力零回退）
+        acc_legacy = {"raw_n_total": 2, "kept": 2, "discarded_total": 0, "caliber_flags": []}
+        self.assertFalse(bool(GD.check_g81(rep, {"web_research_findings": _scene(items, acc_legacy)})))
+
+    def test_v42_b_bad_message_shows_failing_line(self):
+        """v4-2⑤: b 臂消息引用失败行本身（治循环残留变量 stale-ln 诊断 bug）"""
+        rep = ("无关首行 [src: web_research_findings 食品级CO2全球规模]\n"
+               "营收9.99亿元 [src: web_research_findings 2026中报业绩]")
+        r = GD.check_g81(rep, {"web_research_findings": _scene(ITEMS, ACC)})
+        self.assertFalse(bool(r))
+        self.assertIn("营收9.99亿元", str(r))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

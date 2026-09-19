@@ -1,516 +1,605 @@
-# TRAP_LEDGER — 陷阱台账（E10；2026-08-31 首批 10 条，金安 002636 / 德福 301511 两轮 13 陷阱归并）
-#
-# 单一真相源：新 trap 教训**先入本台账**（memory 只存跨票根因，见 memory-writing-conventions）。
-# 消费方：regression-tests/trap_ledger_scan.py（计数/增量拦截）、scripts/generate_checklist.py（blocked 硬阻断）。
-#
-# schema：
-#   signature: gate#subcheck:reason_class   ← 唯一键
-#   gate/subcheck/reason_class/fix          ← 定位与修法
-#   match:   该 gate FAIL reasons 拼接串的正则（缺省=gate 级兜底）
-#   count:   基线计数（= 冻结日线上语料实测量；--strict 仅拦 cur>count 的新增，P12）
-#   status:  landed=引擎已修复（复发=回归）｜inflight=已立项未落地（root_cause=engine 时计入 engine_pending 晋级欠账）｜pending=写作纪律约束（复发=正常计数增长，人工复盘）
-#   root_cause: engine=引擎根因（engine_pending 指标=engine 且未 landed 计数，run_regression 尾部可见）
-#   blocked(P3): true 时 generate_checklist exit 2 硬阻断（运营态开关，修复后置回 false）
 entries:
-  - signature: G63#percentile:percentile_as_price
-    gate: G63
-    subcheck: percentile
-    reason_class: percentile_as_price
-    match: "分位"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    blocked: false
-    fix: "（金安实锤）换手/估值分位数字与 S&R 真值落 ±5% 容差窗被误判价位转录错——引擎已剥『N分位』词（E1），报告可直书分位数字；复发=剥离 regex 回退"
-  - signature: G30#5:negation_window
-    gate: G30
-    subcheck: "5"
-    reason_class: negation_window
-    match: "#5"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    blocked: false
-    fix: "（金安实锤）前置否定词（不支持/暂不/无加仓…）修饰的动作词被当主推荐动作——引擎已加 12 字符否定窗+两遍锚定（E2）；capstone 区动作词仍建议用 持有/观望/逢低承接"
-  - signature: G21#src_path:alias_hotspots
-    gate: G21
-    subcheck: src_path
-    reason_class: alias_hotspots
-    match: "真路径|假层"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    blocked: false
-    fix: "（金安实锤）假层路径 5 重灾区：technical.relative_strength / td.daily / cash_flow_statement / s9_news——引擎已带 PATH_ALIASES 指引（E5），照 suggestion 改真路径"
-  - signature: G21#src_path:numeric_subscript
-    gate: G21
-    subcheck: src_path
-    reason_class: numeric_subscript
-    match: "去下标|数组下标"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    blocked: false
-    fix: "（金安/龙磁实锤）数组下标 .N（signals.events.0/seats.0）必 FAIL——G21 按 dict 键步进；去下标锚父级节点"
-  - signature: G62#tally:direction_column_contract
-    gate: G62
-    subcheck: tally
-    reason_class: direction_column_contract
-    match: "跨章不一致"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    blocked: false
-    fix: "（德福实锤，两条并一）①方向列必须第 2 列且单元格字面=方向、括号注释挪「现状」列；②他表（§3.2 信号矩阵）第 2 列裸方向词曾误计入——引擎已表头签名执法（E4：只数表头第 2 列=方向 的表），他表可安全用「中性区」带修饰词；复发（跨章不一致 FAIL 再现）=表头签名回退"
-  - signature: G55#disclosure:false_missing_claim
-    gate: G55
-    subcheck: disclosure
-    reason_class: false_missing_claim
-    match: "VWAP"
-    count: 0
-    last_seen: "2026-08-31"
-    status: pending
-    blocked: false
-    fix: "（德福实锤）缺失披露必验真：VWAP 真值 89.83 在而写「字段为空」→反捏造 FAIL——披露缺失前必 snapshot_view --field vwap 验真"
-  - signature: G55#vocab:boundary_words
-    gate: G55
-    subcheck: vocab
-    reason_class: boundary_words
-    match: "仓位|盈亏比|重仓"
-    count: 0
-    last_seen: "2026-08-31"
-    status: pending
-    blocked: false
-    fix: "（德福实锤）词表子串命中：m3 段「仓位管理/仓位节奏」也算越界——仓位/盈亏比/重仓是 m6/m7 边界词，m3 只读数"
-  - signature: G56#pointer:literal_home_link
-    gate: G56
-    subcheck: pointer
-    reason_class: literal_home_link
-    match: "详见 m9/m7"
-    count: 0
-    last_seen: "2026-08-31"
-    status: pending
-    blocked: false
-    fix: "（德福实锤）m1 资金筹码句须含「详见 m7/m9」字面（「详见 §8」不够），≤1 句+指向 home"
-  - signature: G64#caliber:big_order_mislabel
-    gate: G64
-    subcheck: caliber
-    reason_class: big_order_mislabel
-    match: "口径错标"
-    count: 0
-    last_seen: "2026-08-31"
-    status: pending
-    blocked: false
-    fix: "（德福实锤）行含「大单」不含「主力」→数值命中主力/全单口径即 FAIL——写「全单口径净流入约 N 亿」或标注「主力」"
-  - signature: G30#1:substring_keyword
-    gate: G30
-    subcheck: "1"
-    reason_class: substring_keyword
-    match: "增发|担保"
-    count: 0
-    last_seen: "2026-08-31"
-    status: pending
-    blocked: false
-    fix: "（德福实锤）⑫治理行须含「增发」「担保」词本身——「定增」不含「增发」子串，担保数额照抄 timeline"
-  # ---- 诊断契约 v2.1 批1（2026-08-31，plan wiggly-moseying-spring）：11 站点 reason 真值化 9 签名 ----
-  # 旧形态=裸 False 尾注 reason 丢失（7 处）/静态编造 reason 无真值行号（4 处）；新 reason=真值+行号+照抄修法+diag 六键。
-  # 删记忆实验：新 11/11 vs 旧 4/11 一轮改对（对照组 3 处产出假陈述——见 REFACTOR_LOG S5）。
-  - signature: G21#m5_src_count:bare_false_reason_loss
-    gate: G21
-    subcheck: m5_src_count
-    reason_class: bare_false_reason_loss
-    match: "橡皮章估值"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "m5 verified [src:]<2 臂已 GateResult 化：reason 带现有锚点清单+补锚示例——照抄补锚；复发=reason 文本回退泛句"
-  - signature: G32#data_layer:bare_false_reason_loss
-    gate: G32
-    subcheck: data_layer
-    reason_class: bare_false_reason_loss
-    match: "\\[数据层\\]"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "拉取失败臂带 [数据层] 前缀+status 真值：不改报告，重跑 s_lhb 拉取或上报数据源异常"
-  - signature: G33#data_layer:bare_false_reason_loss
-    gate: G33
-    subcheck: data_layer
-    reason_class: bare_false_reason_loss
-    match: "\\[数据层\\]"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "同 G32：[数据层] 前缀=数据层问题，重跑 northbound 拉取或上报，报告侧不动"
-  - signature: G53#turnover_pct:bare_false_reason_loss
-    gate: G53
-    subcheck: turnover_pct
-    reason_class: bare_false_reason_loss
-    match: "换手分位数捏造"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "reason 带「报告第X分位 vs snapshot pct_250=Y（偏离N>5）+违规行号」——照抄 snapshot 改写（tol ±5 分位）"
-  - signature: G57#growth_tier:bare_false_reason_loss
-    gate: G57
-    subcheck: growth_tier
-    reason_class: bare_false_reason_loss
-    match: "growth_tier"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "两臂（high/moderate）reason 带档位语义+照抄补写句+src 路径——m4 §4.1.1 直接补成长强度句"
-  - signature: G61#data_layer:bare_false_reason_loss
-    gate: G61
-    subcheck: data_layer
-    reason_class: bare_false_reason_loss
-    match: "\\[数据层\\]"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "同 G32：[数据层] 前缀=重跑 s_stock_evaluation 拉取或上报，报告侧不动"
-  - signature: G51#sgr:static_reason_no_truth
-    gate: G51
-    subcheck: sgr
-    reason_class: static_reason_no_truth
-    match: "SGR 无中生有|SGR 不适用却报"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "两臂 reason 带 snapshot 判定真值+违规行 L{n}:『原句』——删数值改「未计算/不适用」，或补拉信封后照抄"
-  - signature: G52#atr:static_reason_no_truth
-    gate: G52
-    subcheck: atr
-    reason_class: static_reason_no_truth
-    match: "ATR 无中生有"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "reason 带报告 ATR 值+违规行号——删数值改「ATR 未计算」或补拉 atr14 后照抄（单位元）"
-  - signature: G58#valuation_pct:static_reason_no_truth
-    gate: G58
-    subcheck: valuation_pct
-    reason_class: static_reason_no_truth
-    match: "估值分位无中生有"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "reason 带违规行号——删具体分位数改「分位数据缺失」，或补拉后按 pct_5y×100 口径照抄"
-    # 2026-09-02 RCA 注：本签名仅覆盖反编造臂 reason 字面；劫持/漏报臂（m5 未 surface…）不含该子串 →
-    # 劫持形态复发不计数 = 晋级三次哑火根因（688270×5 + 300548×2 FAIL 事件账面 0 计）。劫持面移交下行签名。
-  # 2026-09-02 RCA 落盘（match 已两极验证：3/3 生产臂 reason 命中、反编造臂不误中；count 为人工回填——
-  # sidecar 已被终态 PASS 覆盖 scan 不可考，回填证据=/tmp/rca_preserve_688270/LEDGER_BASELINE_20260902.txt）
-  - signature: G58#valuation_pct:locator_hijack_title_anchor
-    gate: G58
-    subcheck: valuation_pct
-    reason_class: locator_hijack
-    match: "定位层|m5 未 surface .*（applicable）"
-    count: 7
-    last_seen: "2026-09-02"
-    status: pending
-    root_cause: engine
-    blocked: false
-    fix: "H1 含「估值」劫持 m5 切片（_locate_section head_re ^#{1,4} 未排除 level-1 + verify_re 可被 TL;DR 序言满足 + 15% 容差跨值代偿）——引擎修 head_re ^#{2,4} + fallback fail-loud + 定位诊断入 reason（修复批①-⑤，REFACTOR_LOG 2026-09-02 条目）；落地前 G58 PASS 一律视为未验证状态，禁以改标题规避"
-  # ---- 批2 五条引擎根因立项（2026-08-31，plan wiggly-moseying-spring 裁决C；inflight→各条落地时翻 landed）----
-  # #3 G62 列合同文档化不入 entries：engine E4 表头签名已 landed（见上 G62#tally），#3 为 m6 文档侧补线，无独立 FAIL 面。
-  - signature: G63#percentile_variant:bai_percentile_leak
-    gate: G63
-    subcheck: percentile_variant
-    reason_class: bai_percentile_leak
-    match: "百分位"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "E1 剥离正则补百分位/分位数变体（批2#1 landed）：『N 百分位』的『百』挡在 \\s*分位 前——语料实锤『94 百分位』『3 百分位』今仍泄漏价位对拍；修后分位族（分位/百分位/分位数/分数）全形态不进对拍池。证据：HEAD 旧引擎复跑『94 百分位』FAIL（偏0.8%）→修后 PASS；归档44对0翻转；5形态进 trap_corpus.yaml 永久语料"
-  - signature: G30#1:synonym_dingzeng
-    gate: G30
-    subcheck: "1"
-    reason_class: synonym_dingzeng
-    match: "定增"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "fatal/治理行 surface 同义词归一 定增≡增发（批2#5 landed，德福实锤从写作纪律升级 engine 修复）：报告写『定增』不再误报『增发』漏报；执法力反例（配售=两者皆非）仍报缺失；归档44对0翻转；形态进 trap_corpus（g30_surf_dingzeng_defu）。担保词表部分仍属写作纪律（见 G30#1:substring_keyword pending）"
-  - signature: G30#5:negation_context_v2
-    gate: G30
-    subcheck: "5"
-    reason_class: negation_context_v2
-    match: "主推荐"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "E2 否定窗 v2（批2#2 landed）：窗遇标点截断+紧邻否定词（没有|难以|不再|放弃|拒绝，距动词≤2字符）——七句评测 1/7→7/7（5 误判翻转+E2 锚 None→持有+趋势锚不回退）；归档44对0翻转；七句固化 trap_corpus；窗语义合同同步 m6/m11（E 类 expected 源）；被否决设计 P2a 宽窗/P2b 后置窗见 _research/b2_prototype.py"
-  - signature: G21#did_you_mean:registry_hint
-    gate: G21
-    subcheck: did_you_mean
-    reason_class: registry_hint
-    match: "近邻"
-    count: 0
-    last_seen: "2026-08-31"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "_explain_bad_path 第 1 层断键挂 data_contracts.SCENES registry（批2#4 landed，reason-only verdict 恒不变）：scene 在注册表而快照未生成 → [数据层] 归因（查快照生成/重跑拉取，非路径拼写）；拼写错且兄弟键无近邻 → registry difflib 近邻，禁退化裸路径报错。guard=TestTrapCorpus.test_g21_registry_hint 两形态断言；归档44对0翻转。**计数语义**：match『近邻』命中=报告侧又引用了坏路径（合法 FAIL，写作纪律信号）；引擎回归面=建议缺失，由 guard 测试把守——delta 勿按引擎回归处置"
-  - signature: G28#dupont_panel:data_layer_missing
-    gate: G28
-    subcheck: dupont_panel
-    reason_class: data_layer_missing
-    match: "杜邦"
-    count: 10
-    last_seen: "2026-09-01"
-    status: pending
-    blocked: false
-    fix: "（2026-09-01 首批 --propose 入账）历史 sidecar 10 处：快照 dupont 面板未生成（s1_financial 无该键）→ 真数据层缺非引擎陷阱，引擎按设计执法；G28 轨1 已真值化（reason 带 [数据层]+status 真值），此类 FAIL 修数据不修报告（重跑 s1_financial），mixed_caliber 软化政策见 pending #8 轨2"
-  # ---- 轨2 mixed_caliber（2026-09-02 裁决 D 落地；③A/②A 复核语义：未确认三态一律现状 PASS）----
-  # 未确认三态无 FAIL 面（负收益豁免同 G47 判例，入账留痕防沉默）：
-  #   caliber_probe.state=em_fetch_failed —— EM 单次拉取失败（裁决②：现状=fixture 级降级测试钉死）
-  #   caliber_probe.state=em_period_mismatch —— EM 与 Sina 报告期不齐，追随比较无效
-  #   caliber_probe.state=em_not_tracking —— EM 自洽但不追随 Sina（提取错嫌疑形态，2026-09-01 语料 0 例；
-  #     真实样本出现=REFACTOR_LOG 重开触发器 #3 素材，届时人判是否升 FAIL——不追随有良性成因
-  #     （源端披露滞后/聚合口径差）无法先验排除，预 FAIL 会重造 8-30 前假 FAIL 机器）
-  #   caliber_probe.state=em_self_broken —— EM 面板自身不自洽（实测 000960 EM 面板 rel 11.34%；
-  #     裁决③A=认证失败语义：referee 失格非重跑可修，不造 cron 清不掉的 verdict；2026-09-02 用户裁定）
-  - signature: G28#dupont_caliber:disclosure_missing
-    gate: G28
-    subcheck: dupont_caliber_disclosure
-    reason_class: disclosure_missing
-    match: "报告缺口径披露行"
-    count: 0
-    last_seen: "2026-09-02"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "口径混装确认（残差触发 rel>5% ∧ EM RPT_F10_FINANCE_DUPONT 独立管道自洽∧追随 Sina ROE≤5%∧同期，runner._dupont_caliber_probe 写 caliber_note）而报告沉默→FAIL，reason 照抄 caliber_note 原句（m2 §2.12 模板）。残差只作触发器（交叉验证≠自算，8-30 裁决不变）；容差单值 rel 5%（001309 ROE>90 abs 必错案 / 000960 残差 0.27pp=rel 3.73% 无害不触发——两侧边界钉死 trap_corpus g28_caliber_*）。预申（2026-09-01 实测语料）：3 指纹股（001309 rel 7.03%/300456 14.97%/000657 9.42%）EM 全自洽全追随→confirmed；真实报告矩阵 001309/300456 已披露 PASS、000657 沉默=唯一真翻转；25 对照股+归档 26 对零变化（冻结快照无 probe 键=结构零翻转）。裁决原文『恰好 7 只』出自 8-30 记录（abs 0.25pp 旧阈值语料），中报落定后 rel 5% 单值下收敛为 3 只——计数以实测为准（计数勿硬编码规约）"
-  # ---- F4a 收窄批（2026-09-01，裁决 B：回读立项意图定作用域 + 两极用例 + pre-declare 翻转清单）----
-  - signature: G49#fabrication_arm:crossline_cooccurrence
-    gate: G49
-    subcheck: fabrication_arm
-    reason_class: crossline_cooccurrence
-    match: "同片段"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "反编造臂片段级收窄（套 G48 R5 范式，re.split [|。；;\\n]）：『买卖力量』与阵营词须同片段才 FAIL——旧全文共现把『卖方研报』覆盖度语境（观点层行）误当阵营结论，跨行误伤。REAL_WATCH no_bsp 探针同步刷新 frozen False→True；归档 55 对 G49 零翻转=无误伤存量"
-  - signature: G16#cl_grounded:fulltext_collision
-    gate: G16
-    subcheck: cl_grounded
-    reason_class: fulltext_collision
-    match: "合同负债语境"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "grounded 作用域从全文收窄为 CL 行∪『合同负债』标题节正文（slice_of 单一实现，G63 section 范式）：旧 `c in report` 全文扫——股价 35.0 恰等 cl_yi 即假 grounded。初版行级作用域被归档重放抓出误伤（002138：节内判读行 0.29 亿不重复字面词）→ 收正为 section 级；节内表格行/判读行均算合法语境消费。guard=test_g16_section_judgeline_pass；归档 g16 零翻转"
-  - signature: G67#vol_consumption:foreign_context_collision
-    gate: G67
-    subcheck: vol_consumption
-    reason_class: foreign_context_collision
-    match: "无量价语境行"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "量价数值对拍挂语境锚（量比|成交|倍数|放量|缩量|换手|量能|量价|5日|20日|周成交 同行）：旧 `_nums_in(report)` 全文对拍——归档实锤 4 票假 PASS 全为异语境撞数（fib 回撤 0.786 vs vol_ratio 0.817、TD9 均值 -1.02 vs 1.048、EPS/股息行撞数）。4 票翻转已逐条裁决=预期收紧非误伤（报告须把量比/成交倍数写进量价语境行）；G49/G16 零翻转"
-  - signature: G69#dim_consumption:crossline_join
-    gate: G69
-    subcheck: dim_consumption
-    reason_class: crossline_join
-    match: "同行"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "消费判定改同行共现+否定披露守卫（F4b① 裁决 B landed，_contextual_presence forbid 首用）：旧『src_token in report AND 维度词 in report』两独立全文条件可跨行拼「消费」——降级披露行如实挂 [src:] 反被计入维度（R7 观察档实证，8-27 暂缓、9-01 回读 m37 四维表合同=行级意图后落码）。披露词表（未消费/未拉取/降级/不可得）从 m37 披露措辞合同推导并已入 m37；暴露计数（守卫命中维度）进 diag.found；值对拍缺口登记 pending #10；归档 56 对 0 翻转=预申③兑现；watch 探针 True 不变仅注记更新（预申①）"
-  # ---- F4b② presence 批（2026-09-01，裁决 C：逐门 commit，窗口语义逐门显式预申）----
-  # G47 负收益豁免不入 entries（裁决 C 条件 ④，无引擎改动无 FAIL 面）：唯一已知碰撞形态「北向增持」
-  # 本属股东面真内容（northbound processed summary 的合法 surface 词），给 G47 触发词加语境锚反而对
-  # 合法北向行制造假 FAIL——负收益，显式豁免维持现状。若日后归档/语料出现 G47 真·跨节拼消费实证再复议。
-  - signature: G13#holding_decision:fulltext_word
-    gate: G13
-    subcheck: holding_decision_context
-    reason_class: fulltext_word
-    match: "同节共现"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "消费判定改语境锚同节共现（_contextual_presence scope=section，presence 批门 2/4）：旧 `if 决策 in report` 全文单词条件——「董事会决策/决策层」等治理叙事词即可过（持仓语境零校验）。锚表=持仓/仓位/成本/买入价/底仓/现价（m11 WP1b 骨架合同推导，已入 m6）。⚠️ 休眠门注记：holding_status 全管道无 producer（仅 gate+测试引用），归档 56 对 0 在场、重放 0 翻转为结构性真空非证据；锚表正确性由单测双向钉死（裁决例句跨行同节=PASS/治理词跨节=FAIL/裸决策句=FAIL 预申翻转）。已知宽向：bare 成本 锚覆盖营业成本语境（同节治理词+营业成本会假 PASS，weight-2 容忍，收紧须新证据走预申报）"
-  - signature: G29#danger_surface:fulltext_danger_word
-    gate: G29
-    subcheck: asset_safety_danger_surface
-    reason_class: fulltext_danger_word
-    match: "同行 surface"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "危险 surface 改语境锚同行共现+披露守卫（_contextual_presence scope=line，presence 批门 3/4）：旧全文 re.search 危险词（🚨/危险/紧张/风险/爆雷/减值/资金链）任一即过——近真空（每份报告都有风险节，「估值/关税风险」即可满足资产安全危险 surface）。收窄=危险词+资产安全对象词（货币资金/有息负债/商誉/现金/资金链/资产安全/cash_to_debt）**同行**且行内无披露词（m2 §2.10 flags 句式合同「cash_to_debt=0.30，资金链紧张」，已入 m2）。预飞 16 个 🚨 归档对 14 对真同行（行级窗口预申经语料实证成立，G25 教训前置预飞奏效）；重放 flips=2 全=000657 两模式B 报告×cache 全量快照配对伪影（其自身快照 degraded 如实披露「cash_to_debt 不可计算」，旧 True 系别节风险词假 PASS）。消费臂维持现状显式占行（字段词即对象词自锚无意义）；降级披露行挂对象词由 forbid 守卫排除"
-  - signature: G39#type_sentence:morpheme_leak
-    gate: G39
-    subcheck: type_sentence_context
-    reason_class: morpheme_leak
-    match: "类型结论未落语境"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "#1 类型词改语境锚同行共现（_contextual_presence scope=line，presence 批门 4/4）：旧 `core not in report` 全文裸词根扫描——词根（周期/成长）泄漏面极广：「多周期共振/周期状态表」（技术面）、「成长性/成长风格」（质量维度/市场语境）、「gap：成长性未拉取」（披露行）皆假 PASS；预飞 54 活跃对 16 对旧判全靠词根散落（15/16 全词「成长股/周期股」压根未出现，1/16 全词仅在「高位成长股有牵制」市场语境行）。收窄=类型词（primary 全词+词根混合触发）+分类陈述词（属/框架/类型/分类/classification，m1 开篇句合同+688502 语料变体「本文按成长股框架分析」推导，已入 m1）**同行**。重放 verdict flips=0（16 对子检查收紧全落在既有 #2/#3 FAIL 之下——模式B 报告本就缺框架词，G39 不在其生产 gate 集）；保护面=「框架词在场但类型句靠词根」的假形态。#2 框架词/#3 宏观词维持现状显式占行：触发词自锚（PB/PS/PPI 本身即语境），否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL"
-  - signature: G25#news_consumption:crossline_join
-    gate: G25
-    subcheck: news_consumption
-    reason_class: crossline_join
-    match: "同节消费"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "消费判定改语境锚同节共现（_contextual_presence scope=section）：旧两独立全文条件（『事件』词任意处 + 任意 [src:] 计数）与 G69 R7 同构——事件词散在技术面叙事（『离散事件』）+ s5_events src 挂全景表即可拼出「消费」（000657 形态）。窗口裁决过程=纪律 ROI 第二实证：初申 line 被 56 对重放证伪（6 翻转中 5 对=002130/300223/688195/000960/300835 合法消费全为『节标题带事件词+src 挂节内明细行』跨行同节形态，行级锚全假 FAIL）→ 按制度化规则改锚表（line→section）不改报告；仅存 000657 一对翻转=B 模式报告×cache 全量快照配对伪影（报告自身管道未拉 news，旧 True 系『离散事件』叙事词侥幸命中）。REAL_WATCH 双向探针：同节跨行=True（防回退行级）+跨节拼=False（防松动回全文级）；锚表已入 m4 §4.1.1 gate 锚点块"
-  - signature: G71#projection:panorama_pct_misread
-    gate: G71
-    subcheck: head_capstone_probability
-    reason_class: panorama_pct_misread
-    match: "漂移"
-    count: 0
-    last_seen: "2026-09-02"
-    status: landed
-    blocked: false
-    fix: "G71④ 假漂移（E类：词法概率误读，2026-09-02 双批+第三会话共 5 轮实锤）：旧 _prob_by_root 对切片内所有 | 行做「词根+首个%」共现抽取，证据全景表（无概率列）中性行的裸 %（买入 100%/获利盘 10.89%/TD9 66.7%）被误读为情景概率。引擎收窄已落地（P0 批）：只扫表头含「概率」列的表、按列名取概率列数值、同词根多表实例 reason 全枚举（防修一轮暴露下一个）；corpus=FLIP×5+INVARIANT+ENUMERATION（test_b_head_g71.TestG71ProbTableGate，红先绿后已演示）。写作侧规避条款（非情景表禁裸 %）自 landed 批失效（宪法②）。显式盲区声明（NEGATIVE-CONTROL 裁决）：散文概率主张（非表格行）从未在④执法面（旧版仅扫 | 行，先在盲区非本次收窄造成）；归档抽样 3 处散文概率主张均与各自表格值一致，未发现漂移实例；观察签名——若出现「散文概率主张与头表冲突」漏报实锤 → 立案扩锚评审（扩锚须结构锚，禁止词法叠加词法）"
-  - signature: G30#1:scene_bucket_blacklist_misfire
-    gate: G30
-    subcheck: panorama_coverage
-    reason_class: scene_bucket_blacklist_misfire
-    match: "有数据未纳入"
-    count: 1
-    last_seen: "2026-09-02"
-    status: landed
-    blocked: false
-    fix: "G30#1 真片面假 FAIL（B类引擎侧，retrospective_audit_20260902 处置④）：旧 _scene_has_data 黑名单语义仅 failed/error/throttled 判无，status=degraded/missing 的非空信封（002202 实证：asset_safety={status:degraded} 无 data 键、segment 富 dict status=missing）落 bool(val) 兜底判 present → 把从未到货的维度当 present 强制覆盖。已落地三桶（P1b 批）：_scene_bucket 判 present/gap/failed/absent，panorama 增 disclose_quant（failed 或 degraded/missing 信封，theme+path+status）；G30#1 新增披露义务臂——豁免覆盖≠静默免单（防 Goodhart），各维须一行〈维度名或关键词+降级/缺失/失败〉（002202 §4.0 维表形态=合规样例）；结构性缺席（mode B 不拉 s1）不担披露义务。corpus 四段=FLIP/PROTECTION(正外部性保护)/INVARIANT/NEGATIVE（test_g30_disclose_bucket.py）。预申报翻转实测：12 份首写 verdict/failed-set 零变化，仅 reason 面——002202 真片面[资产安全,主营构成]→披露义务[资产安全[path:degraded]]（主营构成首写自带披露行）、300408 豁免清单增两维（display-only）"
-  - signature: G27#financial_indicators:start_year_empty_nextnew
-    gate: G27
-    subcheck: financial_indicators
-    reason_class: start_year_empty_nextnew
-    match: "financial_indicators"
-    count: 0
-    last_seen: "2026-09-08"
-    status: landed
-    blocked: false
-    fix: "（泰金 688813 实锤 2026-09-08）runner _fetch_financial_indicators 硬编码 start_year='2018'——新浪 stock_financial_analysis_indicator 对次新票（2026-03-31 上市）在 start_year 早于上市年时返回 0 行 → financial_indicators all_failed → G27 数据臂 FAIL。已 landed（2026-09-09）：单发改双档 ladder（2018 空→降档 2024 重试一次），fetch_with_fallback 缓存/失败记忆全继承（params 入键两档不互染）；老股首试即中零额外调用。测试 test_financial_indicators_ladder.py 5 用例（真实 payload fixtures：688813@2024 九行/000657@2018 三十四行）挂载 run_regression.sh；live 688813 自愈 status=ok periods=8。写作侧规避条款已随本批删除（宪法②）：memory 次新家族条目改为「已引擎化禁会话注入」"
-  - signature: G58#percentile:m0_hijack_first_verify
-    gate: G58
-    subcheck: percentile
-    reason_class: m0_hijack_first_verify
-    match: "m5 未 surface"
-    count: 0
-    last_seen: "2026-09-09"
-    status: pending
-    root_cause: engine
-    blocked: false
-    fix: "（剑桥 603083 实锤 2026-09-09）section_locator.locate() 候选按文档序首个验签命中者胜——m0「股票分类与估值框架」节含 G58 verify_re token 时劫持 m5 切片→估值分位三维全假 FAIL：PE 子串可经 PEG/『动态 PE』命中，PB 可经『禁以 PB』否定句命中（gate 主 hint 宣称 m0 不再劫持，实际 verify_re 无词边界、否定句/缩写含塞即命中）。写作侧规避（随本签名 landed 批删除，宪法②）：m0 框架行避写 PE/PB/PEG 及『市盈/市净』子串，改用 动态盈利倍数/账面价值倍数/市销率 表述，G39 框架词由 PS/DCF/市销率 继续满足（剑桥已按此过 56/56）。引擎修向（宪法⑧候选）：G58 head_re 候选排除分类章标题，或 verify_re 对 PE/PB 加词边界"
-  - signature: G80#c_arm:corpus_missing_voice_raw
-    gate: G80
-    subcheck: c_arm
-    reason_class: corpus_missing_voice_raw
-    match: "非语料子串"
-    count: 0
-    last_seen: "2026-09-09"
-    status: landed
-    blocked: false
-    fix: "（世运 603920 复盘实锤 2026-09-09）voice 相不存 raw_answer——首维度标题前的导语段（模型复述/总起，实测 8.6% 字量）不在任何 answers 维：导语段真引文逐字照抄反被 c 臂判『非语料子串』（真引文诬为改写），且 stats 对全文计数与语料口径分叉不可对账。已 landed：xq_voice.py voice 信封 data 增 raw_answer（与 check 相同构）+ gate_definitions G80 c 臂语料拼装 +mv.data.raw_answer（.get 兜底，旧快照零翻转）。先红后绿：gate_fixture_test SECTION_PROBES R1 正例探针（引文仅存 mv.data.raw_answer 样本）修复前必 FAIL、修复后 PASS。写作侧无规避条款（纯引擎修，无可规避面）"
-  - signature: F3#report_path:run_scoped_collision
-    gate: verify_gates
-    subcheck: report_path
-    reason_class: run_scoped_collision
-    match: "陈旧拷贝|run-scoped"
-    count: 0
-    last_seen: "2026-09-01"
-    status: landed
-    blocked: false
-    fix: "（2026-09-01 收官批 B2 落地，补注册 2026-09-10）并行会话互覆 /tmp 固定路径报告/快照——verify_gates 验的是 A 的报告 × B 的快照，静默串档。已 landed：报告/快照路径 run-scoped（analysis_report_<code>）+ verify_gates CLI 层 mtime 闸（报告 mtime < 快照 mtime → exit 2『陈旧拷贝』，两极实测：早于拦截/新于放行；主条目 REFACTOR_LOG:139）+ mode 段叠加（2026-09-09 模式隔离批：mode<A|B> 段，同模式才可覆盖）。残余（显式记录在案）：同 code 同 mode 跨日碰撞 day-scoped 不足——mtime 闸兜底拦截，未见复发实锤"
-  - signature: F4#web_writeback:key_alias_contract
-    gate: G72
-    subcheck: web_writeback
-    reason_class: key_alias_contract
-    match: "web_research"
-    count: 0
-    last_seen: "2026-09-11"
-    status: landed
-    blocked: false
-    root_cause: engine
-    fix: "（603256 实锤 2026-09-11，回溯实证同型 4 次：688270 09-02→E批#13 只做形态显性化、09-09 会话 transcript 已自行推导键名不匹配、600105 09-10、603256 09-11——每次会话内人肉补救，诊断从未落账）调用方照 orchestrator SKILL.md F8 节旧 schema 传 {source,title,url,published,content}，adapter 白名单只收 {topic,value,provider,url,query}——content 静默丢、status=ok+stdout 成功面、URL-only WARN 只进快照 _warnings 延后至 precheck/G72 才见=反馈环断裂。已 landed 三层：①adapter 键名合同容错（别名 content/text/finding→value、title→topic、source→provider 仅当目标键空回填；白名单外非空键命名 WARN + fetch_log dropped_keys/mapped 记账；_ 前缀引擎自有键豁免防 scene 行重写回假 WARN）②runner 写回 stdout 如实报 substantive/url_only + _warnings 即时 stderr ③根因层 SKILL.md:204 schema 改白名单 5 键。先红后绿：envelope 603256 真实形态反例修复前必 FAIL；parity 3 票 byte-parity 零漂移。残余（显式在案）：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持）。主条目=两仓 REFACTOR_LOG 2026-09-11"
+- signature: G63#percentile:percentile_as_price
+  gate: G63
+  subcheck: percentile
+  reason_class: percentile_as_price
+  match: 分位
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  blocked: false
+  fix: （金安实锤）换手/估值分位数字与 S&R 真值落 ±5% 容差窗被误判价位转录错——引擎已剥『N分位』词（E1），报告可直书分位数字；复发=剥离 regex 回退
+- signature: G30#5:negation_window
+  gate: G30
+  subcheck: '5'
+  reason_class: negation_window
+  match: '#5'
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  blocked: false
+  fix: （金安实锤）前置否定词（不支持/暂不/无加仓…）修饰的动作词被当主推荐动作——引擎已加 12 字符否定窗+两遍锚定（E2）；capstone 区动作词仍建议用 持有/观望/逢低承接
+- signature: G21#src_path:alias_hotspots
+  gate: G21
+  subcheck: src_path
+  reason_class: alias_hotspots
+  match: 真路径|假层
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  blocked: false
+  fix: （金安实锤）假层路径 5 重灾区：technical.relative_strength / td.daily / cash_flow_statement / s9_news——引擎已带 PATH_ALIASES 指引（E5），照 suggestion 改真路径
+- signature: G21#src_path:numeric_subscript
+  gate: G21
+  subcheck: src_path
+  reason_class: numeric_subscript
+  match: 去下标|数组下标
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  blocked: false
+  fix: （金安/龙磁实锤）数组下标 .N（signals.events.0/seats.0）必 FAIL——G21 按 dict 键步进；去下标锚父级节点
+- signature: G62#tally:direction_column_contract
+  gate: G62
+  subcheck: tally
+  reason_class: direction_column_contract
+  match: 跨章不一致
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  blocked: false
+  fix: （德福实锤，两条并一）①方向列必须第 2 列且单元格字面=方向、括号注释挪「现状」列；②他表（§3.2 信号矩阵）第 2 列裸方向词曾误计入——引擎已表头签名执法（E4：只数表头第 2 列=方向 的表），他表可安全用「中性区」带修饰词；复发（跨章不一致 FAIL 再现）=表头签名回退
+- signature: G55#disclosure:false_missing_claim
+  gate: G55
+  subcheck: disclosure
+  reason_class: false_missing_claim
+  match: VWAP
+  count: 0
+  last_seen: '2026-08-31'
+  status: pending
+  blocked: false
+  fix: （德福实锤）缺失披露必验真：VWAP 真值 89.83 在而写「字段为空」→反捏造 FAIL——披露缺失前必 snapshot_view --field vwap 验真
+- signature: G55#vocab:boundary_words
+  gate: G55
+  subcheck: vocab
+  reason_class: boundary_words
+  match: 仓位|盈亏比|重仓
+  count: 0
+  last_seen: '2026-08-31'
+  status: pending
+  blocked: false
+  fix: （德福实锤）词表子串命中：m3 段「仓位管理/仓位节奏」也算越界——仓位/盈亏比/重仓是 m6/m7 边界词，m3 只读数
+- signature: G56#pointer:literal_home_link
+  gate: G56
+  subcheck: pointer
+  reason_class: literal_home_link
+  match: 详见 m9/m7
+  count: 0
+  last_seen: '2026-08-31'
+  status: pending
+  blocked: false
+  fix: （德福实锤）m1 资金筹码句须含「详见 m7/m9」字面（「详见 §8」不够），≤1 句+指向 home
+- signature: G64#caliber:big_order_mislabel
+  gate: G64
+  subcheck: caliber
+  reason_class: big_order_mislabel
+  match: 口径错标
+  count: 0
+  last_seen: '2026-08-31'
+  status: pending
+  blocked: false
+  fix: （德福实锤）行含「大单」不含「主力」→数值命中主力/全单口径即 FAIL——写「全单口径净流入约 N 亿」或标注「主力」
+- signature: G30#1:substring_keyword
+  gate: G30
+  subcheck: '1'
+  reason_class: substring_keyword
+  match: 增发|担保
+  count: 0
+  last_seen: '2026-08-31'
+  status: pending
+  blocked: false
+  fix: （德福实锤）⑫治理行须含「增发」「担保」词本身——「定增」不含「增发」子串，担保数额照抄 timeline
+- signature: G21#m5_src_count:bare_false_reason_loss
+  gate: G21
+  subcheck: m5_src_count
+  reason_class: bare_false_reason_loss
+  match: 橡皮章估值
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: m5 verified [src:]<2 臂已 GateResult 化：reason 带现有锚点清单+补锚示例——照抄补锚；复发=reason 文本回退泛句
+- signature: G32#data_layer:bare_false_reason_loss
+  gate: G32
+  subcheck: data_layer
+  reason_class: bare_false_reason_loss
+  match: \[数据层\]
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 拉取失败臂带 [数据层] 前缀+status 真值：不改报告，重跑 s_lhb 拉取或上报数据源异常
+- signature: G33#data_layer:bare_false_reason_loss
+  gate: G33
+  subcheck: data_layer
+  reason_class: bare_false_reason_loss
+  match: \[数据层\]
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 同 G32：[数据层] 前缀=数据层问题，重跑 northbound 拉取或上报，报告侧不动
+- signature: G53#turnover_pct:bare_false_reason_loss
+  gate: G53
+  subcheck: turnover_pct
+  reason_class: bare_false_reason_loss
+  match: 换手分位数捏造
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: reason 带「报告第X分位 vs snapshot pct_250=Y（偏离N>5）+违规行号」——照抄 snapshot 改写（tol ±5 分位）
+- signature: G57#growth_tier:bare_false_reason_loss
+  gate: G57
+  subcheck: growth_tier
+  reason_class: bare_false_reason_loss
+  match: growth_tier
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 两臂（high/moderate）reason 带档位语义+照抄补写句+src 路径——m4 §4.1.1 直接补成长强度句
+- signature: G61#data_layer:bare_false_reason_loss
+  gate: G61
+  subcheck: data_layer
+  reason_class: bare_false_reason_loss
+  match: \[数据层\]
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 同 G32：[数据层] 前缀=重跑 s_stock_evaluation 拉取或上报，报告侧不动
+- signature: G51#sgr:static_reason_no_truth
+  gate: G51
+  subcheck: sgr
+  reason_class: static_reason_no_truth
+  match: SGR 无中生有|SGR 不适用却报
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 两臂 reason 带 snapshot 判定真值+违规行 L{n}:『原句』——删数值改「未计算/不适用」，或补拉信封后照抄
+- signature: G52#atr:static_reason_no_truth
+  gate: G52
+  subcheck: atr
+  reason_class: static_reason_no_truth
+  match: ATR 无中生有
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: reason 带报告 ATR 值+违规行号——删数值改「ATR 未计算」或补拉 atr14 后照抄（单位元）
+- signature: G58#valuation_pct:static_reason_no_truth
+  gate: G58
+  subcheck: valuation_pct
+  reason_class: static_reason_no_truth
+  match: 估值分位无中生有
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: reason 带违规行号——删具体分位数改「分位数据缺失」，或补拉后按 pct_5y×100 口径照抄
+- signature: G58#valuation_pct:locator_hijack_title_anchor
+  gate: G58
+  subcheck: valuation_pct
+  reason_class: locator_hijack
+  match: 定位层|m5 未 surface .*（applicable）
+  count: 7
+  last_seen: '2026-09-02'
+  status: pending
+  root_cause: engine
+  blocked: false
+  fix: H1 含「估值」劫持 m5 切片（_locate_section head_re ^#{1,4} 未排除 level-1 + verify_re 可被 TL;DR 序言满足 + 15% 容差跨值代偿）——引擎修 head_re ^#{2,4} + fallback fail-loud + 定位诊断入 reason（修复批①-⑤，REFACTOR_LOG 2026-09-02 条目）；落地前
+    G58 PASS 一律视为未验证状态，禁以改标题规避
+- signature: G63#percentile_variant:bai_percentile_leak
+  gate: G63
+  subcheck: percentile_variant
+  reason_class: bai_percentile_leak
+  match: 百分位
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: E1 剥离正则补百分位/分位数变体（批2#1 landed）：『N 百分位』的『百』挡在 \s*分位 前——语料实锤『94 百分位』『3 百分位』今仍泄漏价位对拍；修后分位族（分位/百分位/分位数/分数）全形态不进对拍池。证据：HEAD 旧引擎复跑『94 百分位』FAIL（偏0.8%）→修后 PASS；归档44对0翻转；5形态进 trap_corpus.yaml 永久语料
+- signature: G30#1:synonym_dingzeng
+  gate: G30
+  subcheck: '1'
+  reason_class: synonym_dingzeng
+  match: 定增
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: fatal/治理行 surface 同义词归一 定增≡增发（批2#5 landed，德福实锤从写作纪律升级 engine 修复）：报告写『定增』不再误报『增发』漏报；执法力反例（配售=两者皆非）仍报缺失；归档44对0翻转；形态进 trap_corpus（g30_surf_dingzeng_defu）。担保词表部分仍属写作纪律（见 G30#1:substring_keyword pending）
+- signature: G30#5:negation_context_v2
+  gate: G30
+  subcheck: '5'
+  reason_class: negation_context_v2
+  match: 主推荐
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: E2 否定窗 v2（批2#2 landed）：窗遇标点截断+紧邻否定词（没有|难以|不再|放弃|拒绝，距动词≤2字符）——七句评测 1/7→7/7（5 误判翻转+E2 锚 None→持有+趋势锚不回退）；归档44对0翻转；七句固化 trap_corpus；窗语义合同同步 m6/m11（E 类 expected 源）；被否决设计 P2a 宽窗/P2b 后置窗见 _research/b2_prototype.py
+- signature: G21#did_you_mean:registry_hint
+  gate: G21
+  subcheck: did_you_mean
+  reason_class: registry_hint
+  match: 近邻
+  count: 0
+  last_seen: '2026-08-31'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: _explain_bad_path 第 1 层断键挂 data_contracts.SCENES registry（批2#4 landed，reason-only verdict 恒不变）：scene 在注册表而快照未生成 → [数据层] 归因（查快照生成/重跑拉取，非路径拼写）；拼写错且兄弟键无近邻 → registry difflib 近邻，禁退化裸路径报错。guard=TestTrapCorpus.test_g21_registry_hint
+    两形态断言；归档44对0翻转。**计数语义**：match『近邻』命中=报告侧又引用了坏路径（合法 FAIL，写作纪律信号）；引擎回归面=建议缺失，由 guard 测试把守——delta 勿按引擎回归处置
+- signature: G28#dupont_panel:data_layer_missing
+  gate: G28
+  subcheck: dupont_panel
+  reason_class: data_layer_missing
+  match: 杜邦
+  count: 10
+  last_seen: '2026-09-01'
+  status: pending
+  blocked: false
+  fix: '（2026-09-01 首批 --propose 入账）历史 sidecar 10 处：快照 dupont 面板未生成（s1_financial 无该键）→ 真数据层缺非引擎陷阱，引擎按设计执法；G28 轨1 已真值化（reason 带 [数据层]+status 真值），此类 FAIL 修数据不修报告（重跑 s1_financial），mixed_caliber 软化政策见 pending
+    #8 轨2'
+- signature: G28#dupont_caliber:disclosure_missing
+  gate: G28
+  subcheck: dupont_caliber_disclosure
+  reason_class: disclosure_missing
+  match: 报告缺口径披露行
+  count: 0
+  last_seen: '2026-09-02'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 口径混装确认（残差触发 rel>5% ∧ EM RPT_F10_FINANCE_DUPONT 独立管道自洽∧追随 Sina ROE≤5%∧同期，runner._dupont_caliber_probe 写 caliber_note）而报告沉默→FAIL，reason 照抄 caliber_note 原句（m2 §2.12 模板）。残差只作触发器（交叉验证≠自算，8-30 裁决不变）；容差单值
+    rel 5%（001309 ROE>90 abs 必错案 / 000960 残差 0.27pp=rel 3.73% 无害不触发——两侧边界钉死 trap_corpus g28_caliber_*）。预申（2026-09-01 实测语料）：3 指纹股（001309 rel 7.03%/300456 14.97%/000657 9.42%）EM 全自洽全追随→confirmed；真实报告矩阵 001309/300456
+    已披露 PASS、000657 沉默=唯一真翻转；25 对照股+归档 26 对零变化（冻结快照无 probe 键=结构零翻转）。裁决原文『恰好 7 只』出自 8-30 记录（abs 0.25pp 旧阈值语料），中报落定后 rel 5% 单值下收敛为 3 只——计数以实测为准（计数勿硬编码规约）
+- signature: G49#fabrication_arm:crossline_cooccurrence
+  gate: G49
+  subcheck: fabrication_arm
+  reason_class: crossline_cooccurrence
+  match: 同片段
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 反编造臂片段级收窄（套 G48 R5 范式，re.split [|。；;\n]）：『买卖力量』与阵营词须同片段才 FAIL——旧全文共现把『卖方研报』覆盖度语境（观点层行）误当阵营结论，跨行误伤。REAL_WATCH no_bsp 探针同步刷新 frozen False→True；归档 55 对 G49 零翻转=无误伤存量
+- signature: G16#cl_grounded:fulltext_collision
+  gate: G16
+  subcheck: cl_grounded
+  reason_class: fulltext_collision
+  match: 合同负债语境
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: grounded 作用域从全文收窄为 CL 行∪『合同负债』标题节正文（slice_of 单一实现，G63 section 范式）：旧 `c in report` 全文扫——股价 35.0 恰等 cl_yi 即假 grounded。初版行级作用域被归档重放抓出误伤（002138：节内判读行 0.29 亿不重复字面词）→ 收正为 section 级；节内表格行/判读行均算合法语境消费。guard=test_g16_section_judgeline_pass；归档
+    g16 零翻转
+- signature: G67#vol_consumption:foreign_context_collision
+  gate: G67
+  subcheck: vol_consumption
+  reason_class: foreign_context_collision
+  match: 无量价语境行
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 量价数值对拍挂语境锚（量比|成交|倍数|放量|缩量|换手|量能|量价|5日|20日|周成交 同行）：旧 `_nums_in(report)` 全文对拍——归档实锤 4 票假 PASS 全为异语境撞数（fib 回撤 0.786 vs vol_ratio 0.817、TD9 均值 -1.02 vs 1.048、EPS/股息行撞数）。4 票翻转已逐条裁决=预期收紧非误伤（报告须把量比/成交倍数写进量价语境行）；G49/G16
+    零翻转
+- signature: G69#dim_consumption:crossline_join
+  gate: G69
+  subcheck: dim_consumption
+  reason_class: crossline_join
+  match: 同行
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: '消费判定改同行共现+否定披露守卫（F4b① 裁决 B landed，_contextual_presence forbid 首用）：旧『src_token in report AND 维度词 in report』两独立全文条件可跨行拼「消费」——降级披露行如实挂 [src:] 反被计入维度（R7 观察档实证，8-27 暂缓、9-01 回读 m37 四维表合同=行级意图后落码）。披露词表（未消费/未拉取/降级/不可得）从
+    m37 披露措辞合同推导并已入 m37；暴露计数（守卫命中维度）进 diag.found；值对拍缺口登记 pending #10；归档 56 对 0 翻转=预申③兑现；watch 探针 True 不变仅注记更新（预申①）'
+- signature: G13#holding_decision:fulltext_word
+  gate: G13
+  subcheck: holding_decision_context
+  reason_class: fulltext_word
+  match: 同节共现
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 消费判定改语境锚同节共现（_contextual_presence scope=section，presence 批门 2/4）：旧 `if 决策 in report` 全文单词条件——「董事会决策/决策层」等治理叙事词即可过（持仓语境零校验）。锚表=持仓/仓位/成本/买入价/底仓/现价（m11 WP1b 骨架合同推导，已入 m6）。⚠️ 休眠门注记：holding_status 全管道无
+    producer（仅 gate+测试引用），归档 56 对 0 在场、重放 0 翻转为结构性真空非证据；锚表正确性由单测双向钉死（裁决例句跨行同节=PASS/治理词跨节=FAIL/裸决策句=FAIL 预申翻转）。已知宽向：bare 成本 锚覆盖营业成本语境（同节治理词+营业成本会假 PASS，weight-2 容忍，收紧须新证据走预申报）
+- signature: G29#danger_surface:fulltext_danger_word
+  gate: G29
+  subcheck: asset_safety_danger_surface
+  reason_class: fulltext_danger_word
+  match: 同行 surface
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 危险 surface 改语境锚同行共现+披露守卫（_contextual_presence scope=line，presence 批门 3/4）：旧全文 re.search 危险词（🚨/危险/紧张/风险/爆雷/减值/资金链）任一即过——近真空（每份报告都有风险节，「估值/关税风险」即可满足资产安全危险 surface）。收窄=危险词+资产安全对象词（货币资金/有息负债/商誉/现金/资金链/资产安全/cash_to_debt）**同行**且行内无披露词（m2
+    §2.10 flags 句式合同「cash_to_debt=0.30，资金链紧张」，已入 m2）。预飞 16 个 🚨 归档对 14 对真同行（行级窗口预申经语料实证成立，G25 教训前置预飞奏效）；重放 flips=2 全=000657 两模式B 报告×cache 全量快照配对伪影（其自身快照 degraded 如实披露「cash_to_debt 不可计算」，旧 True 系别节风险词假 PASS）。消费臂维持现状显式占行（字段词即对象词自锚无意义）；降级披露行挂对象词由
+    forbid 守卫排除
+- signature: G39#type_sentence:morpheme_leak
+  gate: G39
+  subcheck: type_sentence_context
+  reason_class: morpheme_leak
+  match: 类型结论未落语境
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: '#1 类型词改语境锚同行共现（_contextual_presence scope=line，presence 批门 4/4）：旧 `core not in report` 全文裸词根扫描——词根（周期/成长）泄漏面极广：「多周期共振/周期状态表」（技术面）、「成长性/成长风格」（质量维度/市场语境）、「gap：成长性未拉取」（披露行）皆假 PASS；预飞 54 活跃对 16 对旧判全靠词根散落（15/16
+    全词「成长股/周期股」压根未出现，1/16 全词仅在「高位成长股有牵制」市场语境行）。收窄=类型词（primary 全词+词根混合触发）+分类陈述词（属/框架/类型/分类/classification，m1 开篇句合同+688502 语料变体「本文按成长股框架分析」推导，已入 m1）**同行**。重放 verdict flips=0（16 对子检查收紧全落在既有 #2/#3 FAIL 之下——模式B
+    报告本就缺框架词，G39 不在其生产 gate 集）；保护面=「框架词在场但类型句靠词根」的假形态。#2 框架词/#3 宏观词维持现状显式占行：触发词自锚（PB/PS/PPI 本身即语境），否定句「PB 不作主要锚」是合法内容，加锚反假 FAIL'
+- signature: G25#news_consumption:crossline_join
+  gate: G25
+  subcheck: news_consumption
+  reason_class: crossline_join
+  match: 同节消费
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: 消费判定改语境锚同节共现（_contextual_presence scope=section）：旧两独立全文条件（『事件』词任意处 + 任意 [src:] 计数）与 G69 R7 同构——事件词散在技术面叙事（『离散事件』）+ s5_events src 挂全景表即可拼出「消费」（000657 形态）。窗口裁决过程=纪律 ROI 第二实证：初申 line 被 56 对重放证伪（6 翻转中
+    5 对=002130/300223/688195/000960/300835 合法消费全为『节标题带事件词+src 挂节内明细行』跨行同节形态，行级锚全假 FAIL）→ 按制度化规则改锚表（line→section）不改报告；仅存 000657 一对翻转=B 模式报告×cache 全量快照配对伪影（报告自身管道未拉 news，旧 True 系『离散事件』叙事词侥幸命中）。REAL_WATCH
+    双向探针：同节跨行=True（防回退行级）+跨节拼=False（防松动回全文级）；锚表已入 m4 §4.1.1 gate 锚点块
+- signature: G71#projection:panorama_pct_misread
+  gate: G71
+  subcheck: head_capstone_probability
+  reason_class: panorama_pct_misread
+  match: 漂移
+  count: 0
+  last_seen: '2026-09-02'
+  status: landed
+  blocked: false
+  fix: G71④ 假漂移（E类：词法概率误读，2026-09-02 双批+第三会话共 5 轮实锤）：旧 _prob_by_root 对切片内所有 | 行做「词根+首个%」共现抽取，证据全景表（无概率列）中性行的裸 %（买入 100%/获利盘 10.89%/TD9 66.7%）被误读为情景概率。引擎收窄已落地（P0 批）：只扫表头含「概率」列的表、按列名取概率列数值、同词根多表实例 reason
+    全枚举（防修一轮暴露下一个）；corpus=FLIP×5+INVARIANT+ENUMERATION（test_b_head_g71.TestG71ProbTableGate，红先绿后已演示）。写作侧规避条款（非情景表禁裸 %）自 landed 批失效（宪法②）。显式盲区声明（NEGATIVE-CONTROL 裁决）：散文概率主张（非表格行）从未在④执法面（旧版仅扫 | 行，先在盲区非本次收窄造成）；归档抽样
+    3 处散文概率主张均与各自表格值一致，未发现漂移实例；观察签名——若出现「散文概率主张与头表冲突」漏报实锤 → 立案扩锚评审（扩锚须结构锚，禁止词法叠加词法）
+- signature: G30#1:scene_bucket_blacklist_misfire
+  gate: G30
+  subcheck: panorama_coverage
+  reason_class: scene_bucket_blacklist_misfire
+  match: 有数据未纳入
+  count: 1
+  last_seen: '2026-09-02'
+  status: landed
+  blocked: false
+  fix: G30#1 真片面假 FAIL（B类引擎侧，retrospective_audit_20260902 处置④）：旧 _scene_has_data 黑名单语义仅 failed/error/throttled 判无，status=degraded/missing 的非空信封（002202 实证：asset_safety={status:degraded} 无 data 键、segment
+    富 dict status=missing）落 bool(val) 兜底判 present → 把从未到货的维度当 present 强制覆盖。已落地三桶（P1b 批）：_scene_bucket 判 present/gap/failed/absent，panorama 增 disclose_quant（failed 或 degraded/missing 信封，theme+path+status）；G30#1
+    新增披露义务臂——豁免覆盖≠静默免单（防 Goodhart），各维须一行〈维度名或关键词+降级/缺失/失败〉（002202 §4.0 维表形态=合规样例）；结构性缺席（mode B 不拉 s1）不担披露义务。corpus 四段=FLIP/PROTECTION(正外部性保护)/INVARIANT/NEGATIVE（test_g30_disclose_bucket.py）。预申报翻转实测：12 份首写
+    verdict/failed-set 零变化，仅 reason 面——002202 真片面[资产安全,主营构成]→披露义务[资产安全[path:degraded]]（主营构成首写自带披露行）、300408 豁免清单增两维（display-only）
+- signature: G27#financial_indicators:start_year_empty_nextnew
+  gate: G27
+  subcheck: financial_indicators
+  reason_class: start_year_empty_nextnew
+  match: financial_indicators
+  count: 0
+  last_seen: '2026-09-08'
+  status: landed
+  blocked: false
+  fix: （泰金 688813 实锤 2026-09-08）runner _fetch_financial_indicators 硬编码 start_year='2018'——新浪 stock_financial_analysis_indicator 对次新票（2026-03-31 上市）在 start_year 早于上市年时返回 0 行 → financial_indicators all_failed
+    → G27 数据臂 FAIL。已 landed（2026-09-09）：单发改双档 ladder（2018 空→降档 2024 重试一次），fetch_with_fallback 缓存/失败记忆全继承（params 入键两档不互染）；老股首试即中零额外调用。测试 test_financial_indicators_ladder.py 5 用例（真实 payload fixtures：688813@2024
+    九行/000657@2018 三十四行）挂载 run_regression.sh；live 688813 自愈 status=ok periods=8。写作侧规避条款已随本批删除（宪法②）：memory 次新家族条目改为「已引擎化禁会话注入」
+- signature: G58#percentile:m0_hijack_first_verify
+  gate: G58
+  subcheck: percentile
+  reason_class: m0_hijack_first_verify
+  match: m5 未 surface
+  count: 0
+  last_seen: '2026-09-09'
+  status: pending
+  root_cause: engine
+  blocked: false
+  fix: （剑桥 603083 实锤 2026-09-09）section_locator.locate() 候选按文档序首个验签命中者胜——m0「股票分类与估值框架」节含 G58 verify_re token 时劫持 m5 切片→估值分位三维全假 FAIL：PE 子串可经 PEG/『动态 PE』命中，PB 可经『禁以 PB』否定句命中（gate 主 hint 宣称 m0 不再劫持，实际 verify_re
+    无词边界、否定句/缩写含塞即命中）。写作侧规避（随本签名 landed 批删除，宪法②）：m0 框架行避写 PE/PB/PEG 及『市盈/市净』子串，改用 动态盈利倍数/账面价值倍数/市销率 表述，G39 框架词由 PS/DCF/市销率 继续满足（剑桥已按此过 56/56）。引擎修向（宪法⑧候选）：G58 head_re 候选排除分类章标题，或 verify_re 对 PE/PB 加词边界
+- signature: G80#c_arm:corpus_missing_voice_raw
+  gate: G80
+  subcheck: c_arm
+  reason_class: corpus_missing_voice_raw
+  match: 非语料子串
+  count: 0
+  last_seen: '2026-09-09'
+  status: landed
+  blocked: false
+  fix: （世运 603920 复盘实锤 2026-09-09）voice 相不存 raw_answer——首维度标题前的导语段（模型复述/总起，实测 8.6% 字量）不在任何 answers 维：导语段真引文逐字照抄反被 c 臂判『非语料子串』（真引文诬为改写），且 stats 对全文计数与语料口径分叉不可对账。已 landed：xq_voice.py voice 信封 data 增 raw_answer（与
+    check 相同构）+ gate_definitions G80 c 臂语料拼装 +mv.data.raw_answer（.get 兜底，旧快照零翻转）。先红后绿：gate_fixture_test SECTION_PROBES R1 正例探针（引文仅存 mv.data.raw_answer 样本）修复前必 FAIL、修复后 PASS。写作侧无规避条款（纯引擎修，无可规避面）
+- signature: F3#report_path:run_scoped_collision
+  gate: verify_gates
+  subcheck: report_path
+  reason_class: run_scoped_collision
+  match: 陈旧拷贝|run-scoped
+  count: 0
+  last_seen: '2026-09-01'
+  status: landed
+  blocked: false
+  fix: （2026-09-01 收官批 B2 落地，补注册 2026-09-10）并行会话互覆 /tmp 固定路径报告/快照——verify_gates 验的是 A 的报告 × B 的快照，静默串档。已 landed：报告/快照路径 run-scoped（analysis_report_<code>）+ verify_gates CLI 层 mtime 闸（报告 mtime < 快照 mtime
+    → exit 2『陈旧拷贝』，两极实测：早于拦截/新于放行；主条目 REFACTOR_LOG:139）+ mode 段叠加（2026-09-09 模式隔离批：mode<A|B> 段，同模式才可覆盖）。残余（显式记录在案）：同 code 同 mode 跨日碰撞 day-scoped 不足——mtime 闸兜底拦截，未见复发实锤
+- signature: F4#web_writeback:key_alias_contract
+  gate: G72
+  subcheck: web_writeback
+  reason_class: key_alias_contract
+  match: web_research
+  count: 0
+  last_seen: '2026-09-11'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: （603256 实锤 2026-09-11，回溯实证同型 4 次：688270 09-02→E批#13 只做形态显性化、09-09 会话 transcript 已自行推导键名不匹配、600105 09-10、603256 09-11——每次会话内人肉补救，诊断从未落账）调用方照 orchestrator SKILL.md F8 节旧 schema 传 {source,title,url,published,content}，adapter
+    白名单只收 {topic,value,provider,url,query}——content 静默丢、status=ok+stdout 成功面、URL-only WARN 只进快照 _warnings 延后至 precheck/G72 才见=反馈环断裂。已 landed 三层：①adapter 键名合同容错（别名 content/text/finding→value、title→topic、source→provider
+    仅当目标键空回填；白名单外非空键命名 WARN + fetch_log dropped_keys/mapped 记账；_ 前缀引擎自有键豁免防 scene 行重写回假 WARN）②runner 写回 stdout 如实报 substantive/url_only + _warnings 即时 stderr ③根因层 SKILL.md:204 schema 改白名单 5 键。先红后绿：envelope
+    603256 真实形态反例修复前必 FAIL；parity 3 票 byte-parity 零漂移。残余（显式在案）：published 等无目标键仍丢弃（WARN 命名非静默）；URL-only 合法降级面不变（E批#13 裁决维持）。主条目=两仓 REFACTOR_LOG 2026-09-11
+- signature: F4#web_writeback:multicall_overwrite
+  gate: G72
+  subcheck: web_writeback
+  reason_class: multicall_overwrite
+  match: web_research
+  count: 0
+  last_seen: '2026-09-15'
+  status: landed
+  root_cause: engine
+  blocked: false
+  fix: （四方达 300179 实锤 2026-09-15）runner web_research 每次调用整体替换 snapshot items 而非合并——同票三批拉取（全球供需 12 条 → 补充 4 条 → PDF 批 4 条）后 snapshot 仅存最后一批 4 条，前两批 16 条静默蒸发（status=ok + stdout 成功面，同 F4 反馈环断裂形态；发现于写作期取数）。landed（2026-09-16，financial-data-routing
+    8973f9a）：写回默认 merge-by-topic upsert（exact-topic strip 整行替换、空 topic 只追加、无模糊匹配；_merge_web_research_items 纯函数）；--replace 显式重建（保 S1 清警告语义）；stdout mode/existing/incoming/appended/updated 诚实计数；--verify 写后读盘对拍；告警=状态函数（URL-only/空场跨批存活、修正后自清）；覆盖旧行
+    _warnings 留痕旧值→新值。回归=test_web_research_merge_writeback.py 13 用例（run_regression.sh 契约层恒跑）+变异抽查红极实证。写作侧规避条款已按失效条件（引擎 merge 落地批）同批删除，现行用法=直接重跑同命令多批累积，删行用 --replace。主条目=两仓 REFACTOR_LOG 2026-09-16
+- signature: TD#backtest:sell_win_direction_blind
+  gate: TD
+  subcheck: backtest
+  reason_class: sell_win_direction_blind
+  match: td9_sell
+  count: 0
+  last_seen: '2026-09-14'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: （603011 实锤 2026-09-14）td_analyzer._backtest(setups, closes, direction) 的 direction 参数收而不用，win 判据硬编码 r>0（涨=胜），买/卖两臂共用——td9_sell（9 天抬升衰竭→预期跌）的胜率被算成『续涨率』：603011 实测 td9_sell.5d 66.7→33.3，『TD9卖胜率66.7%(有效)』实为
+    3 次信号后 5 日 2 涨 1 跌，方向性结论反向。median 无辜（收益中位数方向中性）；effectiveness 阈值(≥55% 有效)只对 buy 臂成立。已 landed：win 判据按 direction 分支——sell 臂 win=r<0（跌=胜），buy 臂不变；周线 _compute_weekly_resonance 同函数复用自动覆盖。先红后绿：test_sell_backtest_win_is_fall_rate
+    修复前必 FAIL、修复后过；买臂守恒测恒绿；parity 3 票 byte-parity 零漂移（pureraw 烘焙 td 不重算）；206 份真实快照 dry-run diff-scope ⊆ {td9_sell winrate, effectiveness_sell, action_hint} 且 td9_buy 全等。td9_sell.winrate 现行语义=下跌胜率，报告按此直读，勿再反读。主条目=routing
+    REFACTOR_LOG 2026-09-14
+- signature: RD#readside:entries_overwrite
+  subcheck: readside_parse
+  reason_class: multicall_overwrite
+  match: search_artifact_parser
+  count: 0
+  last_seen: '2026-09-18'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: （688716 实锤 2026-09-18，S8b 首票）search_artifact_parser parse --json 每次调用整文件覆盖——exa 两批分次解析后 entries.json 只剩末批 16/32，会话内人肉发现重解析自愈。同 F4#multicall_overwrite 家族（写回层 300179 同型病理的解析层翻版）。已 landed：--json 同路径按
+    entry_id upsert 累积、failed 按本批文件替换、caliber_flags 按 (file,q,unit,min,max) 去重合并；stdout 报 本批 n/累积 n。先红后绿：test_parse_json_accumulates_across_calls 两批同路径须=2；变异（撤合并改覆盖）红→恢复绿；parser 14 用例+G81 11 用例+全量回归 exit0。主条目=REFACTOR_LOG
+    2026-09-18
+- signature: RD#readside:api_overlap_search
+  subcheck: readside_presearch
+  reason_class: api_first_violation
+  match: websearch|web_research
+  count: 0
+  last_seen: '2026-09-18'
+  status: pending
+  blocked: false
+  root_cause: process
+  fix: （688716 实锤 2026-09-18）runner/client API 已验证可得的数据（本票年报财务/s36/peer 等 scene 面）仍走 websearch 搜一遍、读一遍、存一遍、写一遍=4×浪费，且挤占引擎读面预算（32 条中 ~20 条属此类或噪音）。写侧规避条款（宪法②，工单=本签名）：**每次构造 search query 前逐需求反查 data-source-registry
+    catalog 与 runner scene 表，API 已验证可得的数据禁入 websearch query**；境外同业（runner 不可达口径）留 websearch 合法。失效条件=搜前反查机械化落地（checklist 强制子项执法或引擎 scene 表预检）之批次，本条同批复审删除/降级。引擎化候选：query 构造步注入 scene 表清单对照。
+- signature: G81#b:line_number_attribution
+  gate: G81
+  subcheck: b_num_consistency
+  reason_class: multicite_line_mixed_numbers
+  match: web_research_findings
+  count: 2
+  last_seen: '2026-09-19'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: '（301069 实锤 2026-09-19，单票 31 处同型违规）check_g81 b 臂按「单个 cite」独立检查：pool=该 cite 锚命中条目的 value∪topic，而行内全部数字（含同行其他 cite 已覆盖的、含带独立 [src: snapshot.*] 的快照数字）都要求 ∈ 该 pool——合成用例实证：『A 100亿 [cite A]；B 200亿 [cite
+    B]』与『毛利率25.65%(快照)；报价1765元/吨 [cite webfinding][src: snapshot.*]』均 FAIL。两个后果：①「机构间口径分歧」类自然披露句（一行对比多个 item 数字）与 b 臂结构性冲突，写作侧只能拆嵌套 bullet；②快照数字被误判为疑似捏造（G21 与 G81 对同一行双执法但 pool 互不认账）。引擎收窄候选（一行改动）：pool 改为行内全部
+    cites 命中条目的并集再查 bad——执法力不降（数字仍必须出自某个被引条目，捏造/张冠李戴仍被抓），且与口径披露语义对齐。写作侧规避条款（宪法②，工单=G81#b:line_number_attribution）：webfinding 引用行「一行一 cite 一组数字」，多 item 对比拆嵌套 bullet，快照数字另起行挂 [src: snapshot.*]；失效条件=引擎 union-pool
+    语义 landed 之批次，本条同批复审删除。诊断链验证：verify_gates lib/gate_definitions.py check_g81 循环 for li,anchor,ln in cites 每 cite 独立查 bad。'
+- signature: G81#b:cjk_unit_boundary_asymmetry
+  gate: G81
+  subcheck: b_num_consistency
+  reason_class: tokenizer_cjk_boundary
+  match: web_research_findings
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: （301069 实锤 2026-09-19）_g81_num_tokens 单位正则用 B\b/M\b（Python re 默认 unicode \w 含 CJK）：条目 value 写『$13B机会』（B 后直接 CJK）时 \b 不成立、数字根本不入 pool（合成实证 _g81_num_tokens('潜在$13B机会')=∅），而报告行写『$13B 机会』（B 后空格）正常提取
+    → 同一数字 value 侧失语、报告侧入账 → b 臂恒 FAIL（T3a FAIL/T3b PASS 实证）。数字是否存在取决于相邻字符是否 CJK，非内容差异。引擎修法候选：B\b/M\b 的 \b 换 (?![A-Za-z0-9]) lookahead（CJK 邻接也算单位边界），或对 value/报告两侧同规则分词保证对称。写作侧临时规避（宪法②，工单=本签名）：引用 B/M 单位数字时照抄条目
+    value 原空格形态（value 无空格则报告也无空格）；失效条件=分词对称化 landed 之批次。
+- signature: G81#b:section_verify_blindspot
+  gate: G81
+  subcheck: section_dispatch
+  reason_class: final_only_accumulation
+  match: web_research_findings
+  count: 2
+  last_seen: '2026-09-19'
+  status: landed
+  blocked: false
+  root_cause: process
+  fix: （301069 实锤 2026-09-19）G81 不在 verify_gates SECTION_FINAL_ONLY=[G11,G12,G21,G22,G80] 且 section 模式活跃门集不含 G81（16 个原子步逐章 --section 全绿，webfinding 消费章 §3.11 内 20+ 处 b 臂违规零暴露），违规积压到 c70 终验一次爆炸；叠加 b_bad[:3]
+    显示上限 → 逐轮修 3 处共 4 轮 whack-a-mole。写作侧规避（宪法②，工单=本签名）：含 webfinding 消费的章节写完后、进入下一章前，先跑本地复刻清剿（python3 复刻 _g81_num_tokens+per-cite 检查扫全报告，301069 会话已验证与引擎判定一致），清零再勾该章；失效条件=①G81 入 section 活跃门集或 ②lint 子命令机械化（search_artifact_parser.py
+    lint-report）landed 之批次。机械化候选（A 类门槛：同会话 31 处同类复发）：把复刻脚本收编为 search_artifact_parser.py lint-report --report X --snapshot Y 子命令。
 
-  - signature: F4#web_writeback:multicall_overwrite
-    gate: G72
-    subcheck: web_writeback
-    reason_class: multicall_overwrite
-    match: "web_research"
-    count: 0
-    last_seen: "2026-09-15"
-    status: landed
-    root_cause: engine
-    blocked: false
-    fix: "（四方达 300179 实锤 2026-09-15）runner web_research 每次调用整体替换 snapshot items 而非合并——同票三批拉取（全球供需 12 条 → 补充 4 条 → PDF 批 4 条）后 snapshot 仅存最后一批 4 条，前两批 16 条静默蒸发（status=ok + stdout 成功面，同 F4 反馈环断裂形态；发现于写作期取数）。landed（2026-09-16，financial-data-routing 8973f9a）：写回默认 merge-by-topic upsert（exact-topic strip 整行替换、空 topic 只追加、无模糊匹配；_merge_web_research_items 纯函数）；--replace 显式重建（保 S1 清警告语义）；stdout mode/existing/incoming/appended/updated 诚实计数；--verify 写后读盘对拍；告警=状态函数（URL-only/空场跨批存活、修正后自清）；覆盖旧行 _warnings 留痕旧值→新值。回归=test_web_research_merge_writeback.py 13 用例（run_regression.sh 契约层恒跑）+变异抽查红极实证。写作侧规避条款已按失效条件（引擎 merge 落地批）同批删除，现行用法=直接重跑同命令多批累积，删行用 --replace。主条目=两仓 REFACTOR_LOG 2026-09-16"
-
-  - signature: TD#backtest:sell_win_direction_blind
-    gate: TD
-    subcheck: backtest
-    reason_class: sell_win_direction_blind
-    match: "td9_sell"
-    count: 0
-    last_seen: "2026-09-14"
-    status: landed
-    blocked: false
-    root_cause: engine
-    fix: "（603011 实锤 2026-09-14）td_analyzer._backtest(setups, closes, direction) 的 direction 参数收而不用，win 判据硬编码 r>0（涨=胜），买/卖两臂共用——td9_sell（9 天抬升衰竭→预期跌）的胜率被算成『续涨率』：603011 实测 td9_sell.5d 66.7→33.3，『TD9卖胜率66.7%(有效)』实为 3 次信号后 5 日 2 涨 1 跌，方向性结论反向。median 无辜（收益中位数方向中性）；effectiveness 阈值(≥55% 有效)只对 buy 臂成立。已 landed：win 判据按 direction 分支——sell 臂 win=r<0（跌=胜），buy 臂不变；周线 _compute_weekly_resonance 同函数复用自动覆盖。先红后绿：test_sell_backtest_win_is_fall_rate 修复前必 FAIL、修复后过；买臂守恒测恒绿；parity 3 票 byte-parity 零漂移（pureraw 烘焙 td 不重算）；206 份真实快照 dry-run diff-scope ⊆ {td9_sell winrate, effectiveness_sell, action_hint} 且 td9_buy 全等。td9_sell.winrate 现行语义=下跌胜率，报告按此直读，勿再反读。主条目=routing REFACTOR_LOG 2026-09-14"
-  - signature: RD#readside:entries_overwrite
-    subcheck: readside_parse
-    reason_class: multicall_overwrite
-    match: "search_artifact_parser"
-    count: 0
-    last_seen: "2026-09-18"
-    status: landed
-    blocked: false
-    root_cause: engine
-    fix: "（688716 实锤 2026-09-18，S8b 首票）search_artifact_parser parse --json 每次调用整文件覆盖——exa 两批分次解析后 entries.json 只剩末批 16/32，会话内人肉发现重解析自愈。同 F4#multicall_overwrite 家族（写回层 300179 同型病理的解析层翻版）。已 landed：--json 同路径按 entry_id upsert 累积、failed 按本批文件替换、caliber_flags 按 (file,q,unit,min,max) 去重合并；stdout 报 本批 n/累积 n。先红后绿：test_parse_json_accumulates_across_calls 两批同路径须=2；变异（撤合并改覆盖）红→恢复绿；parser 14 用例+G81 11 用例+全量回归 exit0。主条目=REFACTOR_LOG 2026-09-18"
-  - signature: RD#readside:api_overlap_search
-    subcheck: readside_presearch
-    reason_class: api_first_violation
-    match: "websearch|web_research"
-    count: 0
-    last_seen: "2026-09-18"
-    status: pending
-    blocked: false
-    root_cause: process
-    fix: "（688716 实锤 2026-09-18）runner/client API 已验证可得的数据（本票年报财务/s36/peer 等 scene 面）仍走 websearch 搜一遍、读一遍、存一遍、写一遍=4×浪费，且挤占引擎读面预算（32 条中 ~20 条属此类或噪音）。写侧规避条款（宪法②，工单=本签名）：**每次构造 search query 前逐需求反查 data-source-registry catalog 与 runner scene 表，API 已验证可得的数据禁入 websearch query**；境外同业（runner 不可达口径）留 websearch 合法。失效条件=搜前反查机械化落地（checklist 强制子项执法或引擎 scene 表预检）之批次，本条同批复审删除/降级。引擎化候选：query 构造步注入 scene 表清单对照。"
+- signature: G81#b:segment_scoping_landed
+  gate: G81
+  subcheck: b_num_consistency
+  reason_class: multicite_line_mixed_numbers
+  match: web_research_findings
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  root_cause: engine
+  fix: '（002915 实锤 2026-09-19，39 处假阳）b 臂由 per-cite 整行对拍升级为段落级：行按全部 [src:] 标签切片，每段数字只对拍段尾 webfindings 锚条目；snapshot 段豁免（G21/G63 管辖）；行尾段对拍行内命中并集；b_bad 消息同时修复循环残留 ln（stale 诊断）。单测 20 例（原 14+新 6）+ 全量 35 票历史报告+快照双版对比 verdict 零变化（0 执法力回退）。附带：a 臂认 entry_id 锚（稳定主键）、反向臂消费 accounting.kept_detail.merged_into（转载家族等价）。'
+- signature: G81#reverse:syndicated_family_no_dedup
+  gate: G81
+  subcheck: reverse_consumption
+  reason_class: syndicated_family_false_unconsumed
+  match: web_research_findings
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  root_cause: engine
+  fix: '（002915 实锤）中文财经转载密集：同一报告多站点转载=多条 entry（parser 旧去重仅 dup_url 同 URL），反向臂逐条要求 topic 出现 → 家族成员必然假阳「未消费」。landing：parser account 输出 kept_detail（id/topic/merged_into）+ parse 输出 family_groups（标题相似≥0.85 聚类，仅提示不自动合并）；G81 反向臂按 merged_into 家族等价（任一成员被消费即全族满足）。配套 curation schema 既有 merged_into 字段启用。'
+- signature: runner#accounting:full_scope_double_count
+  gate: meta
+  subcheck: accounting_accumulation
+  reason_class: registry_scope_missing
+  match: web_research
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  root_cause: engine
+  fix: '（002915 实锤：raw_n_total 累积 80 vs 唯一 48、caliber 24 vs 14）account 按 M+K==N 硬约束只能产出全量注册表账，runner 却一律按增量累加 → 跨批双计。landing：account 输出 registry_scope=full，runner 遇 full 替换聚合计数与明细（kept_detail/discarded_detail/caliber_flags），delta 账本仍累加（向后兼容）。'
+- signature: G81#cite:entry_id_anchor_rejected
+  gate: G81
+  subcheck: a_anchor_matching
+  reason_class: primary_key_not_citable
+  match: web_research_findings
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  root_cause: engine
+  fix: '（002915 实锤 35 处坏路径）entry_id 是 kept→items 覆盖断言主键却不被 a 臂认作锚（items(entry_id=X) 路径不存在、裸 id 也不认）→ 写作侧只能用长中文 topic 锚（易错）。landing：a 臂 topic 锚 ∪ entry_id 锚双形态匹配。'
+- signature: G81#b:reason_advice_attribution
+  gate: G81
+  subcheck: b_reason_quality
+  reason_class: missing_copyable_action
+  match: web_research_findings
+  count: 1
+  last_seen: '2026-09-19'
+  status: landed
+  root_cause: engine
+  fix: '（002915 实锤）b 臂 reason 只说「疑似捏造/张冠李戴」不带归因 → LLM 盲猜多轮。landing：_g81_token_advice 三类归因逐 token 给可照抄动作（①他条目精确含→移段/补锚 ②他条目近值→照抄原值并挂其锚 ③本锚近值→照抄 ④无源→删/换锚/加快照锚）。同批 G63 来源归因（found 精确命中 s4 其他字段值如 dmi.ADX → 指认「误入技术位语境行」+照抄真值）、G58 照抄值（「→ 照抄写「57.1% 分位」」）。全库 65 门 reason 质量审计完成：A 类 36 门、B/C 类 29 门列下一批。'
