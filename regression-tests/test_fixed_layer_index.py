@@ -23,7 +23,7 @@ from pathlib import Path
 CLAUDE_MD = Path.home() / "CLAUDE.md"
 ORCH_ROOT = Path(__file__).resolve().parent.parent
 VOL1 = ORCH_ROOT / "_research" / "engineering-paradigms.md"
-VOL2 = Path.home() / "tdx-publish-v4" / "SOP.md"
+VOL2 = ORCH_ROOT / "references" / "publish-sop.md"  # v4.1: 自 ~/tdx-publish-v4 迁入（获版本控制）
 VOL3 = Path.home() / ".claude" / "docs" / "tooling-playbook.md"
 
 INDEX_HEADER = r"###\s*📚\s*触发分册索引"
