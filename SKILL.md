@@ -188,6 +188,8 @@ runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_
 ```bash
 # ⓪ 搜前 API 覆盖反查（trap: RD#readside:api_overlap_search）：逐需求对照 catalog/scene 表——
 #    API 已验证可得的数据禁入 websearch query（搜/读/存/写 4×浪费）；境外同业等 runner 不可达口径才搜
+#    ⚠️ 反查例外=产销量物理量：产量/销量/产销率/产能利用率/分基地产量在三表只有金额无吨数，凡用户问涉产量/产能必发
+#    query「公司名+最新报告期+产量 销量 产销率」并写回 snapshot（688295 实证：只搜年度口径、漏中报口径=覆盖缺口+产能口径错误）
 # ① 工件落盘（票号目录强制，禁 /tmp 根裸命名）: /tmp/<code>/<engine>_<topic>_<batch>.<ext>
 # ② 解析+清点（唯一合法读取面；禁手写解析/禁 text[:N] 截断打印当结果——Exa 流 json.load 必炸=「文本格式」错觉）
 python3 ~/.hermes/skills/stock-analysis/financial-data-routing/search_artifact_parser.py parse \
