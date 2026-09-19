@@ -1,0 +1,222 @@
+{
+ "entries": [
+  {
+   "id": "exa_global_interior_market_b1#q1e1",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "GII：2025基年146.34B→2026E 153.99B→2032E 216.40B CAGR5.74%",
+   "value": "2025 146.34B→2026E 153.99B→2032E 216.40B USD CAGR 5.74%"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e3",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Mordor类：2025 181.14B→2026 186.80B→2033 217.11B CAGR2.2%；EV细分CAGR11.1%；亚太主导",
+   "value": "2025 181.14B→2026 186.80B→2033E 217.11B CAGR 2.2%; EV细分 CAGR 11.1%"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e4",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Mordor：2025 168.11B→2026 175.14B→2031E 214.96B CAGR4.18%；亚太份额37.43% 售后72.77% 集中度Medium",
+   "value": "2025 168.11B→2026 175.14B→2031E 214.96B CAGR 4.18%; 亚太37.43% 售后72.77%"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e5",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "IMARC：2025 172.0B→2034E 243.6B CAGR3.82%；组件/材料拆分维度",
+   "value": "2025 172.0B→2034E 243.6B USD CAGR 3.82%"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e7",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "EMR：2025 176.52B→2035E 293.06B CAGR5.20%；亚太5.8%/中国5.7%/cockpit 6.1%",
+   "value": "2025 176.52B→2035E 293.06B CAGR 5.20%; 亚太CAGR5.8% 中国5.7% cockpit6.1%"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e8",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Fortune BI trim parts（华翔最贴近细分）：2025 48.37B→2026 50.69B→2034E 73.76B CAGR4.80%；亚太份额56.78%",
+   "value": "trim parts 2025 48.37B→2026 50.69B→2034E 73.76B CAGR 4.80%; 亚太56.78%"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e1",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "TOP10供应商表(2024营收/份额)：Forvia 27.2B/7.2% Lear23.5B/6.14% Adient15.4B/4.14% Magna20.2B/5.28% Yanfeng17.5B/4.63% 丰田纺绩13.0B/3.45% Antolin6.0B/1.58%；第10名Tachi-S 5.8B/1.53%；亚太>45%",
+   "value": "TOP10: Forvia 7.20%/Lear 6.14%/Yanfeng 4.63%…第10名1.53%; 亚太>45%"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e3",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "内饰材料供应商全景名单 Other Players 含 Nbhx Trim GmbH（华翔德国子公司）=华翔欧洲内饰供应席位",
+   "value": "供应商名录10大vendor+15家Other Players共25家, 含Nbhx Trim GmbH(华翔德国子公司)"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e4",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "top5集中度36-41%；延锋240+工厂/20国/5.5万人/14研发中心；Lear目标座椅29%份额",
+   "value": "top5 36-41%; 延锋240+工厂20国5.5万人; Lear座椅目标29%"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e5",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "延锋2026 AN Top100第15位升2位=中资上市第2；220+工厂6万人",
+   "value": "延锋全球第15位(2026 Top100); 220+工厂 ~60,000人"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e6",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Lear FY2025官方：营收23.3B flat 净利437M FCF527M 座椅利润率5.5%(调整6.4%)；2026指引23.21B/假设全球产量-1%；2025全球产量+4%(中国+10%北美-1%欧洲-1%)",
+   "value": "Lear FY2025 23.3B/437M/527M; 2026指引23.21B; 2025全球产量+4% 中国+10%"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e7",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "ReportPrime：HS8708.29口径2025 99.1B→2032预测带128-140B CAGR4.3%；CR10≈55%；Forvia 2025 EUR26.2B margin5.6%谈判出售Interiors BG给Apollo(2026-02-24)",
+   "value": "2025 99.1B→2032 128-140B; CR10≈55%; Forvia EUR26.2B margin5.6%出售Interiors"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e8",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Lear座椅全球份额26%(FY2025)两大之一 中期目标29%；2017收购Antolin座椅业务EUR286M",
+   "value": "Lear座椅全球份额26% FY2025; 目标29%"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e2",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "MarkLines：全球基地布局(国内14+欧洲德罗英/北美墨美加/东南亚印尼越菲)；合资Merkt/Schlemmer/安波福/井上/Antolin/Miller；真木真铝碳纤维透光IMD饰条全工艺",
+   "value": "基地:国内14+欧洲3国北美3国东南亚3国; 合资6家; 5类饰条工艺"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e3",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "第三方口径员工21860人与年报22221互证",
+   "value": "员工21,860人(第三方口径)"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e4",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "MatrixBCG：63基地/TTM3.73B/FY2024 3.668B；2024收购IAC六家中国子公司~6亿；2025-03以1欧元剥离NBHX Trim Europe(2024营收2亿欧)；德国厂关闭迁罗马尼亚、北美产能并墨西哥；2023海外收入~30%；全球汽车电子份额~2%(2022)",
+   "value": "63基地; IAC 6子公司~6亿; 1欧剥离NBHX Trim Europe(2亿欧营收); 海外~30%"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e5",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Porter分析：全球份额内外饰合计low single-digit、中国门板/IP细分double-digit；China成本基础+本地化=核心优势；EV电子+15%年增目标；美欧模块厂投资USD30-80M",
+   "value": "全球low single-digit/中国门板IP double-digit; EV电子+15%目标; 海外厂$30-80M"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e6",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "定增募集说明书(官方)：募投新增内饰件产值156,720万(+11.61%)/金属件126,000万(+25.98%)以2024为基准；定点覆盖率73.71%未完全覆盖；客户25+家含特斯拉比亚迪小米理想蔚来等",
+   "value": "募投内饰+11.61%/金属+25.98%; 定点覆盖73.71%; 客户25+家"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e8",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "HDS官网：中国汽车内饰龙头；华翔2022营业额196亿；HDS门板130万套/饰柱70万套(17.5亿元)；新能源产品线Busbar/高压接头/热成型",
+   "value": "2022营业额196亿; HDS门板130万套/饰柱70万套; Busbar/HV Connector"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e1",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Mobility Global 7月月度：欧洲+123K/+23K 中国-193K/-496K 韩国+17K MEA+36K；出口是中国产量稳定器",
+   "value": "欧洲+123K/中国-193K(2026); 中国-496K(2027) units"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e2",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "同源S&P页：日本+60K(熊本地震+台风65K扰动后Q4上调10万+)；印度+41K(GST减税)",
+   "value": "日本+60K; 印度+41K(2026/2027) units"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e3",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "Mobility Global分区域产量表(2026-07-01编制)：全球2025 93.10M→2026 90.68M(-2.6%)→2027 91.61M(+1.0%)；大中华33.10M→31.78M(-4.0%)→32.17M(+1.2%)；九区域全序列",
+   "value": "全球2025 93.10M→2026E 90.68M(-2.6%)→2027E 91.61M(+1.0%); 大中华-4.0%→+1.2%"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e4",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "S&P 2026展望：2025销量91.7M(+3.4%)产量92.9M(+3.7%)近2017峰值95M；2026销量91.8M持平/产量92.6M(-0.4%)",
+   "value": "2025销量91.7M/产量92.9M; 2026E销量91.8M/产量92.6M(-0.4%)"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e6",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "8月更新AutoInformed转述：北美2027+224K；南美+25K/+23K；南亚+104K/+40K-27K；Mike Wall观点=中国需库存管控+国际化",
+   "value": "北美2027+224K; 南美+25K; 南亚+104K units"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e7",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "S&P销量长周期：2025 >94M→2030 >100M（与q1e4的91.7M存在批次口径差=披露点）",
+   "value": "2025销量>94M→2030E>100M units(口径差披露)"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e8",
+   "disposition": "kept",
+   "rule": "",
+   "reason": "与q1e3同表dup——但独立URL确认表真实性，保留作交叉验证",
+   "value": "分区域产量表交叉验证(同q1e3)"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e2",
+   "disposition": "discarded",
+   "rule": "no_numeric_value",
+   "reason": "Barnes目录页全文无数值(USD xx占位符)"
+  },
+  {
+   "id": "exa_global_interior_market_b1#q1e6",
+   "disposition": "discarded",
+   "rule": "off_topic",
+   "reason": "全文为呼吸系统药物/兽医学市场误配内容"
+  },
+  {
+   "id": "exa_supplier_share_b1#q1e2",
+   "disposition": "discarded",
+   "rule": "dup_content",
+   "reason": "与q1e3同主题materials quadrant页，核心厂商名单重复；q1e3另含华翔德国子公司证据故保q1e3弃本条"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e1",
+   "disposition": "discarded",
+   "rule": "low_credibility_noise",
+   "reason": "LinkedIn母公司274人与年报22221人严重矛盾"
+  },
+  {
+   "id": "exa_huaxiang_capacity_b2#q1e7",
+   "disposition": "discarded",
+   "rule": "dup_url",
+   "reason": "MarkLines与q1e2同页面；已从q1e2全量读取全部内容"
+  },
+  {
+   "id": "exa_vehicle_demand_b2#q1e5",
+   "disposition": "discarded",
+   "rule": "no_numeric_value",
+   "reason": "S&P产品销售页无具体预测数字"
+  }
+ ]
+}
