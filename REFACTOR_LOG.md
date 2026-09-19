@@ -879,3 +879,10 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 - G81 反向臂家族等价（trap G81#reverse:syndicated_family_no_dedup landed）：accounting.kept_detail[].merged_into——转载同文家族任一成员 topic 现于报告即全族满足；无 kept_detail 旧账本仍逐条执法（测试锁定零回退）。
 - 诊断修：b_bad 消息引用失败行本身（原循环残留 ln=最后一 cite 行，002915 排障实测误导）。
 - 未修（仍 pending）：G81#b:cjk_unit_boundary_asymmetry（tokenizer CJK 邻接）、G81#b:section_verify_blindspot（section 门集+lint 机械化）。
+
+## 2026-09-19 读侧协议 v4.3/v4.4 [C] 批：tokenizer CJK 对称 + lint-report 机械化 + FAIL reason 归因合同（002915 会话）
+- v4.3 tokenizer（trap G81#b:cjk_unit_boundary_asymmetry landed）：`B\b/M\b` → `B(?![A-Za-z0-9])` lookahead——`$13B机会`（value 侧）曾整数字失语而 `$13B 机会`（报告侧）入账，同一数字因 CJK 邻接决定 b 臂生死；对称后两侧一致。8 例分词矩阵（Bn/Billion/裸数/%/亿美元 分支不受扰）。
+- v4.3 lint-report 子命令（trap G81#b:section_verify_blindspot landed）：`parser lint-report --report X --snapshot S [--chapter 锚]`——G81 局部臂（a+b）逐章清剿；反向/c 全文臂归终验（切片上必假阳，分派合同保守默认仍成立）。四态实测：清零 exit0/章级 exit0/违规捕获 exit1/坏锚 exit2。写作步 ④ 可链式：`$VG --section <锚> && parser lint-report ...`。
+- v4.4 FAIL reason 归因合同（CLAUDE.md「Gate 修复验证」第 7 条固化）：①G81-b `_g81_token_advice` 三类归因逐 token 可照抄（他条目精确含→移段/补锚；他条目近值→照抄原值并挂其锚；本锚近值→照抄；无源→删/换锚/加快照锚）②G63 来源归因：found 精确命中 s4_technical 其他字段值（实证 dmi.ADX=25.78 撞 TDST 25.22）→ 指认「误入技术位语境行，删除/移出」+照抄真值 ③G58 照抄值（`→ 照抄写「57.1% 分位」`）。
+- 全库 65 门 reason 质量 AST 审计（本批产出）：A 类（值+动作）36 门；B/C 类 29 门列下一批增强（C 模板话术 7：G27/G30/G34/G35/G36/G40/G59；B 有值缺动作 12：G6/G22/G23/G31/G32/G33/G37/G41/G57/G64/G66/G72；B- 动态值缺动作词 10：G20/G42/G43/G44/G45/G47/G48/G49/G65/G70）。
+- 验证：单测 19 例 + 分词矩阵 8 例 + 36 票 corpus verdict 零变化 + 本票终验 100/100；官方回归全绿（65 门漏报=0）。双仓库 push：orchestrator@1f58e53、financial-data-routing@7bfe566。
