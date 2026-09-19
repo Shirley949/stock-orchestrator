@@ -168,7 +168,7 @@ PHASE_STEPS = {
             {"id": "c_xq_delta", "desc": "增量逐条过堂：d1-d6+check 每维增量逐条显式落点（利空→m7 §7.1、利好→对撞行/观察清单）或写明弃用理由（漏填=修订未完）"},
         ],
         "phase_5": [
-            {"id": "c80", "desc": "报告写入腾讯文档（发布前先 $SO --fix 重排至显示序——R9 硬合同）"},
+            {"id": "c80", "desc": "①读 ~/tdx-publish-v4/SOP.md（五步闸，此刻才读——禁提前预读）→ ②$SO --fix 重排至显示序（R9 硬合同）→ ③报告写入腾讯文档"},
         ],
     },
     "B": {
@@ -466,6 +466,7 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         lines.append("- [ ] <!--c_webread_1--> B 级面覆盖：跑 `blevel --entries entries.json` 一键**双字段**全量阅读（blevel_text+content，301069 实证中报原文在 content），禁 Title 扫读、禁关键词行提取替代（002048 漏 TOP10 表；kept 必须引用 entry_id，items 载荷携带 entry_id）")
         lines.append("- [ ] <!--c_webread_2--> 消费披露：报告引用 webfindings 条数 < accounting.kept 时，未引用条目逐条给弃用理由（G81）")
         lines.append("- [ ] <!--c_webread_3--> 口径互斥披露：accounting.caliber_flags 非空时，报告引用段带口径区间/分歧披露（G81-c）")
+        lines.append("- [ ] <!--c_webread_5--> **产销量物理量必查（688295 实证缺口）**：产量/销量/产销率/产能利用率/分基地产量在三表只有金额无吨数=反查例外，必发 websearch query「公司名+最新报告期+产量 销量 产销率」并写回 snapshot；报告引用前 grep 自检：只有年度口径、缺最近报告期口径=未完成")
 
     lines.append("")
 
