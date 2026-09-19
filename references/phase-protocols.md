@@ -15,7 +15,8 @@
 
 ## P2 web_research 素材落盘
 
-- 载荷白名单 5 键：`[{topic,value,provider,url,query}, ...]`；`content/title/source` 系别名自动映射（仅当目标键空回填），白名单外非空键丢弃并 WARN（进 `_warnings`→precheck/G72 披露通道）。
+- 载荷白名单 6 键：`[{topic,value,provider,url,query,entry_id}, ...]`（v4.1/D1 新增第 6 键 entry_id=溯源主键，**构造时必带**——301069 实证 40/40 url 空致覆盖断言失腿）；`content/title/source` 系别名自动映射（仅当目标键空回填），白名单外非空键丢弃并 WARN（进 `_warnings`→precheck/G72 披露通道）。
+- **kept→items 覆盖断言（v4-2）**：`account --items @载荷.json`——每 kept entry 须 url∈items 或 curation 标 `merged_into`，缺口即 block（P-G：002048 kept 26 vs items 20、6 条实损）。
 - **多批合并（引擎默认 merge）**：同票多次调用按 `topic`（strip 后精确匹配，strip 含全角空格 U+3000）upsert——同 topic **整行替换**（新策展胜，修正后到）、空 topic（URL-only 行）只追加、**无模糊匹配/大小写折叠**（全角/半角标点、大小写、简繁差异=不同键，宁重复不误并）。URL-only/空场告警按合并后 items 现算（跨批存活、修正后自清，G72 披露不丢）；覆盖旧行时 `_warnings` 留痕「旧值→新值」。
 - **修剪语义（勿踩）**：merge 下故意**不带**某 topic = 该行**保留**（不删），误删面靠 stdout `total>incoming` 暴露；故意删行/推倒重建必须 `--replace`（整场替换 + 旧 `[web_research]` 告警清空）。
 - 写回后 scene=`web_research_findings`；报告引用处带 `[src: snapshot.web_research_findings...]`（**执法者：G21 溯源 + G45 目标价/预测口径**；裸贴 findings = 溯源断裂）。

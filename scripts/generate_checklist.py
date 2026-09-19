@@ -168,7 +168,7 @@ PHASE_STEPS = {
             {"id": "c_xq_delta", "desc": "增量逐条过堂：d1-d6+check 每维增量逐条显式落点（利空→m7 §7.1、利好→对撞行/观察清单）或写明弃用理由（漏填=修订未完）"},
         ],
         "phase_5": [
-            {"id": "c80", "desc": "①读 ~/tdx-publish-v4/SOP.md（五步闸，此刻才读——禁提前预读）→ ②$SO --fix 重排至显示序（R9 硬合同）→ ③报告写入腾讯文档"},
+            {"id": "c80", "desc": "①读 ~/.hermes/skills/stock-analysis/stock-orchestrator/references/publish-sop.md（五步闸，此刻才读——禁提前预读）→ ②$SO --fix 重排至显示序（R9 硬合同）→ ③报告写入腾讯文档"},
         ],
     },
     "B": {
