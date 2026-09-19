@@ -123,6 +123,29 @@ GATE_DESCS = {
 # check 函数源码段（勿全文 Read 本文件，178K）。
 # ============================================================
 GATE_HINTS = {
+    "G12": "局限性 ≥3 条且每条具体：数据时效/未做模型/假设边界/缺失维度逐条列——每条带「哪章哪个字段/口径」；禁「数据可能有延迟」类泛化句",
+    "G6": "季报表 ≥6 连续季度逐期照抄 snapshot.s1_financial.data.income_statement 行值（营收/归母/扣非/毛利率+预计算同比键），缺失期标「—」禁外推",
+    "G20": "全文估值口径统一：开篇分类定框架（周期=PB/EV-EBITDA、成长=PS/PEG），把偏离段的指标改写为开篇框架对应指标；两段口径句式须同词根",
+    "G22": "分业务表补 [src: snapshot.s1_financial.data.segment_composition.product|industry]；未披露维写「公司未拆分此维」，禁占位行",
+    "G23": "缺失维度补区块并挂锚：D3 分红→annual 视图、D4 前十大→s36_annual_analysis.data.D4_top10_holders、D7 客户供应商→D7_custsupp、D8 员工→D8_staff；真空写「未披露」",
+    "G27": "报告 ROE/同比数字照抄 snapshot.s1_financial.data.financial_indicators 最新期列（预计算键），禁手算；快照缺失写「不可得」禁编数",
+    "G31": "peTtm/pbRatio/totalMarketCap ≥2 项照抄 snapshot.valuation_snapshot.data.quote；亏损/破净为有效信号——保留原值+语义标注+[src:]",
+    "G32": "lhb processed status=failed → 写「龙虎榜数据未获取」；never_listed → 写「90 天未上榜（中性）」；禁编席位名/净额",
+    "G33": "freshness 维未获取 → 写「该信号未获取」不阻断；有值则照抄 processed.summary 原文",
+    "G34": "产品维 fetch_failed/degraded → 写「该维数据未获取」，重跑 runner A 拉取；disclosed 维照抄 segment_composition 行值（收入/占比/毛利率）",
+    "G35": "行业维 fetch_failed/degraded → 写「该维数据未获取」，重跑 runner A 拉取；disclosed 维照抄 segment_composition 行值",
+    "G36": "地区维 fetch_failed/degraded → 写「该维数据未获取」，禁编海外占比；overseas 派生读 computed_metrics.overseas",
+    "G37": "按 snapshot.classification.primary_type 改写估值表述：周期→PB/EV-EBITDA/股息率、成长→PS/PEG/远期PE；删除跨框架错配指标",
+    "G40": "逐字段补消费行并照抄 snapshot.s4_technical.data.signals.state 词（macd_state/kdj_zone/rsi_zone/ma_alignment/boll_state）；degraded → 写「信封降级」禁编 DIF 数值",
+    "G41": "chipAvgCost 照抄 snapshot.s4_technical.data.chip.chipAvgCost（精确到分），判定=现价对比：高于现价写「上方套牢盘」、低于写「多数浮盈」",
+    "G42": "融资余额照抄 snapshot.s_margin.data.finance_value_yi 与 finance_dod 并标注口径日；两融资格表述照抄 s_stock_evaluation「融资杠杆」维度",
+    "G43": "披露日历照抄 snapshot.s5_events.data.disclosure 的 disclosure_date/disclosure_desc；status=missing 写「预约披露已全部完成」",
+    "G44": "ESG 评级照抄 snapshot.s_esg.data.items 的 source/rating/publish_date/change；missing 写「无 ESG 评级覆盖」禁编档位",
+    "G49": "buy_sell_pressure.verdict ∈ {buy_dominant,sell_dominant,balanced} 时，报告必写「买卖力量/买方/卖方」词并挂 [src: snapshot.s5_events.data.risk_signals.processed.buy_sell_pressure]",
+    "G57": "业绩强度照抄  consensus_forecast.data.company_guidance.latest_period.value.growth_tier 结构化值（high/moderate/None）；None → 不写强度标签，禁从标题正则解析「预增 X%」",
+    "G65": "direction/confidence/probability 逐字照抄 snapshot.s4_technical.data.short_term_enrich.direction_forecast 三字段；insufficient_history/failed → 照抄降级披露，禁自造数字",
+    "G66": "TD countdown 消费行照抄 snapshot.s4_technical.data.td 的 summary/stage（「N/13」形态）与 key_levels，禁自算计数",
+    "G70": "m11 区指针行照抄 verify_gates stdout 末尾 📌 行原文：[verified: self_score=N profile=X | see <报告stem>.verified.json]，禁手填分数",
     "G1": "技术面四段：tq=ok 时 m3 必须消费换手/量比/成交额任一词（量价漏消费=最常见 FAIL）；"
           "failed→禁编造技术结论。修法：m3 补量价段并带 [src: snapshot.s4_technical]。",
     "G16": "合同负债核对：报告「合同负债」行数值若与 snapshot 偏离>50% 且无 [src:] → FAIL。"

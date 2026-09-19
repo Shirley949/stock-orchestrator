@@ -886,3 +886,9 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 - v4.4 FAIL reason 归因合同（CLAUDE.md「Gate 修复验证」第 7 条固化）：①G81-b `_g81_token_advice` 三类归因逐 token 可照抄（他条目精确含→移段/补锚；他条目近值→照抄原值并挂其锚；本锚近值→照抄；无源→删/换锚/加快照锚）②G63 来源归因：found 精确命中 s4_technical 其他字段值（实证 dmi.ADX=25.78 撞 TDST 25.22）→ 指认「误入技术位语境行，删除/移出」+照抄真值 ③G58 照抄值（`→ 照抄写「57.1% 分位」`）。
 - 全库 65 门 reason 质量 AST 审计（本批产出）：A 类（值+动作）36 门；B/C 类 29 门列下一批增强（C 模板话术 7：G27/G30/G34/G35/G36/G40/G59；B 有值缺动作 12：G6/G22/G23/G31/G32/G33/G37/G41/G57/G64/G66/G72；B- 动态值缺动作词 10：G20/G42/G43/G44/G45/G47/G48/G49/G65/G70）。
 - 验证：单测 19 例 + 分词矩阵 8 例 + 36 票 corpus verdict 零变化 + 本票终验 100/100；官方回归全绿（65 门漏报=0）。双仓库 push：orchestrator@1f58e53、financial-data-routing@7bfe566。
+
+## 2026-09-19 v4.5 [D] 批：GATE_HINTS 全覆盖 65 门（FAIL reason 动作指引无死角）
+- 29 门新 hint（22 新增 + G12）+ 7 门既有详版：每条=「现状 → 照抄值/具体动作」形态（G27 照抄 financial_indicators 预计算键、G41 chipAvgCost 精确到分+套牢/浮盈判定、G65 逐字照抄 direction_forecast 三字段、G57 只读 growth_tier 结构化值等）。
+- 输出层 hint 拼接本就无条件（`💡 {g} 修法`），原生 reasons（真值面）+ hint（动作面）= CLAUDE.md 第 7 条 A 类达标。
+- AST 审计修正：diag.expected/found/fix 三键计入「值+动作」——真实缺口 16 门（非初版 29），全部由 hint 覆盖收敛。
+- 回归全绿；engine_pending 4→2（余 G58 定位器族 2 条）。
