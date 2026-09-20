@@ -204,11 +204,13 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
   --items '<json | @findings.json>' --accounting '@<accounting.json>'
 # 多批分次拉取直接重跑同命令：默认按 topic 合并（同 topic 整行替换=修正后到）；accounting 跨批累积；
 # 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。
+# ⚠️ topic 须批内唯一（同批不同 entry_id 撞名=命名事故，引擎 WARN+末条覆盖丢数据，300502 实证）；
+#    account 用 --json 落盘纯净账（stdout 告警已迁 stderr）；items url 必非空（entries.json 取 .entries 子层）。
 ```
 
 - 引擎读法（B 级面/已知坑/降级）**选定引擎后先读** `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`；索引（Title/URL）只准用于弃读判定与追读 target，kept 内容必须溯源 B 级面文本。
 - 口径对撞：解析器输出 `CALIBER_FLAG`（同 query 同单位极差 ≥3×）→ 策展期逐条裁决，真分歧写入条目并在报告披露区间（**引用段必带口径限定词**）；对撞 flag 清单在 `accounting.caliber_flags`。
-- 写回 scene=`web_research_findings`，引用带 `[src: snapshot.web_research_findings...]`（G21 溯源 + G45 口径执法；消费执法 → G81）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
+- 写回 scene=`web_research_findings`，引用合法双形态：`[src: snapshot.web_research_findings.data.items]` 或 `[src: web_research_findings <topic 子串|entry_id>]`（禁 items(entry_id=X) 路径形态=G21 断链；消费执法 → G81，逐章清剿可链 `parser lint-report --report R --snapshot S --chapter 锚`）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
 
 ---
 
