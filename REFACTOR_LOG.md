@@ -892,3 +892,7 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 - 输出层 hint 拼接本就无条件（`💡 {g} 修法`），原生 reasons（真值面）+ hint（动作面）= CLAUDE.md 第 7 条 A 类达标。
 - AST 审计修正：diag.expected/found/fix 三键计入「值+动作」——真实缺口 16 门（非初版 29），全部由 hint 覆盖收敛。
 - 回归全绿；engine_pending 4→2（余 G58 定位器族 2 条）。
+
+## 2026-09-20 v4.5 收口：全量 65 门遍历测试固化（@6fb0d28）
+- test_reason_quality_all_gates.py 入契约层：策略矩阵（empty/minimal/stripped/corrupted/real + corpus 三票空报告面）逐门触发，断言 FAIL 输出「值+动作」双达标；未触发门逐门登记豁免依据（57 门登记：mode-B 4/条件真空 6/数据健康 9/本票达标态 38），EXEMPT 禁静默膨胀（assertIn 强制）。
+- 方法论：静态 AST 字面量审计有盲区（diag 三键/f-string 动态构造），动态遍历为准；数据健康门 FAIL 面=snapshot 损坏（归 fixture 体系），报告变体打不中属职责边界非偷懒。
