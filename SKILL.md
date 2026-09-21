@@ -42,6 +42,7 @@ A 模式同时产出**加载骨架台账**（模块 JIT 序 × 已读状态）�
 ### 约束 2：清单项必须跟踪
 清单生成后 → 用 `TaskCreate` 把每个 `[ ]` 项加到 task list（让 Claude 的 task 系统也跟踪）。
 → 原因：跟踪清单项可以防止遗漏，确保每个步骤都被执行。如果没有跟踪，Claude 可能会跳过某些步骤，导致分析不完整。
+→ 边界（V-D 流水下）：Phase 3 写作期**清单即唯一状态**，禁 TaskCreate/TaskUpdate（详见 Phase 3 管理轮禁令）；约束 2 仅约束清单生成后的初始登记。
 
 ### 约束 3：完成必须打勾
 每完成一个 `[ ]` 项 → 用 `update_checklist.py` 更新清单：
@@ -208,6 +209,7 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 #    account 用 --json 落盘纯净账（stdout 告警已迁 stderr）；items url 必非空（entries.json 取 .entries 子层）。
 ```
 
+- **G81 数字归属合同（写作前必读，执法者=G81-b / `parser lint-report`）**：①切片归属——行按 `[src:]` 标签切片，**每个数字归属其左侧最近的锚**：webfindings 锚切片的数字须能在该锚条目 value 中找到（万/亿/B/M→亿换算对拍，**照抄原值含小数位**，953.58 禁写 954）；`[src: snapshot.*]` 锚切片豁免 b 臂；**行尾残余**（末锚之后文本）归全行 webfindings 锚并集。②写章期预检：`search_artifact_parser.py lint-report --report R --snapshot S`（与引擎共用同一内核，勿等终验集中炸）。
 - 引擎读法（B 级面/已知坑/降级）**选定引擎后先读** `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`；索引（Title/URL）只准用于弃读判定与追读 target，kept 内容必须溯源 B 级面文本。
 - 口径对撞：解析器输出 `CALIBER_FLAG`（同 query 同单位极差 ≥3×）→ 策展期逐条裁决，真分歧写入条目并在报告披露区间（**引用段必带口径限定词**）；对撞 flag 清单在 `accounting.caliber_flags`。
 - 写回 scene=`web_research_findings`，引用合法双形态：`[src: snapshot.web_research_findings.data.items]` 或 `[src: web_research_findings <topic 子串|entry_id>]`（禁 items(entry_id=X) 路径形态=G21 断链；消费执法 → G81，逐章清剿可链 `parser lint-report --report R --snapshot S --chapter 锚`）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。

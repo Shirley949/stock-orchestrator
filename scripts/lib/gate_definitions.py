@@ -3300,7 +3300,7 @@ def check_g54(report: str, data: dict) -> bool:
 def check_g55(report: str, data: dict) -> bool:
     """G55: m3 golden 结构+边界+VWAP（fetch+save+read+golden）。SOFT(weight2)。
     golden = 六维读数（环境/量能/位置/筹码/趋势 至少覆盖4维）+ 综合一致性诊断段（非打分）；
-    边界禁区：仓位%/盈亏比/重仓/打分 → m6/m7（m3 只读数诊断）；VWAP 值须 == snapshot（反捏造）。
+    边界禁区：仓位/盈亏比/重仓/建议买入/建议卖出/打分 → m6/m7（m3 只读数诊断）；VWAP 值须 == snapshot（反捏造）。
     """
     s4 = _snapshot_get(data, "s4_technical") or {}
     if s4.get("status") == "never_traded":
@@ -3325,11 +3325,12 @@ def check_g55(report: str, data: dict) -> bool:
         violations.append(
             "m3 缺综合一致性诊断段——须含诊断词（诊断/共振/分歧/阶段），"
             "把六维读数收敛成一个结构性结论（禁打分）")
-    # ④ 边界禁区：仓位/盈亏比/重仓/买卖建议/打分（m3 只读数诊断，决策→m6）
+    # ④ 边界禁区：仓位/盈亏比/重仓/建议买入/建议卖出/打分（m3 只读数诊断，决策→m6；
+    #   词表以正则为准——reason 必须逐词枚举真实触发词，禁写正则里没有的词如「买卖建议」）
     if re.search(r'(仓位|盈亏比|重仓|建议买入|建议卖出)', sec):
         violations.append(
-            "m3 越界：出现 仓位%/盈亏比/重仓/买卖建议——m3 只读数诊断，"
-            "决策类表述归 m6/m7，删除或移段")
+            "m3 越界：触发边界词（仓位/盈亏比/重仓/建议买入/建议卖出 任一，含否定/边界声明形态）"
+            "——m3 只读数诊断，决策类表述归 m6/m7：删除触发词或整句移段，边界声明沉默收口即可")
     if re.search(r'得分|评分|综合\s*\d+\s*分', sec):
         violations.append(
             "m3 越界：出现 得分/评分/综合N分——技术面禁量化打分（用诊断词收敛）")
