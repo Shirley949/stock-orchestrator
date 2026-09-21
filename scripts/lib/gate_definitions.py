@@ -3030,12 +3030,31 @@ def check_g49(report: str, data: dict) -> bool:
 
 
 
+_SGR_ADJ_PAT = re.compile(r'(?:SGR|可持续增长率)\s*[^%\d]{0,6}\d[\d.]*\s*%')  # 触发词后≤6字符接百分数=报值形态（任何豁免不保护）
+
+
 def _sgr_claim_lines(report):
     """报告报了 SGR 数值的行 [(line_no, text)]（反捏造定位用，单一实现）。
     含「SGR / 可持续增长」的行若同时带「数字%」即视为报值（覆盖「SGR=27.40%」「SGR 可持续增长率 30%」
-    等多种写法）；纯公式行（SGR = ROE×b/(1−ROE×b)，无百分数）不算。"""
-    return [(i, ln.strip()) for i, ln in enumerate(report.split('\n'), 1)
-            if ('SGR' in ln or '可持续增长' in ln) and re.search(r'\d[\d.]*\s*%', ln)]
+    等多种写法）；纯公式行（SGR = ROE×b/(1−ROE×b)，无百分数）不算。
+    E1（2026-09-21，688813/688381 跨会话复发实锤后收窄）：豁免三类**陈述形态**——
+    ①行含「不适用」且无报值形态（不适用解释行引用 reason 数值/ROE%）；
+    ②指针行（SGR 见/详见 §N）；③时效行（报告期差异）。
+    报值形态（_SGR_ADJ_PAT：触发词后≤6字符接百分数，含「不适用；但历史可持续增长率约 25%」转折编造）
+    任何豁免不保护——G51b fixture 哨兵固化。"""
+    hits = []
+    for i, ln in enumerate(report.split('\n'), 1):
+        if ('SGR' not in ln and '可持续增长' not in ln) or not re.search(r'\d[\d.]*\s*%', ln):
+            continue
+        if _SGR_ADJ_PAT.search(ln):
+            hits.append((i, ln.strip()))
+            continue
+        if '不适用' in ln:
+            continue
+        if re.search(r'SGR\s*见|SGR（?见|详见\s*§', ln) or '报告期差异' in ln:
+            continue
+        hits.append((i, ln.strip()))
+    return hits
 
 
 def _sgr_numeric_claim(report):
