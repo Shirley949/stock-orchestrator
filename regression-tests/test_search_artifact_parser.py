@@ -273,7 +273,9 @@ class TestFollowupAndManifest(unittest.TestCase):
                             "--curation", str(FIXT / "curation_b12.json"),
                             "--items", str(FIXT / "findings.json")], capture_output=True, text=True)
         self.assertEqual(r.returncode, 1, r.stdout[-200:])
-        self.assertIn("kept→items", r.stdout)
+        # v4.5: 诊断（ACCOUNT_BLOCK/WARN）走 stderr；stdout 保持机读纯净 JSON
+        self.assertIn("kept→items", r.stdout + r.stderr)
+        json.loads(r.stdout)
 
 
     def test_v43_flags_auto_merged(self):

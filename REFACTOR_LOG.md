@@ -27,6 +27,17 @@
 > **✅ 终局条件①达成（2026-09-02 裁决 D 落地，程序最后一轮 verdict-affecting 人工裁决批）**：pending 人工项清零（#8 轨2 本批落地；#3 F4a+F4b①② 已全落；#10 转守候态——m37 差距注记已落，值对拍落地归重开触发器范畴，无排期人工项）。剩 ②③④ 机器条件自然累积；重开触发器（4 条，见下）自本日生效值守。
 
 
+---
+
+## 0. GATE_HINTS 补 G14/G15 修法（2026-09-21，gate_definitions.py）
+
+**改动：** GATE_HINTS 新增 G14/G15 两条修法（G14 含「N/9|N/13」计数形态与降级档披露；G15 六指标实数+items[].metrics 照抄+金融股豁免）；`test_search_artifact_parser.py::test_v42_cli_items_blocks` 断言面刷新（诊断流 stdout→stderr，新增 stdout 纯净 JSON 断言）。
+
+**为什么：** ①GATE_HINTS 42 条不含 G14/G15——两门的「💡修法」机制缺位（300502 会话审计实证）；②遗留工作区有一版把修法写进 GATE_DESCS 的未提交编辑，但插在原键之前构成 Python dict 重复键死代码（运行时零效果+静默 no-op 编辑陷阱），且 desc 是每门全量打印通道、hint 才是 FAIL 时修法的指定载体——丢弃死键、按正确通道落地。
+
+**验证：** py_compile OK；GATE_HINTS 44 条；G14 FAIL spot 实测 💡 修法行精确出现（真档快照+无 TD 报告）；`run_regression.sh` exit 0（test_search_artifact_parser 19/19 OK，断言面 diff=诊断流迁移+新增 stdout 纯净断言，无放松）。
+
+
 ## 2026-09-16 流水架构批 5：终局对账（CLAUDE.md + memory，grep 驱动）
 
 - **对账面与结论**：CLAUDE.md 旧措辞/死引用 grep 零残留；唯一修正=加载顺序段「A 12 模块」→「A 13 模块」（:114，批1 补注册 m9 后的化石）；行号引用零漂移（批1 已去行号化）；spot-check 三条实命令过（run_regression.sh 路径/触发分册三文件/snapshot_view --list 命令形）。memory 目录旧措辞 grep 零残留、零修正；本次新 gotcha 三分归置自检=无一达落盘门槛（REFACTOR_LOG 吞标题 n=1、classification.primary_type=None 为 engine 自述合法三态、勾选双形已在 probe docstring）；白名单升级触发器=本会话无 ≥2 复发项。八站点终 grep=新措辞全在/旧措辞零残留。
