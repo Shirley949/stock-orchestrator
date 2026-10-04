@@ -146,8 +146,8 @@ GATE_HINTS = {
     "G44": "ESG 评级照抄 snapshot.s_esg.data.items 的 source/rating/publish_date/change；missing 写「无 ESG 评级覆盖」禁编档位",
     "G49": "buy_sell_pressure.verdict ∈ {buy_dominant,sell_dominant,balanced} 时，报告必写「买卖力量/买方/卖方」词并挂 [src: snapshot.s5_events.data.risk_signals.processed.buy_sell_pressure]",
     "G57": "业绩强度照抄  consensus_forecast.data.company_guidance.latest_period.value.growth_tier 结构化值（high/moderate/None）；None → 不写强度标签，禁从标题正则解析「预增 X%」",
-    "G65": "照抄引擎头行直连形态：`**引擎方向预测：{direction}（置信 {confidence}，视野 {horizon_days} 日）（{中文：bull→看多/bear→看空/neutral→中性}）**——波动预算 [{er_low} ~ {er_high}]`"
-           "（方向预测[：:]+英文方向词直连；中文括注置于「（置信…）」之后——插在 direction 与 置信 之间会断 backtest_score 解析；波动预算数值 ±1% 对拍 expected_range；insufficient_history/failed → 照抄降级披露，禁自造数字）",
+    "G65": "照抄引擎头行（全中文直出）：neutral 形态 `**方向预测：中性 ｜ 视野 {N} 日 ｜ 无方向置信，按区间对待不追高——波动预算 [{er_low} ~ {er_high}]**`；bull/bear 形态 `**方向预测：看多 ｜ 置信：高（规则中文名） ｜ 视野 {N} 日——当前条件胜率 {win_rate}（n={n}）——波动预算 […]**`"
+           "（方向预测[：:]+中文方向词直连，禁写英文 bull/bear/neutral；波动预算数值 ±1% 对拍 expected_range；insufficient_history/failed → 照抄降级披露，禁自造数字）",
     "G66": "周期状态照抄引擎头行（multi_period 直出，禁自算）：`**周期状态** 月线{state} 周线{state} 日线{state} 60分钟{state}`"
            "（≥3 周期词 + resonance_level 原样写入「强度/共振」任一处；数据核对：snapshot_view <S> short_term）",
     "G67": "量价数值须在量价语境行（量比/成交/倍数/换手等词同行）±5% 对拍：头行「**周期状态** … ｜ 量比5d {vol_ratio_5d} · 20日成交倍数 {amount_mult_20d}」照抄 volume_check",
@@ -4095,7 +4095,7 @@ def check_g65(report: str, data: dict) -> bool:
         return True
     df = _snapshot_get(data, _B_STE + ".direction_forecast")
     if not isinstance(df, dict) or not df.get("status"):
-        if re.search(r'方向预测[：:]\s*(bull|bear)|"direction_15d"', report):
+        if re.search(r'方向预测[：:]\s*(bull|bear|看多|看空)|"direction_15d"', report):
             return GateResult(passed=False, reasons=[
                 "short_term_enrich.direction_forecast 缺失而报告写方向预测——禁编造（引擎未出方向）"])
         return True
@@ -4105,20 +4105,27 @@ def check_g65(report: str, data: dict) -> bool:
     swr = df.get("sample_win_rate")
     if status in ("insufficient_history", "failed") or not direction:
         # 降级路径：报告不得出具体方向
-        if re.search(r'方向预测[：:]\s*(bull|bear)|"direction"\s*:\s*"(bull|bear)"', report):
+        if re.search(r'方向预测[：:]\s*(bull|bear|看多|看空)|"direction"\s*:\s*"(bull|bear)"', report):
             return GateResult(passed=False, reasons=[
                 f"direction_forecast.status={status}（上市历史不足/拉取失败）——分级规则不适用，禁出方向"])
         return True
-    # ---- 消费段：status=ok 出方向，报告必须引用且一致 ----
-    asserts = re.findall(r'方向预测[：:]\s*(bull|bear|neutral)', report) + \
+    # ---- 消费段：status=ok 出方向，报告必须引用且一致（报告形态=中文，映射回引擎值对拍）----
+    _G65_ZH2EN = {"看多": "bull", "看空": "bear", "中性": "neutral"}
+    asserts = [_G65_ZH2EN.get(w, w) for w in re.findall(r'方向预测[：:]\s*(看多|看空|中性)', report)] + \
         re.findall(r'"direction"\s*:\s*"(bull|bear|neutral)"', report)
     if not asserts:
         _erblk0 = df.get("expected_range") or {}
         _zh = {"bull": "看多", "bear": "看空", "neutral": "中性"}.get(direction, "")
-        _zh_seg = f"（{_zh}）" if _zh else ""
-        _anchor = (f"**引擎方向预测：{direction}（置信 {confidence or '—'}，视野 "
-                   f"{df.get('horizon_days') or 15} 日）{_zh_seg}**——波动预算 "
-                   f"[{_erblk0.get('low')} ~ {_erblk0.get('high')}]")
+        _cw0 = df.get("conditional_winrate") or {}
+        if direction == "neutral":
+            _anchor = (f"**方向预测：中性 ｜ 视野 {df.get('horizon_days') or 15} 日 ｜ "
+                       f"无方向置信，按区间对待不追高——波动预算 "
+                       f"[{_erblk0.get('low')} ~ {_erblk0.get('high')}]**")
+        else:
+            _anchor = (f"**方向预测：{_zh} ｜ 置信：{confidence or '—'} ｜ 视野 "
+                       f"{df.get('horizon_days') or 15} 日——当前条件胜率 "
+                       f"{_cw0.get('win_rate')}（n={_cw0.get('n')}）——波动预算 "
+                       f"[{_erblk0.get('low')} ~ {_erblk0.get('high')}]**")
         _off = [f"L{i}:『{ln.strip()[:60]}』" for i, ln in enumerate(report.splitlines(), 1)
                 if "引擎方向" in ln and "方向预测：" not in ln][:2]
         return GateResult(passed=False, reasons=[
@@ -4190,8 +4197,8 @@ def check_g65(report: str, data: dict) -> bool:
     if bad_conf:
         return GateResult(passed=False, reasons=[
             f"置信分级不实：报告 {bad_conf} vs 引擎 {confidence}（HIGH/MED 如实分级）"])
-    # neutral 必现区间表述
-    if direction == "neutral" and not re.search(r'方向不明|neutral|区间震荡|波动区间', report):
+    # neutral 必现区间表述（词表含中文直出形态：波动预算/按区间）
+    if direction == "neutral" and not re.search(r'方向不明|neutral|区间震荡|波动区间|波动预算|按区间', report):
         return GateResult(passed=False, reasons=[
             "direction=neutral 须如实写「方向不明+预期波动区间」（neutral 是诚实结论不是失败）"])
     return True

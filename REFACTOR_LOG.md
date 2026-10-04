@@ -1,6 +1,7 @@
 ## 2026-10-04 S4c：G73④ 双侧责任区分 + G65 双语锚
 - **gate_definitions**：G73④ 买行缺 conditional_winrate 按 src 区分——引擎值在档=报告侧照抄修法（带真值）；引擎缺档=[数据层] 前缀（禁编造停笔上报），消「引擎给不出的数字让报告补」死锁；G65 缺块臂锚与 GATE_HINTS 同步双语形态（中文括注位置合同：置于「（置信…）」之后）。
 - **test_short_term_engine_v12**：表键集合恒等式 + _RULE_ORDER 全规则 cw 可达 + panic 分支夹具（bias20<-10% 深跌序列，断言 rule_name==dn_oversold_panic ∧ confidence=HIGH ∧ cw=0.568 ∧ rebound_spec 在档）+ DSNH 门控两极夹具（个股下跌态+指数上行=True；个股上行态+指数下行=False）。
+- **G65/backtest_score 中文词表**：asserts 中文→引擎值归一化对拍（禁英文方向词进报告）；neutral 区间词表补「波动预算/按区间」；v3 文本解析中文方向+置信映射（高=HIGH/中=MED/中性=NEUTRAL）。
 - **验收**：run_regression exit 0；modeb_audit p4 D1 重放 Δ=0 ×4 + 配对 100%（详见 modeb_audit/modeb_v3_backtest_log_s4c.md）。
 
 ## 2026-10-04 S4b：modeB v3 全面对齐（gate/审计/路由/口径）——002171 会话 RCA 收口

@@ -33,11 +33,15 @@ def parse_forecast_block(report_path: str) -> dict:
             continue
         if "direction_15d" in blk:
             return blk
-    # v3（b-trade-sheet）：状态头「方向预测：{direction}（置信 {conf}，视野 N 日）——波动预算 [lo ~ hi]」
-    m = re.search(r'方向预测[：:]\s*(bull|bear|neutral)（置信\s*([A-Za-z]+)', text)
+    # v3（b-trade-sheet）：状态头「方向预测：{中文方向} ｜ 视野 N 日 …——波动预算 [lo ~ hi]」
+    _ZH_DIR = {"看多": "bull", "看空": "bear", "中性": "neutral"}
+    _ZH_CONF = {"高": "HIGH", "中": "MED", "中性": "NEUTRAL"}
+    m = re.search(r'方向预测[：:]\s*(看多|看空|中性)', text)
     if not m:
         return {}
-    d15 = {"direction": m.group(1), "confidence": m.group(2).upper()}
+    cm = re.search(r'置信[：:]\s*(高|中|中性)', text)
+    d15 = {"direction": _ZH_DIR[m.group(1)],
+           "confidence": _ZH_CONF.get(cm.group(1), "NEUTRAL") if cm else "NEUTRAL"}
     mp = re.search(r'(?:预期区间|波动预算)[^\[\n]*\[\s*([\d.]+)\s*~\s*([\d.]+)\s*\]', text)
     if mp:
         d15["expected_range"] = {"low": float(mp.group(1)), "high": float(mp.group(2))}
