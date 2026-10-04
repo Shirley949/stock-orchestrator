@@ -146,8 +146,8 @@ GATE_HINTS = {
     "G44": "ESG 评级照抄 snapshot.s_esg.data.items 的 source/rating/publish_date/change；missing 写「无 ESG 评级覆盖」禁编档位",
     "G49": "buy_sell_pressure.verdict ∈ {buy_dominant,sell_dominant,balanced} 时，报告必写「买卖力量/买方/卖方」词并挂 [src: snapshot.s5_events.data.risk_signals.processed.buy_sell_pressure]",
     "G57": "业绩强度照抄  consensus_forecast.data.company_guidance.latest_period.value.growth_tier 结构化值（high/moderate/None）；None → 不写强度标签，禁从标题正则解析「预增 X%」",
-    "G65": "照抄引擎头行直连形态：`**引擎方向预测：{direction}（置信 {confidence}，视野 {horizon_days} 日）**——波动预算 [{er_low} ~ {er_high}]`"
-           "（方向预测[：:]+方向词；波动预算数值 ±1% 对拍 expected_range；insufficient_history/failed → 照抄降级披露，禁自造数字）",
+    "G65": "照抄引擎头行直连形态：`**引擎方向预测：{direction}（置信 {confidence}，视野 {horizon_days} 日）（{中文：bull→看多/bear→看空/neutral→中性}）**——波动预算 [{er_low} ~ {er_high}]`"
+           "（方向预测[：:]+英文方向词直连；中文括注置于「（置信…）」之后——插在 direction 与 置信 之间会断 backtest_score 解析；波动预算数值 ±1% 对拍 expected_range；insufficient_history/failed → 照抄降级披露，禁自造数字）",
     "G66": "周期状态照抄引擎头行（multi_period 直出，禁自算）：`**周期状态** 月线{state} 周线{state} 日线{state} 60分钟{state}`"
            "（≥3 周期词 + resonance_level 原样写入「强度/共振」任一处；数据核对：snapshot_view <S> short_term）",
     "G67": "量价数值须在量价语境行（量比/成交/倍数/换手等词同行）±5% 对拍：头行「**周期状态** … ｜ 量比5d {vol_ratio_5d} · 20日成交倍数 {amount_mult_20d}」照抄 volume_check",
@@ -4114,8 +4114,10 @@ def check_g65(report: str, data: dict) -> bool:
         re.findall(r'"direction"\s*:\s*"(bull|bear|neutral)"', report)
     if not asserts:
         _erblk0 = df.get("expected_range") or {}
+        _zh = {"bull": "看多", "bear": "看空", "neutral": "中性"}.get(direction, "")
+        _zh_seg = f"（{_zh}）" if _zh else ""
         _anchor = (f"**引擎方向预测：{direction}（置信 {confidence or '—'}，视野 "
-                   f"{df.get('horizon_days') or 15} 日）**——波动预算 "
+                   f"{df.get('horizon_days') or 15} 日）{_zh_seg}**——波动预算 "
                    f"[{_erblk0.get('low')} ~ {_erblk0.get('high')}]")
         _off = [f"L{i}:『{ln.strip()[:60]}』" for i, ln in enumerate(report.splitlines(), 1)
                 if "引擎方向" in ln and "方向预测：" not in ln][:2]
@@ -4666,7 +4668,14 @@ def check_g73(report: str, data: dict) -> bool:
                            "（确认词表：收盘/触及/站上/跌破/收回/触发后），报告侧不可修（禁改报告，"
                            "停笔上报引擎；修向：build_trade_sheet_view confirm_rule 合并确认语义）")
         if r["side"] == "买" and "入场带" in str(r.get("type", "")) and not r.get("conditional_winrate"):
-            reasons.append(f"买行{idx}（入场带）缺 conditional_winrate 标注——动作列尾加（条件胜率 X，n=Y，as_of）")
+            _src_cw = ((_snapshot_get(data, _B_STE + ".direction_forecast") or {}).get("conditional_winrate"))
+            if _src_cw:
+                reasons.append(f"买行{idx}（入场带）缺 conditional_winrate 标注——引擎值在档，"
+                               f"动作列尾照抄「（条件胜率 {(_src_cw or {}).get('win_rate')}，"
+                               f"n={(_src_cw or {}).get('n')}，{(_src_cw or {}).get('as_of')}）」")
+            else:
+                reasons.append(f"[数据层] 买行{idx}（入场带）conditional_winrate 无引擎值"
+                               "（direction_forecast.conditional_winrate 缺档）——报告侧禁编造/禁补写，停笔上报引擎")
     if reasons:
         return GateResult(passed=False, reasons=reasons[:5])
     # 报告侧：点位表必须存在（检测表头或首行方向词）

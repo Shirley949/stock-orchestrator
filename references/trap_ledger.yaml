@@ -623,3 +623,43 @@ entries:
   status: landed
   root_cause: engine
   fix: '（002171 as-of 盲测实锤）s3_fund_flow.data.fund_flow={status: degraded, reason: 拉取失败} 零可消费数据，G69 has_value 仍计「有数据未消费」；诚实披露行因含披露词被过滤 → 资金流维必缺，quick 阈值内 PASS 但恒留 1 FAIL。修向：G69 has_value 判定跳过 status∈{degraded,failed} 的 scene（与 as-of 诚实降级契约对齐）。'
+- signature: engine#winrate_table:key_name_mismatch
+  gate: G65
+  subcheck: conditional_winrate
+  reason_class: table_key_rule_name_divergence
+  match: short_term_engine
+  count: 1
+  last_seen: '2026-10-04'
+  status: landed
+  root_cause: engine
+  fix: 'WINRATE_BY_REGIME 表键必须与 FORECAST_RULES 生产 rule_name 逐一相等（执法：test_short_term_engine_v12 键集合恒等式+全规则可达断言、verify A5.3 同款）。断裂期间 HIGH panic 信号 conditional_winrate 恒 None（b_head 渲染「无方向置信」与 direction=bull/confidence=HIGH 并存；珂玛 301611 实锤）。'
+- signature: engine#e2_gate:tol_param_unused
+  gate: E2
+  subcheck: asof_gate
+  reason_class: docstring_impl_semantic_gap
+  match: short_term_engine
+  count: 1
+  last_seen: '2026-10-04'
+  status: pending
+  root_cause: engine
+  fix: '_apply_index_asof_gate 的 tol 参数保留未生效（实现=指数末根早于个股末日即拦，无交易日宽限）。是否需要宽限语义是产品决策：维持严拦（现状，宁可 unknown）或实现 tol2（需回测面重新验证）——另批裁决。docstring 已对齐现行语义。'
+- signature: engine#kelly:legacy_probability_drive
+  gate: G65
+  subcheck: kelly_position
+  reason_class: deprecated_input_still_consumed
+  match: short_term_engine
+  count: 1
+  last_seen: '2026-10-04'
+  status: pending
+  root_cause: engine
+  fix: 'kelly_position 消费 forecast.probability（v11 申报值：panic=0.71/MED=0.64-0.66），P2 已判该申报值非重叠口径不可复现（dn_panic V 段实际 47%）——HIGH panic 时 kelly 顶格 0.25 建立在否认值上。裁决方向：kelly 改锚 conditional_winrate 或暂停方向性仓位输出，另批（动 kelly=动交付，需回测面）。'
+- signature: engine#s8_grade_b:no_backtest_evidence
+  gate: meta
+  subcheck: s8_buy_plus_grade
+  reason_class: unverified_delivery_tier
+  match: short_term_engine
+  count: 1
+  last_seen: '2026-10-04'
+  status: pending
+  root_cause: engine
+  fix: 's8_buy_plus_grade B 级（2/3 条件）无回测依据（A 级三条件合取有 P3 RUN-S8_buy_plus 证据）。处置：补 B 级回测或引擎注释降级为「无回测依据」提示字段——引擎注释已先行标注，回测补齐另批。'

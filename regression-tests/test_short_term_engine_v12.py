@@ -65,6 +65,14 @@ cw2 = ste._conditional_winrate("dn_oversold", "trend_down")
 check("dn_oversold/trend_down=0.608", cw2 and cw2["win_rate"] == 0.608)
 cw3 = ste._conditional_winrate("up_stall", "trend_down")
 check("无该 regime 条目 → None", cw3 is None)
+# 表键集合恒等式：WINRATE_BY_REGIME 键必须与 FORECAST_RULES 生产规则名逐一相等
+# （防表键与引擎发射名脱钩 → _conditional_winrate 静默 None；详见键集合断言 + 全规则可达断言）
+check("表键集合==FORECAST_RULES 键集合",
+      set(ste.WINRATE_BY_REGIME["table"]) == set(ste.FORECAST_RULES),
+      set(ste.WINRATE_BY_REGIME["table"]) ^ set(ste.FORECAST_RULES))
+for _n in ste._RULE_ORDER:
+    check(f"全规则 cw 可达非 None：{_n}",
+          ste._conditional_winrate(_n, ste.FORECAST_RULES[_n]["regime"]) is not None)
 
 
 def build_daily(closes):
@@ -118,6 +126,15 @@ if fc2.get("rule_name") == "up_stall":
 else:
     print(f"  (up_stall 未触发：rule={fc2.get('rule_name')}——构造序列不带该带，跳过)")
 
+# panic 分支夹具：深跌 bias20<-10% 形态，断言 emit 精确 rule_name + confidence + cw + rebound_spec
+closes_panic = [180.0] * 110 + [180 - i * 2.2 for i in range(1, 21)]  # 末20日 180→136，bias20≈-24%
+fc_p = ste.forecast_direction(build_daily(closes_panic), {"regime": "trend_down"})
+check("panic 分支 rule_name 精确", fc_p.get("rule_name") == "dn_oversold_panic", fc_p.get("rule_name"))
+check("panic 分支 confidence=HIGH", fc_p.get("confidence") == "HIGH")
+check("panic 分支 cw=0.568 非 None",
+      (fc_p.get("conditional_winrate") or {}).get("win_rate") == 0.568, fc_p.get("conditional_winrate"))
+check("panic 分支 rebound_spec 在档", "rebound_spec" in fc_p)
+
 # ---------- enrich_short_term：state_tuple / p3_signals / fund_sustain ----------
 print("== enrich_short_term v12 字段 ==")
 # 构造：MA20 上方温和上行 + 末段微跌（DSNH>0）
@@ -156,6 +173,22 @@ en3 = ste.enrich_short_term(snap_s8)
 p3s = en3.get("p3_signals") or {}
 check("S8 条件 bias≤-8 成立", p3s.get("s8_conditions", {}).get("bias_le_m8") is True, p3s)
 check("S8 grade ∈ {A,B,None}", p3s.get("s8_buy_plus_grade") in ("A", "B", None), p3s.get("s8_buy_plus_grade"))
+
+# DSNH 提示门控两极：门控人群=个股 close vs MA20（P3 证据人群），禁用指数 regime
+def _hint_case(stock_tail):
+    closes = [100 + 0.3 * k for k in range(73)] + stock_tail   # 73 涨 + 7 回调 → dsnh=7 ∈[6,10]
+    idx_desc = [4180 - k for k in range(80)]                   # desc 序列，指数上行（regime=trend_up）
+    idx_desc_dn = [3800 + k for k in range(80)]                # desc 序列，指数下行（regime=trend_down）
+    def _run(idx):
+        s = build_snapshot(closes, idx_desc_closes=idx,
+                           idx_dates=[d.strftime("%Y-%m-%d") for d in pd.date_range("2025-01-01", periods=80, freq="B")][::-1])
+        return (ste.enrich_short_term(s).get("p3_signals") or {}).get("dsnh_sell_hint")
+    return _run(idx_desc), _run(idx_desc_dn)
+
+hint_up_idx, hint_dn_idx = _hint_case([round(140 * (1 - 0.02 * k), 3) for k in range(1, 8)])  # 深回撤→close<MA20
+check("个股下跌态+指数上行 → dsnh_sell=True（人群=个股）", hint_up_idx is True, hint_up_idx)
+hint_up_idx2, hint_dn_idx2 = _hint_case([round(140 * (1 - 0.001 * k), 3) for k in range(1, 8)])  # 微回调→close>MA20
+check("个股上行态+指数下行 → dsnh_sell=False（禁用指数 regime）", hint_up_idx2 is False, hint_up_idx2)
 
 # ---------- E2 门在 enrich 链路内生效（stale → degraded + warning） ----------
 stale_date = "2025-01-01"  # 早于个股K线末日（末根日期在 2025-04 下旬）

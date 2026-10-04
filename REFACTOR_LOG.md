@@ -1,3 +1,8 @@
+## 2026-10-04 S4c：G73④ 双侧责任区分 + G65 双语锚
+- **gate_definitions**：G73④ 买行缺 conditional_winrate 按 src 区分——引擎值在档=报告侧照抄修法（带真值）；引擎缺档=[数据层] 前缀（禁编造停笔上报），消「引擎给不出的数字让报告补」死锁；G65 缺块臂锚与 GATE_HINTS 同步双语形态（中文括注位置合同：置于「（置信…）」之后）。
+- **test_short_term_engine_v12**：表键集合恒等式 + _RULE_ORDER 全规则 cw 可达 + panic 分支夹具（bias20<-10% 深跌序列，断言 rule_name==dn_oversold_panic ∧ confidence=HIGH ∧ cw=0.568 ∧ rebound_spec 在档）+ DSNH 门控两极夹具（个股下跌态+指数上行=True；个股上行态+指数下行=False）。
+- **验收**：run_regression exit 0；modeb_audit p4 D1 重放 Δ=0 ×4 + 配对 100%（详见 modeb_audit/modeb_v3_backtest_log_s4c.md）。
+
 ## 2026-10-04 S4b：modeB v3 全面对齐（gate/审计/路由/口径）——002171 会话 RCA 收口
 - **gate_definitions B 面 reason 合同化**（真值+行号+照抄锚四要素，参照 G80 c臂 L{n} 格式与 modeA G32/G31 [数据层] 范式）：G65 缺块臂给「方向预测：{direction}」直连锚+新增波动预算 ±1% 对拍（补零对拍缺口）；G66/G67 reason 给引擎头行照抄锚（执法逻辑零改——needle 与 v3 头行天然兼容）；G68 row_pat 扩展识别点位表行 type 列「止损档（level）」±1%（删「表式见 m6」stale 指针）；G69 `_scene_has_data` 补跳过 status∈{degraded,failed,error,throttled}（as-of 诚实降级契约；降级维不计分母不引导编造）+骨架改 b-trade-sheet §5 消费行形态+资金维主力净额 ±5% 对拍 b_head.main_net_yi（补 pending #10）；G70 presence 臂给 regime 锚；G71③ pess 臂挂 v3 分支撤除（v3「交易计划」无情景框架；v2「核心结论」回滚态保留）；G73 确认词臂加 [数据层] 前缀+「报告侧不可修」归因（引擎 rows 缺确认词=停笔上报）。
 - **GATE_HINTS 同步**：G65/G66/G67/G68/G69/G73 六门 hint 重写为照抄锚形态（G66 旧 hint 误指 TD 数据——stale 修复）。
