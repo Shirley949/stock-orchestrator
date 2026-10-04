@@ -1,3 +1,11 @@
+## 2026-10-04 S4a：modeB 链改造（checklist/JIT/gate quick v3）+ G73 新增
+- **generate_checklist**：B 链 phase_3 五步（m38/m3/m6/m36+m37/m39）→ 三步（b-trade-sheet/策略段/T1-B 可选）；PHASE3_STEP_ANCHORS 不适用 B（A 锚表不变）。
+- **test_pipeline_atomic_steps**：B_PHASE3_FROZEN 冻结清单同步 v3 三步。
+- **data_contracts**：s4 short_term_enrich note 更新 v12 字段；新登记 data.trade_sheet/data.b_head/data.fund_flow.daily_history 产出+消费方（b-trade-sheet/G73/m6 A 继承节）。
+- **gate quick v3**：profile_quick gates=[G1,G11,G63,G68,G72,G80]+B_ONLY[G65,G66,G67,G68,G69,G70,G71,G73]；G30/G62 退出 quick（三情景/tally 已删）；G65 needle 加 conditional_winrate 分支；G71 头块锚 v3/v2 自适应（按报告标题形态分派槽位集）；**新增 G73**=点位表完整性（六列齐+收盘确认词+失效非空+买行条件胜率），HARD weight2，三方注册（ALL_GATES/GATE_REGISTRY/GATE_CHECKERS）+ fixture EXPECTED/两极探针策展（漏报0误伤0）。
+- **测试**：新增 test_short_term_engine_v12.py / test_trade_sheet_view.py；test_b_head_g71.py 增 TestG71V3 三例（31→34 全绿）；run_regression.sh exit 0。
+- 回测重放：verify_v12_vs_backtest.py A5 全 PASS（E2 2/2 拦截、93 快照零误拦、条件胜率 ±1ppt、DSNH/DSNL 抽样 10/10）。
+
 # ⏳ pending 欠账总图（裁决 2026-09-01 登记；本段钉在文件顶）
 
 > 纪律：**人工追踪队列只在此处**（每项带登记日+完成判据），机器可追踪的全部交还机器（scan/tracker 首行自报）。落地一项 → 写 dated 条目 + 删本段对应行；新欠账先进本段再排期。
@@ -37,6 +45,13 @@
 
 **验证：** py_compile OK；GATE_HINTS 44 条；G14 FAIL spot 实测 💡 修法行精确出现（真档快照+无 TD 报告）；`run_regression.sh` exit 0（test_search_artifact_parser 19/19 OK，断言面 diff=诊断流迁移+新增 stdout 纯净断言，无放松）。
 
+
+## 2026-09-23 G80 加 d 臂：维度消费完整性（xqvoice 视图截断漏维机械化兜底）
+
+- **根因**：xqvoice 视图每维仅展示前 12 行且 `raw_answer` 不在视图输出——凭视图写作必然漏尾部增量（000099 实证：d4 尾句/d6 e公司引文/总评尾段截断、raw_answer 行情锚整体缺失，用户人工前置才发现，c_xq_delta 时点在 Phase 4.5 过晚）。
+- **三层修复**：① `check_g80` 加 d 臂（voice ok→每个非真空实质维须有 `[src: snapshot.xq_market_voice.data.answers.<dim>]` 落点，真空判定复用 `_g80b_is_vacuum` 同一实现，reason 带 dims+字节长+--raw 修法；属 SECTION_FINAL_ONLY 仅终验，不扰写作期局部 verify）② `snapshot_view.py` xqvoice 视图维度行加截断警示（`⚠️尾部截断 N 行未显示`）③ `generate_checklist.py` c64 ② 文本固化「六维+raw_answer --raw 全量读」。docstring 三臂→四臂同步。
+- **留盘点位**：gate_definitions.py `check_g80` d 臂块；snapshot_view.py `_print_xqvoice` 警示行；generate_checklist.py c64 desc。
+- **memory**：`xqvoice-fullread-before-m4.md`（写作侧流程记忆，引擎 d 臂为主防线）。
 
 ## 2026-09-16 流水架构批 5：终局对账（CLAUDE.md + memory，grep 驱动）
 

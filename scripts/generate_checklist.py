@@ -150,7 +150,7 @@ PHASE_STEPS = {
             {"id": "c_d3_growth", "desc": "m2.11 行业位置与成长性（行业景气 + 份额 + 研发）：① 读 modules/m2-financial.md → ② 无新拉取（复用 c61）→ ③ append『### 3.11 行业位置与成长性』→ ④ $VG --section '3.11' → ⑤ 勾[x]"},
             {"id": "c62", "desc": "m25 订单诊断（合同负债+segment_composition+中标事件）：① 读 modules/m25-orders.md → ② $SV --raw xq_market_voice.data.answers.d1_intel（对撞，可选 ≤0.7K）→ ③ append『## 四、订单质量诊断』→ ④ $VG --section '四、订单' → ⑤ 勾[x]"},
             {"id": "c63", "desc": "m3 技术面（TD 4 步 + 多指标交叉）：① 读 modules/m3-technical.md → ② $SV kline + technical + any s3_fund_flow.data.fund_flow --depth 1 + --raw xq_market_voice.data.answers.d5_moves（≤6.3K）→ ③ append『## 五、技术面分析』→ ④ $VG --section '五、技术面' → ⑤ 勾[x]"},
-            {"id": "c64", "desc": "m4 市场情绪与消息面（含 4.1.1 事件扫描）：① 读 modules/m4-sentiment.md → ② $SV news + timeline + xqvoice + --raw s35_research_reports.data.layer1.em_reports_count + any northbound.data.processed（≤11.2K+exa 分量 P3 窗实测 0~4.4K，超 20K 先章内即时消化再检索前移视图化；timeline m4/m9 双拉=有意设计禁合并预拉）→ ③ append『## 六、消息面与重大事件时间线』→ ④ $VG --section '六、消息面' → ⑤ 勾[x]"},
+            {"id": "c64", "desc": "m4 市场情绪与消息面（含 4.1.1 事件扫描）：① 读 modules/m4-sentiment.md → ② $SV news + timeline + xqvoice + **xqvoice 六维+raw_answer --raw 全量读（视图=每维前12行截断展示，凭视图写作漏尾部增量=G80-d 终验 FAIL）** + --raw s35_research_reports.data.layer1.em_reports_count + any northbound.data.processed（≤11.2K+exa 分量 P3 窗实测 0~4.4K，超 20K 先章内即时消化再检索前移视图化；timeline m4/m9 双拉=有意设计禁合并预拉）→ ③ append『## 六、消息面与重大事件时间线』→ ④ $VG --section '六、消息面' → ⑤ 勾[x]"},
             {"id": "c65", "desc": "m5 估值（历史分位 + 同业对比 + 机构一致预期）：① 读 modules/m5-valuation.md → ② $SV valuation + consensus + peer（≤5.0K）→ ③ append『## 七、估值分析』→ ④ $VG --section '七、估值' → ⑤ 勾[x]"},
             {"id": "c66", "desc": "m6 综合研判 capstone（证据全景 + 三情景 + 情景-动作矩阵）：① 读 modules/m6-decision.md → ② python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/lib/capstone_panorama.py --snapshot $SNAP（3.4K）+ $SV --raw xq_conclusion_check.processed + --raw xq_market_voice.data.answers.d3_bullbear + 盘上 §2/§3/§5 结论段（grep '^#{2,3} .*(结论|小结|要点)' 子节，无则章区间末 20 行；合计 ≤10.7K）→ ③ append『## 十一、综合研判（收口裁决）』→ ④ $VG --section '十一、综合研判' → ⑤ 勾[x]"},
             {"id": "c_d4_dividend", "desc": "m9.1 分红与股东回报（分红比例 + 股息率 + 稳定性；章头由本步建）：① 读 modules/m9-governance.md → ② $SV timeline + annual + holder + any s_esg.data + any governance（m9blk 两步合计 ≤5.0K；timeline 信封三件套已全覆盖）→ ③ append『## 十、公司治理与股东回报』+『### 10.1 分红与股东回报』→ ④ $VG --section '10.1' → ⑤ 勾[x]"},
@@ -190,11 +190,9 @@ PHASE_STEPS = {
             {"id": "c50b", "desc": "视图认知重建：snapshot_view --list（合法视图以 --list 输出为准——❌未挂载视图勿引用；凭记忆写视图名/写非法视图名 exit 2 是 fumble 主源，命令见下方 Runner 调用命令块）"},
         ],
         "phase_3": [
-            {"id": "c59", "desc": "m38 核心结论头块（G11 声明后、首章节前；整块照抄 b_head 视图 head_draft_md，数字禁改）"},
-            {"id": "c60", "desc": "m3 技术面"},
-            {"id": "c61", "desc": "m6 操作建议"},
-            {"id": "c62", "desc": "m36 短期多周期共振 + m37 筹码与资金结构"},
-            {"id": "c63", "desc": "站内声量 T1-B 七维消费 + 总评 surface（m39 规则 R1-R6：非真空维 [src:] 落地、d3 看空同节、引文逐字；G80-B 三臂执法）"},
+            {"id": "c59", "desc": "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）"},
+            {"id": "c60", "desc": "策略段（≤5 行：主推荐/触发位/失效复述/事件行[权威度分级]+数据降级 1 行；禁概率词/期望股价）"},
+            {"id": "c61", "desc": "站内声量 T1-B（可选增强：xqvoice status=ok 才消费一行；默认跳过，m39 R1-R6 引文纪律仍然适用）"},
         ],
         "phase_4": [
             {"id": "c70", "desc": "运行 verify_gates.py（profile_quick）产出 sidecar，用其路径打勾"},

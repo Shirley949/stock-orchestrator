@@ -53,7 +53,8 @@ def _dk_rows():
 
 
 def _b_snapshot(direction="neutral", probability=None, tail_signal="尾盘连阴",
-                fund_status="ok", insufficient=False, stops_above=False):
+                fund_status="ok", insufficient=False, stops_above=False,
+                head_draft_v3=False):
     rq = {"status": "ok", "open": 39.06, "high": 40.09, "low": 38.19,
           "current": 38.23, "close": 38.23, "pre_close": 39.05,
           "change_pct": -2.1, "turnover_pct": 2.46, "amount_yuan": 47.89e8}
@@ -69,6 +70,10 @@ def _b_snapshot(direction="neutral", probability=None, tail_signal="尾盘连阴
               "rule_name": "up_stall", "horizon_days": 15,
               "expected_range": {"low": 33.123, "high": 43.337},
               "evidence": {"ret20_pct": 21.06}}
+    if head_draft_v3:
+        # v3 头块分派键（report_views._render_head_draft 读 b_head 视图同款语义）
+        df["conditional_winrate"] = ({"win_rate": 0.521, "n": 780, "as_of": "2026-10-03"}
+                                     if direction != "neutral" else None)
     if insufficient:
         df = {"status": "insufficient_history", "direction": None,
               "confidence": None, "probability": None, "sample_win_rate": None,
@@ -131,6 +136,7 @@ def _b_snapshot(direction="neutral", probability=None, tail_signal="尾盘连阴
         "intraday_60min": {"data": {"report_view": {
             "tail_signal": tail_signal, "ma60_state": "above",
             "ma60": 36.92, "last_close": 38.23}}},
+        "head_draft_v3": head_draft_v3,   # v3/v2 头块分派开关（b_head 渲染读）
     }
 
 
@@ -151,7 +157,7 @@ def _res(checker, report, data):
 
 class TestBHeadCalc(unittest.TestCase):
     def setUp(self):
-        self.bh = _build(_b_snapshot())
+        self.bh = _build(_b_snapshot(head_draft_v3=False))
         if self.bh is None:
             self.failTest("F2 未实现：attach 后 s4_technical.data.b_head 缺失")
 
@@ -186,14 +192,14 @@ class TestBHeadCalc(unittest.TestCase):
 class TestBHeadBranches(unittest.TestCase):
     def test_neutral_draft(self):
         """C5 前置：neutral → 60/25/15 + 主推=中性。"""
-        bh = _build(_b_snapshot())
+        bh = _build(_b_snapshot(head_draft_v3=False))
         self.assertIn("中性·区间震荡（主推）", bh["head_draft_md"])
         self.assertIn("| 60%", bh["head_draft_md"])
         self.assertIn("未落规则覆盖带", bh["head_draft_md"])
 
     def test_bear_anchored_and_above_side(self):
         """C5：bear p=0.66 → 概率锚 66；破位态措辞。"""
-        bh = _build(_b_snapshot(direction="bear", probability=0.66, stops_above=True))
+        bh = _build(_b_snapshot(direction="bear", probability=0.66, stops_above=True, head_draft_v3=False))
         self.assertIn("| 66%", bh["head_draft_md"])
         self.assertIn("悲观·顺势回落（主推）", bh["head_draft_md"])
         self.assertEqual(bh["stop_side"]["h60_ma60"], "above")
@@ -205,7 +211,7 @@ class TestBHeadBranches(unittest.TestCase):
 
     def test_bear_normal_side(self):
         """破位反例：stops 在下方时悲观目标=纪律位两档、无「已失守」。"""
-        bh = _build(_b_snapshot(direction="bear", probability=0.66))
+        bh = _build(_b_snapshot(direction="bear", probability=0.66, head_draft_v3=False))
         self.assertEqual(bh["stop_side"]["h60_ma60"], "below")
         self.assertEqual(bh["pess_target_1"], 36.919)
         self.assertEqual(bh["pess_target_2"], 35.527)
@@ -213,13 +219,13 @@ class TestBHeadBranches(unittest.TestCase):
 
     def test_bull_synthetic(self):
         """C7：bull 合成 → 主推=乐观·p 锚 61。"""
-        bh = _build(_b_snapshot(direction="bull", probability=0.61))
+        bh = _build(_b_snapshot(direction="bull", probability=0.61, head_draft_v3=False))
         self.assertIn("乐观·顺势上行（主推）", bh["head_draft_md"])
         self.assertIn("| 61%", bh["head_draft_md"])
 
     def test_insufficient_history(self):
         """C8：次新 → 透传 reason、direction=None、禁编方向。"""
-        bh = _build(_b_snapshot(insufficient=True))
+        bh = _build(_b_snapshot(insufficient=True, head_draft_v3=False))
         self.assertIsNone(bh["direction"])
         self.assertIn("上市历史不足", bh["head_draft_md"])
         self.assertNotIn("方向预测：bull", bh["head_draft_md"])
@@ -227,7 +233,7 @@ class TestBHeadBranches(unittest.TestCase):
 
     def test_fund_flow_failed(self):
         """C9：资金流降级 → status=failed + 主力锚词保留。"""
-        bh = _build(_b_snapshot(fund_status="failed"))
+        bh = _build(_b_snapshot(fund_status="failed", head_draft_v3=False))
         self.assertEqual(bh["fund_status"], "failed")
         self.assertIsNone(bh["main_net_yi"])
         self.assertIn("主力/散户", bh["head_draft_md"])
@@ -235,13 +241,13 @@ class TestBHeadBranches(unittest.TestCase):
 
     def test_tail_none(self):
         """C10：tail_signal=None → 尾盘中性。"""
-        bh = _build(_b_snapshot(tail_signal=None))
+        bh = _build(_b_snapshot(tail_signal=None, head_draft_v3=False))
         self.assertIsNone(bh["tail_signal"])
         self.assertIn("尾盘中性", bh["head_draft_md"])
 
     def test_kelly_note_fallback(self):
         """修正#4：kelly note=None → capped_at 兜底句，禁渲染「（None）」。"""
-        bh = _build(_b_snapshot(direction="bear", probability=0.66))
+        bh = _build(_b_snapshot(direction="bear", probability=0.66, head_draft_v3=False))
         self.assertIn("capped_at", bh["kelly_note"])
         self.assertNotIn("（None）", bh["head_draft_md"])
 
@@ -252,7 +258,7 @@ class TestBHeadBranches(unittest.TestCase):
 
 class TestBHeadDraft(unittest.TestCase):
     def setUp(self):
-        self.md = _build(_b_snapshot())["head_draft_md"]
+        self.md = _build(_b_snapshot(head_draft_v3=False))["head_draft_md"]
 
     def test_fixed_lines(self):
         for anchor in ["## 核心结论（数据截止 2026-08-28 收盘）",
@@ -289,7 +295,7 @@ class TestBHeadDraft(unittest.TestCase):
 class TestBHeadNoop(unittest.TestCase):
     def test_a_snapshot_noop(self):
         """C11：A 快照不挂 b_head；kline 视图照常（加法式）。"""
-        snap = _b_snapshot()
+        snap = _b_snapshot(head_draft_v3=False)
         snap["mode"] = "A"
         snap["s4_technical"]["data"].pop("short_term_enrich")
         rv.attach_report_views(snap)
@@ -417,7 +423,7 @@ class TestG71(unittest.TestCase):
             self.failTest = None
             raise self.failureException("O3 未实现：GATE_CHECKERS 缺 G71")
         self.check = GATE_CHECKERS["G71"]
-        self.snap = _b_snapshot()
+        self.snap = _b_snapshot(head_draft_v3=False)
 
     def test_no_head_fail(self):
         """反例 a：无头块 → 存在性 FAIL。"""
@@ -451,7 +457,7 @@ class TestG71(unittest.TestCase):
 
     def test_broken_state_wording_pass(self):
         """正例 e：破位态「已失守·反抽不过」变体措辞须 PASS（防 regex 漏破位态）。"""
-        snap = _b_snapshot(stops_above=True)
+        snap = _b_snapshot(stops_above=True, head_draft_v3=False)
         bh = _build(snap)  # attach 到 snap 本体（pess 对拍分支随之启用）
         self.assertEqual(snap["s4_technical"]["data"]["b_head"]["stop_side"]["h60_ma60"],
                          "above")
@@ -468,7 +474,7 @@ class TestG71(unittest.TestCase):
 
     def test_broken_pess_mismatch_fail(self):
         """反例 f：破位票悲观行仍写纪律位价（>1% 偏差）→ pess 分支对拍 FAIL。"""
-        snap = _b_snapshot(stops_above=True)
+        snap = _b_snapshot(stops_above=True, head_draft_v3=False)
         _build(snap)  # 挂 b_head（pess=34.55/30.8）；报告悲观行写纪律位 39.919 → 必 FAIL
         ok, reasons = _res(self.check, _HEAD_OK, snap)
         self.assertFalse(ok)
@@ -550,7 +556,7 @@ class TestG71ProbTableGate(unittest.TestCase):
 
     def setUp(self):
         self.check = GATE_CHECKERS["G71"]
-        self.snap = _b_snapshot()
+        self.snap = _b_snapshot(head_draft_v3=False)
 
     def test_flip_panorama_rows_pass(self):
         for label, rows in _PANORAMA_ROWS_FLIP:
@@ -575,6 +581,57 @@ class TestG71ProbTableGate(unittest.TestCase):
         r = next(x for x in reasons if "漂移" in x)
         self.assertIn("60", r)   # 两张概率表的冲突值须同轮全数上桌
         self.assertIn("50", r)
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# v3 头块（交易计划 4 行状态头）测试组（S4a 2026-10-04）
+# ---------------------------------------------------------------------------
+
+class TestG71V3(unittest.TestCase):
+    """v3 头块：交易计划标题 + 6 锚 + conditional_winrate + 无三情景表。"""
+
+    def setUp(self):
+        self.check = GATE_CHECKERS["G71"]
+        self.snap = _b_snapshot(head_draft_v3=True)
+
+    def test_v3_golden_pass(self):
+        """v3 标准头块（_HEAD_OK 的 v3 等价形态）→ PASS。"""
+        report = """# 300433 模式B
+
+📅 数据截止：2026-08-28 收盘
+
+## 交易计划（数据截止 2026-08-28 收盘）
+**趋势/强弱/结构**：down ｜ regime trend_down ｜ 强度 divergent ｜ 结构 amplified/mid
+**引擎方向 bear**（up_stall，当前 regime 条件胜率 0.66（n=780，2026-10-03）），波动预算 15 日 [33.123 ~ 43.337]
+**现价 38.23 元** ｜ kelly=0.25（capped_at=0.25）｜ 纪律位 36.919（60m MA60 档）失守减仓、35.527（日 MA20 档）失守清短线仓
+
+（以下全部点位/确认/失效见 trade_sheet 视图；数字禁改禁四舍五入）
+
+## 交易点位表
+| 方向 | 价位 | 类型 | 触发（收盘确认） | 动作 | 失效条件 |
+|---|---|---|---|---|---|
+| 卖 | 36.919 | 止损档（h60_ma60） | 收盘跌破 | 离场 | 收回 2 日取消 |
+"""
+        ok, reasons = _res(self.check, report, self.snap)
+        self.assertTrue(ok, reasons)
+
+    def test_v3_no_head_fail(self):
+        ok, reasons = _res(self.check, "# 报告\n\n正文\n", self.snap)
+        self.assertFalse(ok)
+
+    def test_v3_missing_kelly_fail(self):
+        """v3 缺 kelly 锚 → 槽位 FAIL。"""
+        report = """## 交易计划（数据截止 2026-08-28 收盘）
+**趋势/强弱/结构**：down ｜ regime trend_down ｜ 强度 divergent ｜ 结构 amplified/mid
+**引擎方向 bear**（up_stall，当前 regime 条件胜率 0.66），波动预算 15 日 [33.1 ~ 43.3]
+**现价 38.23 元** ｜ 纪律位 36.919 失守减仓
+"""
+        ok, reasons = _res(self.check, report, self.snap)
+        self.assertFalse(ok)
+        self.assertTrue(any("kelly" in r for r in reasons), reasons)
 
 
 if __name__ == "__main__":

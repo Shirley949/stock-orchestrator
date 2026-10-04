@@ -117,10 +117,13 @@ SCENES = {
             {"path": "data.fund_flow", "confidence": CONFIRMED},
             {"path": "data.fund_flow.items[].name", "confidence": ASSUMED,
              "note": "fetcher 硬编码中文{特大单,大单,中单,小单}(runner.py:979-989)；G26 严格依赖此集合，错则 FAIL"},
+            {"path": "data.fund_flow.daily_history", "confidence": CONFIRMED,
+             "note": "v12：westock --start/--end 日级主力净额历史（130 日窗；short_term_engine fund_sustain 正天数消费源；缺档 None 降级，P2 RUN-MC-C3）"},
         ],
         "consumers": {
-            "data.fund_flow":              ["G26", "m10:10A.4", "m38-b-conclusion-head"],   # m38 头块主力/散户槽（经 b_head 视图换算 main/retail_net_yi）
-            "data.fund_flow.items[].name": ["G26", "m38-b-conclusion-head"],
+            "data.fund_flow":              ["G26", "m10:10A.4", "b-trade-sheet"],   # v3：b-trade-sheet 资金行（经 b_head/trade_sheet 视图换算）
+            "data.fund_flow.items[].name": ["G26"],
+            "data.fund_flow.daily_history": ["b-trade-sheet", "G73"],   # v12 fund_sustain 正天数（engine 内计算后经 trade_sheet 视图透出）
         },
         "priority": P0,   # G26 依赖
         "cost": {"calls": 1, "calls_worst": 3, "latency": "high", "throttle_prone": True},

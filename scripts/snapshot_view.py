@@ -49,6 +49,7 @@ VIEW_PATHS = {
     "fund_flow":     ("s3_fund_flow", "data", "fund_flow"),
     # 模式B核心结论头块（2026-08-31）：跨 scene 聚合 + head_draft_md 整块预渲染（m38/G71）
     "b_head":        ("s4_technical", "data", "b_head"),
+    "trade_sheet":   ("s4_technical", "data", "trade_sheet"),
     "valuation": ("valuation_snapshot", "data", "report_view"),
     "consensus": ("consensus_forecast", "data", "report_view"),
     "peer":      ("s11_peer", "data", "report_view"),
@@ -414,6 +415,30 @@ def _print_fund_flow(v):
               f"(占比 {_fmt(it.get('in_ratio'))}/{_fmt(it.get('out_ratio'))})")
 
 
+def _print_trade_sheet(v):
+    """v12 交易指令单视图：行集 + 确认器 + 资金持续性 + 事件日历（b-trade-sheet 模板数据源）。"""
+    print(f"## 交易指令单 status={_fmt(v.get('status'))} kelly={_fmt(v.get('kelly'))}")
+    stt = v.get("state_tuple") or {}
+    print(f"  状态：趋势={_fmt(stt.get('trend_state'))} regime={_fmt(stt.get('regime'))} "
+          f"强度={_fmt(stt.get('strength'))} 结构={_fmt(stt.get('structure'))}/{_fmt(stt.get('structure_tier'))}")
+    rows = v.get("rows") or []
+    print(f"  点位行 {len(rows)} 条：")
+    for r in rows:
+        cw = r.get("conditional_winrate")
+        cws = f" 条件胜率={cw['win_rate']}(n={cw['n']})" if cw else ""
+        print(f"   [{r.get('side')}] {r.get('type')} @ {r.get('price')} → {r.get('action')}")
+        print(f"      确认：{r.get('confirm_rule')} ｜ 失效：{r.get('invalidation')}{cws}")
+    if v.get("confirmator"):
+        print(f"  确认器：{v['confirmator']}")
+    fs = v.get("fund_sustain")
+    print(f"  资金持续性：{_fmt(fs and fs.get('verdict'))}（7日正天数 {_fmt(fs and fs.get('pos_days_7'))}）"
+          if fs else "  资金持续性：None（缺档降级）")
+    ec = v.get("event_calendar") or []
+    print(f"  事件日历（{v.get('event_calendar_source')}）：{len(ec)} 条")
+    for e in ec:
+        print(f"   [{e.get('grade')}] {e.get('text')}")
+
+
 def _print_b_head(v):
     """b_head 头块视图：模式B核心结论的 10 槽全量（m38 模板数据源，数字照抄勿改）。"""
     print(f"## 核心结论头块 status={_fmt(v.get('status'))} "
@@ -464,10 +489,12 @@ def _print_xqvoice(v):
           f"传闻={_fmt(st.get('chuanwen'))} 实锤={_fmt(st.get('shichui'))} date_marks={_fmt(st.get('date_marks'))}")
     print(f"[module_map] " + " ".join(f"{k}->{x}" for k, x in (p.get("module_map") or {}).items()))
     answers = (v.get("data") or {}).get("answers") or {}
-    print(f"\n[维度] {len(answers)} 个（每维前12行；全文 → --raw xq_market_voice.data.answers.<dim>）")
+    print(f"\n[维度] {len(answers)} 个（每维前12行=截断展示，非全文；写作前必 --raw 全量读六维+raw_answer）")
     for dim, txt in answers.items():
         lines = [l for l in str(txt).split("\n") if l.strip()][:12]
-        print(f"\n-- {dim} ({len(str(txt))}c) --")
+        n_all = len([l for l in str(txt).split("\n") if l.strip()])
+        tail = f" ⚠️尾部截断 {n_all - 12} 行未显示，--raw 兜底" if n_all > 12 else ""
+        print(f"\n-- {dim} ({len(str(txt))}c) --{tail}")
         for l in lines:
             print("  " + l[:150])
 
@@ -493,6 +520,7 @@ PRINTERS = {
     "consensus": _print_consensus, "peer": _print_peer, "annual": _print_annual,
     "short_term": _print_short_term, "market_context": _print_market_context,
     "fund_flow": _print_fund_flow, "b_head": _print_b_head,
+    "trade_sheet": _print_trade_sheet,
     "xqvoice": _print_xqvoice, "xqcheck": _print_xqcheck,
 }
 

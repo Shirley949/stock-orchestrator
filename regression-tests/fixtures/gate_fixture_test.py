@@ -119,6 +119,9 @@ EXPECTED = {
     # 雪球站内声量三臂门（2026-09-09 plan B4）：池票快照无 xq scene（voice/check 均缺席）
     # → status≠ok 全臂豁免恒 True；两极执法由 SECTION_PROBES 带构造快照的 G80 探针覆盖
     "G80": {"000988": True,  "002008": True,  "300394": True},
+    # v12 交易点位表完整性门（2026-10-04 S4a）：池票快照（v2 runner 产出）无 trade_sheet 键
+    # → 全臂豁免恒 True；两极执法由 SECTION_PROBES 带构造快照的 G73 探针覆盖
+    "G73": {"000988": True,  "002008": True,  "300394": True},
     "G81": {"000988": True,  "002008": True,  "300394": True},   # 冻结池零 webfindings 引用→scene缺+无引用=豁免
 }
 
@@ -349,6 +352,57 @@ SECTION_PROBES = [
         False,
         {"s11_peer": {"data": {"items": []}, "status": "ok"}},
     ),
+    # —— G73 交易点位表完整性（v12 S4a）两极，第 4 元素 = 构造快照 ——
+    (
+        "G73",
+        "## 交易点位表\n| 方向 | 价位 | 类型 | 触发（收盘确认） | 动作 | 失效条件 |\n|---|---|---|---|---|---|\n| 卖 | 24.9 | 止损档 | 收盘跌破 | 离场 | 收回 2 日取消 |\n",
+        True,  # 快照无 trade_sheet（v2 旧产出）→ 豁免 PASS（G73 对旧快照不执法）
+        {"mode": "B", "s4_technical": {"data": {}}},
+    ),
+    (
+        "G73",
+        "## 交易点位表\n| 方向 | 价位 | 类型 | 触发（收盘确认） | 动作 |\n|---|---|---|---|---|\n| 卖 | 24.9 | 止损档 | 反弹考虑 | 离场 | 无 |\n",
+        True,  # 同上豁免极：无 trade_sheet 快照不执法（两极执法须带构造 trade_sheet 的快照，见下）
+        {"mode": "B", "s4_technical": {"data": {}}},
+    ),
+    (
+        "G73",
+        "## 交易点位表\n| 方向 | 价位 | 类型 | 触发（收盘确认） | 动作 | 失效条件 |\n"
+        "|---|---|---|---|---|---|\n| 卖 | 24.9 | 止损档 | 收盘跌破 | 离场 | 收回 2 日取消 |\n"
+        "| 买 | 23.5~23.6 | 超跌反弹入场带（回踩限价） | 触发后 5 个交易日内触及有效 | 分批限价买入（梯 +8%/止损 -8%）"
+        "｜质量分级 A（条件胜率 0.608，n=102，2026-10-03） | 收盘跌破强支撑失效 |\n",
+        True,  # 两极正极：trade_sheet 在档 + 每行六列齐 + 触发含确认词 + 买行带条件胜率 → PASS
+        {"mode": "B",
+         "s4_technical": {"data": {"trade_sheet": {
+             "view": "trade_sheet", "status": "ok",
+             "rows": [
+                 {"side": "卖", "price": 24.9, "type": "止损档", "confirm_rule": "收盘跌破",
+                  "action": "离场", "invalidation": "收回 2 日取消"},
+                 {"side": "买", "price": "23.5~23.6", "type": "超跌反弹入场带（回踩限价）",
+                  "confirm_rule": "触发后 5 个交易日内触及有效",
+                  "action": "分批限价买入", "invalidation": "收盘跌破强支撑失效",
+                  "conditional_winrate": {"win_rate": 0.608, "n": 102}},
+             ]}}}},
+    ),
+    (
+        "G73",
+        "## 交易点位表\n| 方向 | 价位 | 类型 | 触发 | 动作 |\n|---|---|---|---|---|\n| 卖 | 24.9 | 止损档 | 收盘跌破 | 离场 |\n",
+        False,  # 两极负极：trade_sheet 在档但报告行缺[失效条件]列+触发列无确认词 → FAIL（真值+修法）
+        {"mode": "B",
+         "s4_technical": {"data": {"trade_sheet": {
+             "view": "trade_sheet", "status": "ok",
+             "rows": [
+                 {"side": "卖", "price": 24.9, "type": "止损档", "confirm_rule": "收盘跌破",
+                  "action": "离场", "invalidation": "收回 2 日取消"},
+             ]}}}},
+    ),
+    (
+        "G73",
+        "",
+        True,  # 快照无 trade_sheet（v2 旧产出）→ 豁免
+        {"mode": "B", "s4_technical": {"data": {}}},
+    ),
+
 ]
 
 

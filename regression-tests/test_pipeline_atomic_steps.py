@@ -35,12 +35,10 @@ REP = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3f-东材科技-mo
 SNAP = REP.with_name("runner_snapshot_601208_modeA.json")
 CLAUDE_MD = Path("/home/ubuntu/CLAUDE.md")
 
-B_PHASE3_FROZEN = [  # 批 1 前 B phase_3 原文逐字（B 面零触碰锁）
-    "m38 核心结论头块（G11 声明后、首章节前；整块照抄 b_head 视图 head_draft_md，数字禁改）",
-    "m3 技术面",
-    "m6 操作建议",
-    "m36 短期多周期共振 + m37 筹码与资金结构",
-    "m39 规则 R1-R6"[:0] + "站内声量 T1-B 七维消费 + 总评 surface（m39 规则 R1-R6：非真空维 [src:] 落地、d3 看空同节、引文逐字；G80-B 三臂执法）",
+B_PHASE3_FROZEN = [  # S4a v3（2026-10-04）：b-trade-sheet 单模板链 3 步（原 v2 五步链退役）
+    "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）",
+    "策略段（≤5 行：主推荐/触发位/失效复述/事件行[权威度分级]+数据降级 1 行；禁概率词/期望股价）",
+    "站内声量 T1-B（可选增强：xqvoice status=ok 才消费一行；默认跳过，m39 R1-R6 引文纪律仍然适用）",
 ]
 
 A_MARKERS = ["原子步纪律", "步-锚映射", "SNAP=", "SV=", "VG="]

@@ -109,6 +109,7 @@ GATE_DESCS = {
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
+    "G73": "模式B交易点位表完整性（v3：每行六列齐[方向/价位/类型/触发/动作/失效] + 触发列含收盘确认语义 + 失效列非空 + 买行带 conditional_winrate；trade_sheet.rows 为真相源）",
     "G80": "雪球站内声量三臂（a 站内词+xq src 同段共现 / b 反对逐条处理段带证据 token / c 站内引文≥12字须为语料子串；status≠ok 全臂豁免，配额熔断/拉取失败禁编造）",
     "G81": "webfindings 消费三臂（a 引用完整性+反向消费：topic 锚命中/未消费 kept 列清单；b 数字一致性：同行数字万/亿/B 换算后 ⊆ 条目 value∪对撞区间；c 口径披露：caliber_flags 非空须披露 token；accounting 缺=反向+c 豁免）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
@@ -228,6 +229,8 @@ GATE_HINTS = {
            "（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn / curl_sina），"
            "样板话（「已披露数据降级」不带源名）不算。修法：照 FAIL reason 里的"
            "『可写 token』清单在 m8 补点名行。ts<2026-09-01 的旧快照豁免。",
+    "G73": "交易点位表完整性：trade_sheet.rows 每行六列齐（方向/价位/类型/触发/动作/失效），"
+           "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注",
     "G80": "站内声量三臂高频败因：①c 臂改写——引号内换词/压缩日期/转述（V6 实战 4 例均为自发，"
            "熟知规则仍会犯；正道=逐字照抄，改写移出引号）；②b 臂只写「站内有反对意见」"
            "不带反方证据 token——须「站内反对·须直视」标记+数字/≥6字原句同段+处理结论三选一"
@@ -239,7 +242,7 @@ GATE_HINTS = {
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G80", "G81"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G73", "G80", "G81"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -269,9 +272,12 @@ PROFILES = {
     },
     "profile_quick": {
         "name": "quick",
-        "description": "模式B短期走势预测 → 技术面+操作+信号+G65-G70（B v2）",
-        "gates": ["G1", "G30", "G11", "G13", "G80"],
-        "auto_pass": [],  # 原 auto_pass 均不在 quick.gates 内（死代码，B v2 清理）
+        # v3（2026-10-04 S4a）：b-trade-sheet 单模板执法面。G30 三档族退出（三情景表已删）；
+        # G62 tally 退出（14 维全景已删）；G73=点位表完整性（新增，见 check_g73）。
+        # G65/G68/G71 保留但 needle 改 v3（conditional_winrate / 交易计划头块）。
+        "description": "模式B交易指令单 → 点位表+止损链+条件胜率+事件日历（B v3）",
+        "gates": ["G1", "G11", "G63", "G72", "G80"],  # B-only 族（G65/G68/G71/G73）由下方 B_ONLY_GATES 追加，此处勿重复
+        "auto_pass": [],
         "fail_threshold": 2,
     },
 }
@@ -279,7 +285,7 @@ PROFILES = {
 # —— 模式B gate 隔离（双保险之一；2026-08-26 B v2）——
 # G65-G70 只在 profile_quick 实跑：A 报告（profile_full）结构上不含这些 gate；
 # A 快照即便误跑 quick 也被每个 check 顶部的 mode 短路放行（双保险之二）。
-B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70", "G71"]
+B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70", "G71", "G73"]
 PROFILES["profile_full"]["gates"] = [g for g in ALL_GATES if g not in B_ONLY_GATES]
 PROFILES["profile_quick"]["gates"] = PROFILES["profile_quick"]["gates"] + B_ONLY_GATES
 
@@ -4105,21 +4111,34 @@ def check_g65(report: str, data: dict) -> bool:
     if bad_dir:
         return GateResult(passed=False, reasons=[
             f"方向对拍不一致：报告 {bad_dir} vs 引擎 {direction}（direction_forecast.direction 原样引用）"])
-    # probability ±0.03（p=0.66 / 66% 双刻度）
+    # v12（S4a）：主交付=conditional_winrate（regime 条件胜率）；probability 为 v11 存档值。
+    # 对拍顺序：报告写条件胜率 → 对拍 conditional_winrate；报告写 p= → 对拍 probability（兼容旧式）。
+    cw = df.get("conditional_winrate")
+    cw_repr = set()
+    if isinstance(cw, dict) and isinstance(cw.get("win_rate"), (int, float)):
+        cw_repr = {round(cw["win_rate"], 4), round(cw["win_rate"] * 100, 2)}
     p_repr = set()
     if isinstance(probability, (int, float)):
         p_repr = {round(probability, 4), round(probability * 100, 2)}
+    cw_asserts = [float(g) for g in
+                  re.findall(r'条件胜率[：:]?\s*(\d*\.?\d+)', report)]
     p_asserts = [float(g) for tup in
                  re.findall(r'(?<![A-Za-z0-9_])p=(\d*\.?\d+)|"probability"\s*:\s*(\d*\.?\d+)', report)
                  for g in tup if g]
-    if p_asserts and p_repr:
+    if cw_asserts and cw_repr:
+        bad_cw = [x for x in cw_asserts if not any(abs(x - v) <= 0.03 for v in cw_repr)]
+        if bad_cw:
+            return GateResult(passed=False, reasons=[
+                f"条件胜率对拍超 ±0.03：报告 {bad_cw} vs 引擎 conditional_winrate={cw.get('win_rate')}"
+                f"（v12 主交付，照抄 short_term_enrich.direction_forecast.conditional_winrate）"])
+    elif p_asserts and p_repr:
         bad_p = [x for x in p_asserts if not any(abs(x - v) <= 0.03 for v in p_repr)]
         if bad_p:
             return GateResult(passed=False, reasons=[
                 f"概率对拍超 ±0.03：报告 {bad_p} vs 引擎 p={probability}（G65 对拍，禁自造数字）"])
-    if not p_asserts and confidence != "NEUTRAL":
+    if not cw_asserts and not p_asserts and confidence != "NEUTRAL":
         return GateResult(passed=False, reasons=[
-            "probability 未引用：写方向预测必带 p 值（direction_forecast.probability 原样引用）"])
+            "胜率未引用：写方向预测必带 conditional_winrate（v12）或 p（旧式），二选一原样引用"])
     # sample_win_rate 同源（p 与回测胜率一致；非 neutral 须引用）
     if confidence != "NEUTRAL" and isinstance(swr, (int, float)):
         swr_repr = {round(swr, 4), round(swr * 100, 2)}
@@ -4408,10 +4427,14 @@ def check_g70(report: str, data: dict) -> bool:
 
 
 # —— G71（模式B核心结论头块 · 2026-08-31 m38 配套）——
-_G71_HEAD_RE = re.compile(r"^#{1,4}\s.*核心结论", re.MULTILINE)
-_G71_VERIFY_RE = re.compile(r"^#{1,4}\s.*(?:方向预测|纪律位)", re.MULTILINE)
+_G71_HEAD_RE = re.compile(r"^#{1,4}\s.*(?:核心结论|交易计划)", re.MULTILINE)
+_G71_VERIFY_RE = re.compile(r"^#{1,4}\s.*(?:方向预测|引擎方向|纪律位)", re.MULTILINE)
+# v3（S4a 2026-10-04）：头块=4 行状态头（交易计划），槽位从 10 槽收为 6 锚
+# （趋势|regime 二选一 + 引擎方向 + 波动预算 + 现价 + kelly + 纪律位）；三情景表/筹码/主力槽已删。
 _G71_SLOTS = ("现价", r"近\s*5\s*日", "分时", "方向预测", "情景", "关键位",
-              "纪律位", "筹码", "主力", "仓位")
+              "纪律位", "筹码", "主力", "仓位")   # v2（核心结论头块 10 槽；回滚态用）
+_G71_SLOTS_V3 = ("现价", "方向", "波动预算", "纪律位",
+                 r"趋势/强弱/结构", "kelly")        # v3（交易计划 4 行头 6 锚；S4a 2026-10-04）
 # 标签配对（模板与 gate 同形：「{价}（60m MA60 档[已失守]?）」——标签消歧，
 # 无 G68 表格行档间差<5% 互 hit 问题；兼容破位态「已失守」后缀，实测 7/18 票）
 _G71_STOP_PAT = {
@@ -4434,14 +4457,19 @@ def check_g71(report: str, data: dict) -> bool:
                                  weak=("方向预测", "纪律位", "现价"))
     if diag == "no_anchor":
         return GateResult(passed=False, reasons=[
-            "B 报告缺核心结论头块：须有「## 核心结论（数据截止 … 收盘）」标题块"
-            "（m38 模板，G11 声明后、首章节前；整块草稿照抄 b_head 视图 head_draft_md）"])
+            "B 报告缺状态头块：须有「## 交易计划（数据截止 … 收盘）」（v3）或「## 核心结论…」（v2 回滚态）标题块"
+            "（G11 声明后、首章节前；整块草稿照抄 b_head 视图 head_draft_md）"])
     # ① 槽位完整性（10 槽锚词；降级态文案保留锚词，见 m38 缺失态表）
-    missing = [s for s in _G71_SLOTS if not re.search(s, head)]
+    # v3/v2 自适应：报告头块标题是「交易计划」→ v3 槽（6 锚）；「核心结论」→ v2 槽（10 槽）。
+    # 分派键 = 快照 head_draft_v3 与报告实际形态双重判定（以报告实际形态为准——报告才是执法对象）。
+    if re.search(r"交易计划", head):
+        slots, slot_label = _G71_SLOTS_V3, "6 锚（趋势行/引擎方向/波动预算/现价/kelly/纪律位）"
+    else:
+        slots, slot_label = _G71_SLOTS, "10 槽锚词必齐：现价/近5日/分时/方向预测/情景/关键位/纪律位/筹码/主力/仓位"
+    missing = [s for s in slots if not re.search(s, head)]
     if missing:
         return GateResult(passed=False, reasons=[
-            f"头块槽位缺失：{missing}（10 槽锚词必齐：现价/近5日/分时/方向预测/情景/"
-            "关键位/纪律位/筹码/主力/仓位；数据降级时锚词照写+降级说明）"])
+            f"头块槽位缺失：{missing}（{slot_label}；数据降级时锚词照写+降级说明）"])
     reasons = []
     # ② 纪律位散文对拍（标签配对 ±1%；truth 优先 risk_control，旧快照退 b_head）
     bh = _snapshot_get(data, "s4_technical.data.b_head")
@@ -4541,6 +4569,48 @@ def _g72_warning_tokens(w: str) -> set:
     return {t for t in toks if len(t) >= 4 and not t.isdigit()}
 
 
+def check_g73(report: str, data: dict) -> bool:
+    """G73（v3 新增）：模式B交易点位表完整性。HARD(weight2)。
+    真相源：s4.data.trade_sheet.rows（report_views.build_trade_sheet_view 引擎直出）。
+    执法面（P2/P3 盲测裁决的落地合同）：
+    ① 报告含点位表（B 报告必有）→ 每行六列语义齐（方向/价位/类型/触发/动作/失效）；
+    ② 触发列含收盘确认语义词（收盘|触及|站上|跌破|收回）；
+    ③ 失效列非空（空=引擎 bug，停笔上报而非自行补写）；
+    ④ 买行（入场带/rebound_spec）带 conditional_winrate 标注。
+    降级：trade_sheet.status≠ok → 全臂豁免（照实披露即可）。"""
+    if not _b_gate_active(data):
+        return True
+    ts = _snapshot_get(data, "s4_technical.data.trade_sheet")
+    if not isinstance(ts, dict) or ts.get("status") not in ("ok", "empty"):
+        return True  # 缺档/旧快照豁免（旧版 v2 报告不强制）
+    rows = ts.get("rows") or []
+    if ts.get("status") == "empty" and not rows:
+        return True
+    reasons = []
+    CONFIRM_WORDS = ("收盘", "触及", "站上", "跌破", "收回", "触发后")
+    for idx, r in enumerate(rows, 1):
+        if not isinstance(r, dict):
+            continue
+        missing_cols = [c for c in ("side", "price", "type", "confirm_rule", "action", "invalidation")
+                        if not r.get(c)]
+        if missing_cols:
+            reasons.append(f"点位行{idx}（{r.get('type', '?')}）缺列/空列：{missing_cols}"
+                           f"——照 trade_sheet 视图行照抄，禁删列")
+            continue
+        if not any(w in str(r["confirm_rule"]) for w in CONFIRM_WORDS):
+            reasons.append(f"点位行{idx}（{r['type']}）触发列缺收盘确认语义：『{str(r['confirm_rule'])[:40]}』"
+                           f"——确认词表：收盘/触及/站上/跌破/收回/触发后")
+        if r["side"] == "买" and "入场带" in str(r.get("type", "")) and not r.get("conditional_winrate"):
+            reasons.append(f"买行{idx}（入场带）缺 conditional_winrate 标注——动作列尾加（条件胜率 X，n=Y，as_of）")
+    if reasons:
+        return GateResult(passed=False, reasons=reasons[:5])
+    # 报告侧：点位表必须存在（检测表头或首行方向词）
+    if rows and not re.search(r'触发（.*确认.*）|失效条件', report):
+        return GateResult(passed=False, reasons=[
+            "报告缺交易点位表：b-trade-sheet 模板须渲染 trade_sheet.rows（六列表，表头含 触发（收盘确认）/失效条件）"])
+    return True
+
+
 def check_g72(report: str, data: dict) -> bool:
     """G72 降级源点名披露（m8 收官批 F1）：snapshot._warnings 非空时，报告须逐条
     点名各降级源特征 token（API 名/域名/源标签），逐条判定——任一 warning 的
@@ -4594,10 +4664,11 @@ def _g80_obj_tokens(seg: str):
 
 
 def check_g80(report: str, data: dict) -> bool:
-    """G80: 站内声量消费三臂。a 臂 presence（voice ok→须(站内词+xq src)同段共现）；
+    """G80: 站内声量消费四臂。a 臂 presence（voice ok→须(站内词+xq src)同段共现）；
     b 臂 objection-forcing（check ok→每条反对须「站内反对标记+证据token」同段）；
-    c 臂引文子串（站内语境引文≥12字→归一化后须为语料子串，省略号分段每段≥8字）。
-    status≠ok（含 degraded_quota/failed）全臂豁免；无反对 b 豁免；0 引文 c no-op。"""
+    c 臂引文子串（站内语境引文≥12字→归一化后须为语料子串，省略号分段每段≥8字）；
+    d 臂维度消费完整性（voice ok→每个非真空实质维须有 answers.<dim> src 落点，真空豁免）。
+    status≠ok（含 degraded_quota/failed）全臂豁免；无反对 b 豁免；0 引文 c no-op；真空维 d 豁免。"""
     # T1-B（模式B模板）分派：三臂 B 逻辑（维度覆盖/总评 surface/反方同节/引文逐字）。
     # 旧快照无 template 键 → 走 A 臂原样（向后兼容）。
     if (((data.get("xq_market_voice") or {}).get("data") or {}).get("meta") or {}).get("template") == "T1-B":
@@ -4673,6 +4744,23 @@ def check_g80(report: str, data: dict) -> bool:
                 "（归一化后逐字匹配）。".format(n=len(bad), det=det),
                 "💡 修法：引文逐字照抄语料原文（含日期/球友ID），改写转述移出引号；长引文可删节但保留段须≥8字"
                 "逐字。数据核对：snapshot_view <S> xqvoice / --raw xq_market_voice.data.answers.<dim>。"])
+
+    # —— d 臂 维度消费完整性：实质维（非真空）须在报告有 answers.<dim> src 落点 ——
+    # （凭 xqvoice 视图写作必漏维——视图每维仅前 12 行截断、raw_answer 不在视图；2026-09-23 000099 实证）
+    if mv.get("status") == "ok":
+        answers_all = (mv.get("data") or {}).get("answers") or {}
+        missing = [dim for dim, txt in sorted(answers_all.items())
+                   if not _g80b_is_vacuum(txt)
+                   and ("snapshot.xq_market_voice.data.answers." + str(dim)) not in report]
+        if missing:
+            det = "；".join("{d}({n}c)".format(d=d, n=len(answers_all.get(d) or "")) for d in missing[:4])
+            return GateResult(passed=False, reasons=[
+                "xq_market_voice 有 {n} 个实质维（非真空）全报告无 "
+                "[src: snapshot.xq_market_voice.data.answers.<dim>] 落点：{det}"
+                "——声量拉了整维没消费（凭视图截断输出写作的典型漏法）。".format(n=len(missing), det=det),
+                "💡 修法：先 snapshot_view <S> --raw xq_market_voice.data.answers.<dim> 六维 + "
+                "--raw xq_market_voice.data.raw_answer 全量读再落点：利空→m7 §7.1、利好→对撞行/观察清单、"
+                "长尾增量→§站内之声对撞行；真空维豁免（显式真空声明+互证即可，勿为消费而编）。"])
 
     return True
 
@@ -5022,6 +5110,7 @@ GATE_CHECKERS = {
     "G65": check_g65, "G66": check_g66, "G67": check_g67,
     "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
     "G72": check_g72,
+    "G73": check_g73,
     "G80": check_g80, "G81": check_g81,
 }
 
@@ -5295,6 +5384,11 @@ GATE_REGISTRY = {
             "data_dim": "snapshot._warnings",
             "requires": "_warnings 非空→报告逐条点名各降级源特征 token（API 名/域名/源标签）；ts<2026-09-01 豁免（向后兼容）",
             "fail_hint": "降级未逐条点名（样板话不算）——照 FAIL reason『可写 token』清单在 m8 补点名行"},
+    "G73": {"checker": check_g73, "weight": 2, "owner": ["b-trade-sheet"],
+            "data_dim": "s4_technical.data.trade_sheet",
+            "requires": "交易点位表每行六列齐（方向/价位/类型/触发/动作/失效）；触发列含收盘确认语义；失效列非空；买行（rebound_spec）带 conditional_winrate；减仓带行带 LLM 判断位标记",
+            "fail_hint": "照 trade_sheet 视图行照抄；缺列行补列、失效空行补失效条款、买行补条件胜率标注（禁自行发明价位——价位照抄 layers/stops/rebound_spec）"},
+
     "G80": {"checker": check_g80, "weight": 3, "owner": ["m4", "m6"],
             "data_dim": "xq_market_voice/xq_conclusion_check",
             "requires": "站内声量三臂：voice ok→(站内词+xq src)同段共现；check 反对→「站内反对·须直视」段带证据token；"
