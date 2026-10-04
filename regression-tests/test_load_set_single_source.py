@@ -32,9 +32,9 @@ DEFERRED_STATUS = "⏸ 延迟读：首次 verify FAIL 才 Read"
 
 
 def _token(basename: str) -> str:
-    """m12-summary.md → m12；非 mNN- 前缀文件名原样返回"""
+    """m12-summary.md → m12；b-trade-sheet.md → b-trade-sheet（非 mNN 前缀剥 .md）"""
     m = re.match(r"m(\d+)-", basename)
-    return f"m{m.group(1)}" if m else basename
+    return f"m{m.group(1)}" if m else re.sub(r"\.md$", "", basename)
 
 
 def mech_modules(mode: str):
@@ -54,7 +54,8 @@ def _jit_section(text: str) -> str:
 def parse_jit(text: str) -> dict:
     """JIT 表段 → {mode: (main_tokens, deferred_tokens)}
     B 行延迟列「同上 m11（…）」含括注里的 mNN 字样，不解析——同上=继承 A 延迟政策，
-    由 compare 的 m11 规则显式执法（机制表示=B 装载集缺席）。"""
+    由 compare 的 m11 规则显式执法（机制表示=B 装载集缺席）。
+    v3：B 主列含非 mNN token（b-trade-sheet），一并提取。"""
     out = {}
     for line in _jit_section(text).splitlines():
         m = re.match(r"\|\s*\*\*(A|B)\*\*\s*\|([^|]+)\|([^|]*)\|", line)
@@ -62,6 +63,8 @@ def parse_jit(text: str) -> dict:
             continue
         mode, main_cell, defer_cell = m.group(1), m.group(2), m.group(3)
         main = {f"m{x}" for x in re.findall(r"m(\d+)", main_cell)}
+        if "b-trade-sheet" in main_cell:
+            main.add("b-trade-sheet")
         deferred = ({f"m{x}" for x in re.findall(r"m(\d+)", defer_cell)}
                     if mode == "A" else set())
         out[mode] = (main, deferred)
@@ -72,9 +75,9 @@ def parse_quality(text: str) -> dict:
     """quality 模块表 → {token: 模式标注}；只取含 references/modules/ 路径的行"""
     out = {}
     for line in text.splitlines():
-        m = re.match(r"\|[^|]+\|\s*`?references/modules/(m[\w.-]+\.md)`?\s*\|\s*([^|]+?)\s*\|", line)
+        m = re.match(r"\|[^|]+\|\s*`?references/modules/([\w.-]+\.md)`?\s*\|\s*([^|]+?)\s*\|", line)
         if m:
-            out[_token(m.group(1))] = m.group(2)
+            out[_token(m.group(1))] = m.group(2).replace("*", "").strip()
     return out
 
 
@@ -127,15 +130,14 @@ class TestThreeWaySingleSource(unittest.TestCase):
         self.assertEqual(issues, [], "三方漂移:\n" + "\n".join(issues))
 
     def test_v6l_alignment(self):
-        """批1 收尾断言永久化：A=13+m11deferred（流水架构批1 补注册 m9-governance，12→13）；B=6（含 m39 无 m11）"""
+        """断言更新至 v3（S4b）：A=13+m11deferred；B=b-trade-sheet 单模板（无 m39 无 m11）"""
         main_a, deferred_a = mech_modules("A")
         main_b, deferred_b = mech_modules("B")
         self.assertEqual(len(main_a), 13)
         self.assertIn("m9", main_a)
         self.assertEqual(deferred_a, {"m11"})
-        self.assertIn("m39", main_b)
+        self.assertEqual(main_b, {"b-trade-sheet"})
         self.assertNotIn("m11", main_b)
-        self.assertEqual(len(main_b), 6)
         # resolve 透传：deferred 语义流到消费方（generate_checklist 装载表渲染依赖）
         res_a = sdg.resolve_required_files("A", "分析")
         m11_entries = [x for x in res_a if "m11-gates.md" in x["path"]]
@@ -173,20 +175,22 @@ class TestRedPoles(unittest.TestCase):
         base_issues = compare(self.mech, self.jit, self.quality)
         self.assertEqual(base_issues, [], "真实源已漂移，红极对照失效——先修三方一致性")
 
-    def test_red_jit_drop_m39(self):
+    def test_red_jit_drop_bts(self):
+        """JIT B 行删 b-trade-sheet → 必须报 [B] 装载集不一致"""
         orch = ORCH_SKILL.read_text(encoding="utf-8")
-        bad = orch.replace("m38 / m39 / m3 / m36 / m37 / m6", "m38 / m3 / m36 / m37 / m6")
+        bad = orch.replace("| **B** | b-trade-sheet |", "| **B** |  |")
         self.assertNotEqual(bad, orch, "JIT B 行原文未命中替换锚（SKILL.md 格式漂移）")
         issues = compare(self.mech, parse_jit(bad), self.quality)
         self.assertTrue(any("[B]" in i for i in issues), f"JIT 坏样例未报: {issues}")
 
-    def test_red_quality_drop_m39_row(self):
+    def test_red_quality_drop_bts_row(self):
+        """quality 投影表删 b-trade-sheet 行 → 必须报缺行"""
         quality_text = QUALITY_SKILL.read_text(encoding="utf-8")
-        bad_lines = [l for l in quality_text.splitlines() if "m39-b-xq-voice.md" not in l]
+        bad_lines = [l for l in quality_text.splitlines() if "b-trade-sheet.md" not in l]
         bad = "\n".join(bad_lines)
-        self.assertNotEqual(bad, quality_text, "投影表未命中 m39 行（SKILL.md 格式漂移）")
+        self.assertNotEqual(bad, quality_text, "投影表未命中 b-trade-sheet 行（SKILL.md 格式漂移）")
         issues = compare(self.mech, self.jit, parse_quality(bad))
-        self.assertTrue(any("m39" in i for i in issues), f"投影坏样例未报: {issues}")
+        self.assertTrue(any("b-trade-sheet" in i for i in issues), f"投影坏样例未报: {issues}")
 
     def test_red_m11_in_b_load_set(self):
         bad_mech = {

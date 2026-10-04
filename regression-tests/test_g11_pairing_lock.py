@@ -29,6 +29,7 @@ _DOCS = {
     "m38": _MODULES / "m38-b-conclusion-head.md",
     "m12": _MODULES / "m12-summary.md",
     "m8": _MODULES / "m8-disclaimer.md",
+    "b-trade-sheet": _MODULES / "b-trade-sheet.md",   # v3 唯一 B 链加载模板（S4b 纳入锁面）
 }
 _CANON = "📅 数据截止：YYYY-MM-DD"   # 统一字面锚（三文档 backtick 内）
 _DATE = "2026-09-02"
@@ -83,7 +84,7 @@ class TestG11PairingLock(unittest.TestCase):
                 self.assertTrue(ok)
 
     def test_live_docs_feed_real_gate(self):
-        """活文档投影：m38/m12/m8 各须含 ≥1 个 backtick 字面锚，填日期喂真 check_g11 必 PASS。
+        """活文档投影：m38/m12/m8/b-trade-sheet 各须含 ≥1 个 backtick 字面锚，填日期喂真 check_g11 必 PASS。
 
         文档丢锚（有人把字面行改回名词短语/删掉）→ spans 为空 → 本测试红。
         文档改锚为不匹配形态 → check_g11 FAIL → 本测试红。两侧都锁。

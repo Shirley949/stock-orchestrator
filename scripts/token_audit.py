@@ -46,21 +46,21 @@ from skill_dep_graph import resolve_required_files  # 加载集 diff（3.2）：
 
 # ---------- 类别/Phase 推断规则（确定性，勿靠 LLM 自觉） ----------
 
-MODULE_RE = re.compile(r"modules/(m\d[\w-]*)\.md")
+MODULE_RE = re.compile(r"modules/([A-Za-z][\w-]*)\.md")   # v3：含非 mNN 模块（b-trade-sheet 等）
 
 VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "holder",
               "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual",
-              # 模式B视图（2026-08-26 B v2；2026-08-31 +b_head 核心结论头块）
-              "short_term", "market_context", "fund_flow", "b_head",
+              # 模式B视图（B 面归属经 IS_B_SESSION 重映射到 b-trade-sheet）
+              "short_term", "market_context", "fund_flow", "b_head", "trade_sheet",
               # 雪球站内声量视图（2026-09-09 原型）
               "xqvoice", "xqcheck"]
-# 视图 → 消费模块（报告归因用；events 双消费取 m4）
+# 视图 → 消费模块（A 语境缺省；模式B 会话经 :IS_B_SESSION 块重映射 b-t）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
                   "news": "m4", "events": "m4", "holder": "m4",
                   "balance": "m2", "timeline": "m4", "technical": "m3",
                   "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
                   "short_term": "m36", "market_context": "m36", "fund_flow": "m37",
-                  "b_head": "m38",
+                  "b_head": "m38", "trade_sheet": "m37",
                   "xqvoice": "m4", "xqcheck": "m6"}
 
 # 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
@@ -126,7 +126,7 @@ def classify_block(kind, detail):
     if n == "Read":
         m = MODULE_RE.search(fp)
         if m:
-            mid = re.match(r"m\d+", m.group(1)).group()
+            mid = (re.match(r"m\d+", m.group(1)) or re.match(r"[\w-]+", m.group(1))).group()[:3]
             return f"模块文件{mid}", mid
         if "gate_definitions" in fp:
             return "gate源码读入", None
@@ -547,6 +547,11 @@ def main():
         if b["cat"] == "视图:xqvoice":
             b["module"] = _xqv_mod
             b["cat"] = f"视图:xqvoice({_xqv_mod})"
+    # v3（S4b）：模式B 的 B 面视图归属 b-trade-sheet（模块 token=basename[:3]，与 module_reads 同刻度）
+    if IS_B_SESSION:
+        for b in blocks:
+            if b.get("module") in ("m36", "m37", "m38") or b["cat"] in ("视图:b_head", "视图:trade_sheet"):
+                b["module"] = "b-t"
     by_phase = defaultdict(lambda: Counter())
     by_cat = defaultdict(Counter)   # phase -> cat -> cost
     for b in blocks:
@@ -805,7 +810,9 @@ def main():
               if IS_B_SESSION else "")
     L.append(f"\n## ③ 新管线检查项（基线=瑞丰 300243 旧路径，2026-08-20）{_b_tag}\n")
     checks = [
-        ("模块 JIT 加载", jit_span >= 10, f"跨度 {jit_span} 轮（旧：Phase3 开头集中全量 Read）"),
+        ("模块 JIT 加载", jit_span >= 10 or len(_mode_mods[mode_letter]) <= 1,
+         f"跨度 {jit_span} 轮（旧：Phase3 开头集中全量 Read）"
+         if len(_mode_mods[mode_letter]) > 1 else f"跨度 {jit_span} 轮（单模块装载集，跨度判据不适用）"),
         ("m11 延迟加载", m11_delayed,
          "未提前读" if not m11_turns else f"首读轮 {m11_turns[0]} vs verify 轮 {vg_turn}"),
         ("视图直读", len(snapshot_calls) >= 3,

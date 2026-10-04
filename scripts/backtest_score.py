@@ -23,7 +23,7 @@ sys.path.insert(0, "/home/ubuntu/.hermes/skills/stock-analysis/financial-data-ro
 
 
 def parse_forecast_block(report_path: str) -> dict:
-    """报告 md → forecast block dict（```json {direction_15d...} ``` 代码块）。"""
+    """报告 md → forecast dict。v2=```json {direction_15d...}``` 块；v3=状态头文本形态兜底。"""
     text = open(report_path, encoding="utf-8").read()
     # forecast block：含 direction_15d 键的 json 代码块
     for m in re.finditer(r"```json\s*(\{.*?\})\s*```", text, re.S):
@@ -33,13 +33,21 @@ def parse_forecast_block(report_path: str) -> dict:
             continue
         if "direction_15d" in blk:
             return blk
-    return {}
+    # v3（b-trade-sheet）：状态头「方向预测：{direction}（置信 {conf}，视野 N 日）——波动预算 [lo ~ hi]」
+    m = re.search(r'方向预测[：:]\s*(bull|bear|neutral)（置信\s*([A-Za-z]+)', text)
+    if not m:
+        return {}
+    d15 = {"direction": m.group(1), "confidence": m.group(2).upper()}
+    mp = re.search(r'(?:预期区间|波动预算)[^\[\n]*\[\s*([\d.]+)\s*~\s*([\d.]+)\s*\]', text)
+    if mp:
+        d15["expected_range"] = {"low": float(mp.group(1)), "high": float(mp.group(2))}
+    return {"direction_15d": d15}
 
 
 def fetch_future_closes(stock_code: str, as_of: str):
     """T+1~今天收盘序列（全史 stock_zh_a_daily → > as_of 切片）。返回 (dates, closes)。"""
     from runner import fetch_with_fallback, _format_daily_symbol
-    env, _w = fetch_with_fallback("stock_zh_a_daily", {"symbol": _format_daily_symbol(stock_code)})
+    env, _w = fetch_with_fallback("stock_zh_a_daily", {"symbol": _format_daily_symbol(stock_code), "adjust": "qfq"})
     if env.get("status") not in ("ok", "cached"):
         return [], []
     rows = env.get("data", env.get("data_full", []))
@@ -53,7 +61,7 @@ def fetch_future_closes(stock_code: str, as_of: str):
 def score_one(report_path: str, stock_code: str = None, as_of: str = None) -> dict:
     blk = parse_forecast_block(report_path)
     if not blk:
-        return {"report": report_path, "error": "forecast block 未找到（报告缺 m6 收口 JSON）"}
+        return {"report": report_path, "error": "forecast block 未找到（v2 JSON 块与 v3 状态头均未解析到方向预测）"}
     # stock_code/as_of 可从文件名或参数推；显式参数优先
     if not stock_code:
         m = re.search(r"(\d{6})", os.path.basename(report_path))
@@ -78,7 +86,7 @@ def score_one(report_path: str, stock_code: str = None, as_of: str = None) -> di
     base = closes[-1] if not dates else None  # placeholder, base 从 as_of 收盘取
     # base = as_of 当日收盘（future[0] 的前一根）；全史里再取一次
     from runner import fetch_with_fallback as _fw, _format_daily_symbol as _fs
-    env, _ = _fw("stock_zh_a_daily", {"symbol": _fs(stock_code)})
+    env, _ = _fw("stock_zh_a_daily", {"symbol": _fs(stock_code), "adjust": "qfq"})
     rows = env.get("data", env.get("data_full", []))
     base_rows = [float(r["close"]) for r in rows
                  if isinstance(r, dict) and r.get("close") is not None

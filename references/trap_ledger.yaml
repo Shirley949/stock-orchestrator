@@ -603,3 +603,23 @@ entries:
   status: landed
   root_cause: engine
   fix: '（002915 实锤）b 臂 reason 只说「疑似捏造/张冠李戴」不带归因 → LLM 盲猜多轮。landing：_g81_token_advice 三类归因逐 token 给可照抄动作（①他条目精确含→移段/补锚 ②他条目近值→照抄原值并挂其锚 ③本锚近值→照抄 ④无源→删/换锚/加快照锚）。同批 G63 来源归因（found 精确命中 s4 其他字段值如 dmi.ADX → 指认「误入技术位语境行」+照抄真值）、G58 照抄值（「→ 照抄写「57.1% 分位」」）。全库 65 门 reason 质量审计完成：A 类 36 门、B/C 类 29 门列下一批。'
+- signature: G73#asof:confirm_rule_no_confirm_words
+  gate: G73
+  subcheck: confirm_words
+  reason_class: rule_text_missing_confirm_semantics
+  match: trade_sheet
+  count: 1
+  last_seen: '2026-10-04'
+  status: landed
+  root_cause: engine
+  fix: '（002171 as-of 盲测实锤）as-of 模式 trade_sheet 止损档行 confirm_rule 直接照抄 risk_control.stops[].rule 短式（「日MA20-2%×2日」），无 收盘/触及/站上/跌破/收回/触发后 任一确认语义词；G73 检查引擎 rows 原文，报告侧不可修。修向：build_trade_sheet_view 渲染 confirm_rule 时合并 action 列确认语义（如「日MA20-2%×2日 收盘跌破执行」）。'
+- signature: G69#asof:degraded_scene_has_value_false_positive
+  gate: G69
+  subcheck: dim_consumption
+  reason_class: degraded_scene_counted_as_data
+  match: s3_fund_flow
+  count: 1
+  last_seen: '2026-10-04'
+  status: landed
+  root_cause: engine
+  fix: '（002171 as-of 盲测实锤）s3_fund_flow.data.fund_flow={status: degraded, reason: 拉取失败} 零可消费数据，G69 has_value 仍计「有数据未消费」；诚实披露行因含披露词被过滤 → 资金流维必缺，quick 阈值内 PASS 但恒留 1 FAIL。修向：G69 has_value 判定跳过 status∈{degraded,failed} 的 scene（与 as-of 诚实降级契约对齐）。'

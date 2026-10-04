@@ -440,7 +440,32 @@ def _print_trade_sheet(v):
 
 
 def _print_b_head(v):
-    """b_head 头块视图：模式B核心结论的 10 槽全量（m38 模板数据源，数字照抄勿改）。"""
+    """b_head 头块视图：v3=状态头+引擎字段（b-trade-sheet 照抄源）；v2=10 槽全量（m38 回滚态）。"""
+    if v.get("head_draft_v3", True):
+        print(f"## 核心结论头块(v3) status={_fmt(v.get('status'))} "
+              f"as-of {v.get('as_of', '—')} 截止 {v.get('period_label', '—')}")
+        if v.get("missing_fields"):
+            print(f"  ⚠️ missing_fields={v.get('missing_fields')}")
+        er = v.get("expected_range") or {}
+        cw = v.get("conditional_winrate") or {}
+        print(f"[引擎] direction={_fmt(v.get('direction'))} 置信={_fmt(v.get('confidence'))} "
+              f"规则={_fmt(v.get('rule_name'))} 视野={_fmt(v.get('horizon_days'))}日 "
+              f"条件胜率={_fmt(cw.get('win_rate'))}(n={_fmt(cw.get('n'))}) "
+              f"预期区间[{_fmt(er.get('low'))} ~ {_fmt(er.get('high'))}]")
+        print(f"[现价] {_fmt(v.get('close'))} kelly={_fmt(v.get('kelly_fraction'))} "
+              f"纪律位={_fmt(v.get('discipline_line'))}")
+        mp = v.get("multi_period") or {}
+        vc = v.get("volume_check") or {}
+        print(f"[周期/量能] 月线={_fmt((mp.get('monthly') or {}).get('state'))} "
+              f"周线={_fmt((mp.get('weekly') or {}).get('state'))} "
+              f"日线={_fmt((mp.get('daily') or {}).get('state'))} "
+              f"60分钟={_fmt((mp.get('h60') or {}).get('state'))} "
+              f"共振={_fmt(v.get('resonance_level'))} "
+              f"量比5d={_fmt(vc.get('vol_ratio_5d'))} 20日倍数={_fmt(vc.get('amount_mult_20d'))}")
+        print(f"[资金] {v.get('fund_line', '—')}")
+        print("\n[head_draft_md 整块草稿（默认整段照抄）]")
+        print(v.get("head_draft_md", "—").rstrip())
+        return
     print(f"## 核心结论头块 status={_fmt(v.get('status'))} "
           f"as-of {v.get('as_of', '—')} 截止 {v.get('period_label', '—')}")
     if v.get("missing_fields"):

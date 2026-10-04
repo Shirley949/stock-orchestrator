@@ -133,13 +133,14 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 
 ---
 
-## Phase 1.5：雪球站内声量拉取（Phase 2 拉取后、写作前执行 · 模式 A/B 均跑）
+## Phase 1.5：雪球站内声量拉取（Phase 2 拉取后、写作前执行 · 模式 A 必跑 / 模式 B 可选增强默认跳过）
 
 > **执行时机（钉死）：Phase 2 的 runner 拉取完成 + precheck 通过之后、Phase 3 写作之前**——voice 相锚点全部从 snapshot 提取，快照不存在脚本直接报错（数据获取子步骤，非新 Phase 门——checklist 无对应项）。
+> **模式 B 默认跳过**（v3 单模板无声量必选节；用户明示要声量或配额充足时才拉，未拉=报告一行披露+G80-B 全臂豁免）。
 
 ```bash
 python3 ~/xueqiu-ai/scripts/xq_voice.py <code> --snapshot /tmp/runner_snapshot_<code>_mode<X>.json --phase voice
-# 模式 B 必加 --template b：T1-B 七维问句（d0_sentiment 新增）+ data.meta.template="T1-B"（G80-B 分派键，缺它按 A 臂判）
+# 模式 B 可选消费时必加 --template b：T1-B 七维问句（d0_sentiment 新增）+ data.meta.template="T1-B"（G80-B 分派键，缺它按 A 臂判）
 ```
 
 - 幂等（同日 ok 跳过，`--force` 重拉）+ 配额保险丝（剩余 <40 熔断 `degraded_quota` 零发问）——熔断时报告数据局限节一行披露（R6），G80 全臂豁免。
@@ -206,10 +207,11 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 # 多批分次拉取直接重跑同命令：默认按 topic 合并（同 topic 整行替换=修正后到）；accounting 跨批累积；
 # 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。
 # ⚠️ topic 须批内唯一（同批不同 entry_id 撞名=命名事故，引擎 WARN+末条覆盖丢数据，300502 实证）；
-#    account 用 --json 落盘纯净账（stdout 告警已迁 stderr）；items url 必非空（entries.json 取 .entries 子层）。
+#    account 用 --json 落盘纯净账（stdout 告警已迁 stderr）；items url 必非空（entries.json 取 .entries 子层）；
+#    items.value 数字清单用顿号「、」分隔（禁 `/` 连写数值——分词器当单 token，报告引用必 FAIL）。
 ```
 
-- **G81 数字归属合同（写作前必读，执法者=G81-b / `parser lint-report`）**：①切片归属——行按 `[src:]` 标签切片，**每个数字归属其左侧最近的锚**：webfindings 锚切片的数字须能在该锚条目 value 中找到（万/亿/B/M→亿换算对拍，**照抄原值含小数位**，953.58 禁写 954）；`[src: snapshot.*]` 锚切片豁免 b 臂；**行尾残余**（末锚之后文本）归全行 webfindings 锚并集。②写章期预检：`search_artifact_parser.py lint-report --report R --snapshot S`（与引擎共用同一内核，勿等终验集中炸）。
+- **G81 数字归属合同（写作前必读，执法者=G81-b / `parser lint-report`）**：①**行文规定动作：一句一 webfindings 锚、锚即句尾**——同行挂多个不同 topic 锚=切片归属不稳，多来源一律拆行；引用数字先读该条目 value 原文、按原形态照抄（万/亿/B/M→亿换算对拍，**照抄原值含小数位**，953.58 禁写 954）。②切片语义：行按 `[src:]` 标签切片，**每个数字归属其后首个锚**；`[src: snapshot.*]` 锚切片豁免 b 臂；**行尾残余**（末锚之后文本）归全行 webfindings 锚并集。③写章期预检（禁省）：webfindings 锚行 ≥3 的章节写完立即 `search_artifact_parser.py lint-report --report R --snapshot S --chapter <章锚>`（与引擎共用同一内核，勿等终验集中炸）。
 - 引擎读法（B 级面/已知坑/降级）**选定引擎后先读** `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`；索引（Title/URL）只准用于弃读判定与追读 target，kept 内容必须溯源 B 级面文本。
 - 口径对撞：解析器输出 `CALIBER_FLAG`（同 query 同单位极差 ≥3×）→ 策展期逐条裁决，真分歧写入条目并在报告披露区间（**引用段必带口径限定词**）；对撞 flag 清单在 `accounting.caliber_flags`。
 - 写回 scene=`web_research_findings`，引用合法双形态：`[src: snapshot.web_research_findings.data.items]` 或 `[src: web_research_findings <topic 子串|entry_id>]`（禁 items(entry_id=X) 路径形态=G21 断链；消费执法 → G81，逐章清剿可链 `parser lint-report --report R --snapshot S --chapter 锚`）；websearch 是**发现**非**验证**工具，冲突时以 snapshot 为准；白名单与多批合并/修剪语义 → `references/phase-protocols.md` §P2。
@@ -225,7 +227,7 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 | 模式 | 报告涉及模块（按此顺序 JIT） | 延迟加载 |
 |------|------------------------------|---------|
 | **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m9 / m7 / m8 / m10 / m12 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
-| **B** | m38 / m39 / m3 / m36 / m37 / m6 | 同上 m11（m38=核心结论头块，B 报告置顶必写；m39=站内声量节，xqvoice status=ok 必写） |
+| **B** | b-trade-sheet | 同上 m11（b-trade-sheet=v3 单模板：状态头+点位表+策略+数据与口径；m39 R1-R6 仅在可选消费 T1-B 声量时才读） |
 
 ### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
 
@@ -250,7 +252,8 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json holder      # 股东户数�
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json short_term    # B：短期多周期预计算信号（读结论勿自算）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json market_context # B：大盘 regime + 板块环境
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json fund_flow     # B：资金流（当日+历史）
-python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：核心结论头块 10 槽 + head_draft_md 预渲染（m38 照抄源）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：状态头 4 行 + head_draft_md 预渲染（b-trade-sheet 照抄源）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json trade_sheet  # B：交易指令单 rows 六列 + kelly/state_tuple/event_calendar
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqvoice       # 站内声量六/七维 + module_map（Phase 1.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqcheck       # 站内结论求证 verdicts/objections（Phase 4.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）

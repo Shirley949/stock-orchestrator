@@ -146,8 +146,11 @@ GATE_HINTS = {
     "G44": "ESG 评级照抄 snapshot.s_esg.data.items 的 source/rating/publish_date/change；missing 写「无 ESG 评级覆盖」禁编档位",
     "G49": "buy_sell_pressure.verdict ∈ {buy_dominant,sell_dominant,balanced} 时，报告必写「买卖力量/买方/卖方」词并挂 [src: snapshot.s5_events.data.risk_signals.processed.buy_sell_pressure]",
     "G57": "业绩强度照抄  consensus_forecast.data.company_guidance.latest_period.value.growth_tier 结构化值（high/moderate/None）；None → 不写强度标签，禁从标题正则解析「预增 X%」",
-    "G65": "direction/confidence/probability 逐字照抄 snapshot.s4_technical.data.short_term_enrich.direction_forecast 三字段；insufficient_history/failed → 照抄降级披露，禁自造数字",
-    "G66": "TD countdown 消费行照抄 snapshot.s4_technical.data.td 的 summary/stage（「N/13」形态）与 key_levels，禁自算计数",
+    "G65": "照抄引擎头行直连形态：`**引擎方向预测：{direction}（置信 {confidence}，视野 {horizon_days} 日）**——波动预算 [{er_low} ~ {er_high}]`"
+           "（方向预测[：:]+方向词；波动预算数值 ±1% 对拍 expected_range；insufficient_history/failed → 照抄降级披露，禁自造数字）",
+    "G66": "周期状态照抄引擎头行（multi_period 直出，禁自算）：`**周期状态** 月线{state} 周线{state} 日线{state} 60分钟{state}`"
+           "（≥3 周期词 + resonance_level 原样写入「强度/共振」任一处；数据核对：snapshot_view <S> short_term）",
+    "G67": "量价数值须在量价语境行（量比/成交/倍数/换手等词同行）±5% 对拍：头行「**周期状态** … ｜ 量比5d {vol_ratio_5d} · 20日成交倍数 {amount_mult_20d}」照抄 volume_check",
     "G70": "m11 区指针行照抄 verify_gates stdout 末尾 📌 行原文：[verified: self_score=N profile=X | see <报告stem>.verified.json]，禁手填分数",
     "G1": "技术面四段：tq=ok 时 m3 必须消费换手/量比/成交额任一词（量价漏消费=最常见 FAIL）；"
           "failed→禁编造技术结论。修法：m3 补量价段并带 [src: snapshot.s4_technical]。",
@@ -230,7 +233,12 @@ GATE_HINTS = {
            "样板话（「已披露数据降级」不带源名）不算。修法：照 FAIL reason 里的"
            "『可写 token』清单在 m8 补点名行。ts<2026-09-01 的旧快照豁免。",
     "G73": "交易点位表完整性：trade_sheet.rows 每行六列齐（方向/价位/类型/触发/动作/失效），"
-           "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注",
+           "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注。"
+           "带 [数据层] 前缀的 FAIL=引擎 rows 字段缺确认词，不改报告，停笔上报引擎",
+    "G69": "筹码/资金消费行（词/值/src 同行，禁贴披露词）：`- 当日资金流：主力净流入 X 亿 vs 小单净流出 Y 亿 [src: snapshot.s3_fund_flow.data.fund_flow]`；"
+           "`- 融资杠杆：融资余额 X 亿元 [src: snapshot.s_margin.data]`（值照抄 b_head [资金] 行/s_margin 视图；降级维自动豁免不计分母；主力净额 ±5% 对拍 main_net_yi）",
+    "G68": "止损档位在点位表行内 ±1% 对拍（`| 卖 | 12.678 | 止损档（daily_ma20） | … |` type 列含 level 名即命中）+ ATR 止损行 + kelly=N；"
+           "全部照抄 trade_sheet.rows/risk_control，禁第二张档位表",
     "G80": "站内声量三臂高频败因：①c 臂改写——引号内换词/压缩日期/转述（V6 实战 4 例均为自发，"
            "熟知规则仍会犯；正道=逐字照抄，改写移出引号）；②b 臂只写「站内有反对意见」"
            "不带反方证据 token——须「站内反对·须直视」标记+数字/≥6字原句同段+处理结论三选一"
@@ -4105,12 +4113,36 @@ def check_g65(report: str, data: dict) -> bool:
     asserts = re.findall(r'方向预测[：:]\s*(bull|bear|neutral)', report) + \
         re.findall(r'"direction"\s*:\s*"(bull|bear|neutral)"', report)
     if not asserts:
+        _erblk0 = df.get("expected_range") or {}
+        _anchor = (f"**引擎方向预测：{direction}（置信 {confidence or '—'}，视野 "
+                   f"{df.get('horizon_days') or 15} 日）**——波动预算 "
+                   f"[{_erblk0.get('low')} ~ {_erblk0.get('high')}]")
+        _off = [f"L{i}:『{ln.strip()[:60]}』" for i, ln in enumerate(report.splitlines(), 1)
+                if "引擎方向" in ln and "方向预测：" not in ln][:2]
         return GateResult(passed=False, reasons=[
-            f"forecast block 缺失：方向预测（{direction}）未引用 direction_forecast（禁自造/禁省略）"])
+            f"forecast block 缺失：方向预测（{direction}）未引用 direction_forecast（禁自造/禁省略）"
+            + (f"；疑似脱锚行 {'；'.join(_off)}" if _off else "")
+            + f"——照抄引擎头行直连形态（方向预测[：:]+方向词）：`{_anchor}`"])
     bad_dir = [a for a in asserts if a != direction]
     if bad_dir:
         return GateResult(passed=False, reasons=[
             f"方向对拍不一致：报告 {bad_dir} vs 引擎 {direction}（direction_forecast.direction 原样引用）"])
+    # 波动预算数值对拍（S4b：v3 头行唯一呈现点；±1% 对拍 expected_range.low/high）
+    _erblk = df.get("expected_range") or {}
+    _erl, _erh = _erblk.get("low"), _erblk.get("high")
+    if isinstance(_erl, (int, float)) and isinstance(_erh, (int, float)):
+        _mband = re.search(r'(?:预期区间|波动预算)[^\[\n]*\[\s*([\d.]+)\s*~\s*([\d.]+)\s*\]', report)
+        if not _mband:
+            return GateResult(passed=False, reasons=[
+                f"波动预算未呈现：预期区间 [{_erl} ~ {_erh}]（expected_range ±1% 对拍）"
+                f"——照抄引擎头行尾段：`——波动预算 [{_erl} ~ {_erh}]`"])
+        _lo, _hi = float(_mband.group(1)), float(_mband.group(2))
+        _bad_er = [w for w, t in ((_lo, _erl), (_hi, _erh)) if abs(w - t) > abs(t) * 0.01]
+        if _bad_er:
+            return GateResult(passed=False, reasons=[
+                f"波动预算对拍超 ±1%：报告 [{_lo} ~ {_hi}] vs 引擎 [{_erl} ~ {_erh}]"
+                f"（expected_range.low/high 照抄，禁四舍五入到整数位）"
+                f"——照抄写「[{_erl} ~ {_erh}]」"])
     # v12（S4a）：主交付=conditional_winrate（regime 条件胜率）；probability 为 v11 存档值。
     # 对拍顺序：报告写条件胜率 → 对拍 conditional_winrate；报告写 p= → 对拍 probability（兼容旧式）。
     cw = df.get("conditional_winrate")
@@ -4178,14 +4210,19 @@ def check_g66(report: str, data: dict) -> bool:
     n_present = sum(1 for p in periods if p in report)
     if n_present < 3:
         return GateResult(passed=False, reasons=[
-            f"周期状态表覆盖不足：月线/周线/日线/60分钟 须 ≥3 个周期呈现（现 {n_present}）"])
+            f"周期状态表覆盖不足：月线/周线/日线/60分钟 须 ≥3 个周期呈现（现 {n_present}）"
+            f"——照抄引擎头行：`**周期状态** 月线{((mp.get('monthly') or {}).get('state') or '—')} "
+            f"周线{((mp.get('weekly') or {}).get('state') or '—')} "
+            f"日线{((mp.get('daily') or {}).get('state') or '—')} "
+            f"60分钟{((mp.get('h60') or {}).get('state') or '—')}`（multi_period 直出，禁自算）"])
     rl = mp["resonance_level"]
     # divergent 中文备选收窄：勿用裸「背离」（m3 背离节合法表述会误兜底）
     zh = {"divergent": "无单向共振|共振发散|周期背离|多周期背离",
           "long_resonance": "多头共振|向上共振", "short_resonance": "空头共振|向下共振"}
     if rl not in report and not re.search(zh.get(rl, rl), report):
         return GateResult(passed=False, reasons=[
-            f"共振等级未引用/不一致：resonance_level={rl}（原样引用，只描述不预测）"])
+            f"共振等级未引用/不一致：resonance_level={rl}（原样引用，只描述不预测）"
+            f"——头行「强度 {rl}」或「共振 {rl}」任一原样写入即可"])
     # 行级反义对拍（表格行；描述对立结构的语境行豁免）
     opp = {"up": ("down",), "down": ("up",), "below": ("above",), "above": ("below",),
            "long": ("short",), "short": ("long",)}
@@ -4237,7 +4274,8 @@ def check_g67(report: str, data: dict) -> bool:
             diag={"subcheck": "volume_check_consumption",
                   "expected": "≥1 个真值出现在量价语境行（量比/成交/倍数/换手等词同行）",
                   "found": f"语境行 0/{len(truths)} 命中" + ("（全文有撞数但语境外）" if hit_anywhere else ""),
-                  "fix": "在量价分析处照抄：5日量比 vol_ratio_5d、20日成交额倍数 amount_mult_20d、周成交量倍数 week_volume_mult",
+                  "fix": "在量价语境行照抄引擎值：例头行「**周期状态** … ｜ 量比5d {vol_ratio_5d} · 20日成交倍数 {amount_mult_20d}」"
+                         "（volume_check 直出，禁自算）",
                   "src": "s4_technical.data.short_term_enrich.volume_check", "degraded": False})
     for flag in ("amplified", "pullback_shrink"):
         truth = vc.get(flag)
@@ -4277,8 +4315,10 @@ def check_g68(report: str, data: dict) -> bool:
             pr = level_price.get(lv)
             if pr is None:
                 continue
+            v3_needle = f"止损档（{lv}）"   # v3 点位表行（b-trade-sheet 六列）的 type 列
             for ln in report.splitlines():
-                if re.match(pat, ln.strip()) and any(_hit_tol(n, pr, 0.01) for n in _nums_in(ln)):
+                if (re.match(pat, ln.strip()) or v3_needle in ln) and \
+                        any(_hit_tol(n, pr, 0.01) for n in _nums_in(ln)):
                     hit += 1
                     break
         if hit < min(3, len(stops)):
@@ -4287,9 +4327,11 @@ def check_g68(report: str, data: dict) -> bool:
                 blk = _nums_in(m.group(1))
                 hit = _match_count(blk, stops, 0.01)
         if hit < min(3, len(stops)):
+            _lvtxt = " / ".join(f"{lv}={level_price[lv]}" for lv in level_price)
             return GateResult(passed=False, reasons=[
-                f"分级止损表不足：快照 {len(stops)} 档带价位，止损表行/forecast block 须 ≥{min(3, len(stops))} 档"
-                "（risk_control.stops[].price ±1% 对拍；表式见 m6 模式B收口）"])
+                f"分级止损表不足：快照 {len(stops)} 档带价位（{_lvtxt}），"
+                f"止损表行/forecast block 须 ≥{min(3, len(stops))} 档（risk_control.stops[].price ±1% 对拍）"
+                f"——照抄点位表行（trade_sheet.rows 直出）：`| 卖 | {level_price.get('daily_ma20', '…')} | 止损档（daily_ma20） | 日MA20-2%×2日 收盘跌破执行 | 已触发→反抽不过离场；未触发→收盘跌破执行 | 收回该位上方 2 日则取消 |`"])
     atr = (rc.get("atr") or {}).get("atr_stop")
     if isinstance(atr, (int, float)):
         atr_nums = [n for ln in report.splitlines()
@@ -4373,8 +4415,11 @@ def check_g69(report: str, data: dict) -> bool:
     ]
     ok_dims, consumed, negated = [], [], []
     for path, kws, src_token in dims:
-        if not _scene_has_data(_snapshot_get(data, path)):
+        _st = _snapshot_get(data, path)
+        if not _scene_has_data(_st):
             continue  # 缺席/failed 维不计分母（如实降级不算消费失败）
+        if isinstance(_st, dict) and _st.get("status") in ("degraded", "failed", "error", "throttled"):
+            continue  # 降级/失败信封=零可消费值（as-of 诚实降级契约），不计分母不引导编造
         ok_dims.append(path)
         hit = _contextual_presence(report, kws, anchors=(src_token,),
                                    forbid=_G69_DISCLOSE_WORDS, scope="line")
@@ -4386,9 +4431,11 @@ def check_g69(report: str, data: dict) -> bool:
     need = min(3, len(ok_dims))
     if len(consumed) < need:
         miss = [d for d in ok_dims if d not in consumed]
-        fix = ("照抄骨架（m37 四维表行，词/值/src 同行）："
-               "| 当日资金流 | 净额+趋势 | [src: snapshot.s3_fund_flow.data.fund_flow] |；"
-               "| 融资杠杆 | 余额+环比 | [src: snapshot.s_margin.data] |")
+        fix = ("照抄消费行（词/值/src 同行，维度词禁贴披露词）："
+               "`- 当日资金流：{fund_line 值，如 主力净流入 X 亿 vs 小单净流出 Y 亿} "
+               "[src: snapshot.s3_fund_flow.data.fund_flow]`；"
+               "`- 融资杠杆：融资余额 X 亿元（深交所盘后口径） [src: snapshot.s_margin.data]`"
+               "（值照抄 b_head 视图 [资金] 行 / s_margin 视图）")
         neg_note = (f"{negated} 仅为披露行（挂 [src:] 但行内含 未消费/降级 等披露词，不计入）；"
                     if negated else "")
         return GateResult(passed=False, reasons=[
@@ -4398,7 +4445,20 @@ def check_g69(report: str, data: dict) -> bool:
                   "expected": f"≥{need} 维：维度词+src_token 同行且行内无披露词（未消费/未拉取/降级/不可得）",
                   "found": f"{len(consumed)}/{need} 维真实消费"
                            + (f"；披露行不计入：{negated}" if negated else ""),
-                  "fix": fix, "src": "m37 四维表输出合同（词/值/src 同行）", "degraded": False})
+                  "fix": fix, "src": "b-trade-sheet §数据与口径 消费行合同（词/值/src 同行）",
+                  "degraded": False})
+    # 值对拍（补 pending #10）：资金维消费行的主力净额须与 b_head.main_net_yi ±5%
+    bh = _snapshot_get(data, "s4_technical.data.b_head")
+    mn = bh.get("main_net_yi") if isinstance(bh, dict) else None
+    if isinstance(mn, (int, float)) and "s3_fund_flow.data.fund_flow" in consumed:
+        fund_lines = [ln for ln in report.splitlines()
+                      if "s3_fund_flow" in ln and any(k in ln for k in ("资金流", "主力", "净流入", "净流出"))]
+        if fund_lines and not any(
+                abs(n - abs(mn)) <= abs(mn) * 0.05 + 1e-9
+                for ln in fund_lines for n in _nums_in(ln)):
+            return GateResult(passed=False, reasons=[
+                f"资金维值对拍超 ±5%：消费行主力净额 vs 引擎 main_net_yi={mn}（b_head 视图 [资金] 行照抄，"
+                f"净流出写绝对值）——照抄写「主力净{'流入' if mn >= 0 else '流出'} {abs(mn)} 亿」"])
     return True
 
 
@@ -4422,7 +4482,8 @@ def check_g70(report: str, data: dict) -> bool:
             "（regime 是引擎输入，报告表述须一致；勿据大盘单独推方向）"])
     if not re.search(r'大盘|上证|指数|market_context', report):
         return GateResult(passed=False, reasons=[
-            "大盘环境未消费：B 报告须呈现 market_context（regime+证据；板块降级如实标注）"])
+            f"大盘环境未消费：B 报告须呈现 market_context（regime={regime}+证据；板块降级如实标注）"
+            f"——照抄引擎头行片段：「regime {regime}」写入趋势行（idx_close 等证据值见 market_context 视图）"])
     return True
 
 
@@ -4489,9 +4550,11 @@ def check_g71(report: str, data: dict) -> bool:
         elif not _hit_tol(float(m.group(1)), pr, 0.01):
             reasons.append(f"头块纪律位 {lv} 价不符：报告 {m.group(1)} vs 快照 {round(pr, 3)}"
                            "（±1%，照抄 b_head.discipline_line）")
-    # ③ 头块悲观目标与引擎 pess 分支对拍（仅 direction≠bear：bear 的悲观行=主推行，
-    #    目标=er_low（G65/引擎区间管），非 pess 档——防 G71×引擎死锁，002202 全链路实测）
-    if (isinstance(bh, dict) and bh.get("direction") != "bear"
+    # ③ 头块悲观目标与引擎 pess 分支对拍（仅 v2 回滚态「核心结论」头块；v3「交易计划」
+    #    无情景框架（S4b 用户裁决：直出短期预判，无悲观/乐观情景行）→ 本臂跳过。
+    #    v2 态内仍仅 direction≠bear：bear 的悲观行=主推行，目标=er_low——防 G71×引擎死锁）
+    if (not re.search(r"交易计划", head)
+            and isinstance(bh, dict) and bh.get("direction") != "bear"
             and isinstance(bh.get("pess_target_1"), (int, float))):
         pes_nums = [n for ln in head.splitlines()
                     if ln.strip().startswith("|") and "悲观" in ln for n in _nums_in(ln)]
@@ -4598,8 +4661,10 @@ def check_g73(report: str, data: dict) -> bool:
                            f"——照 trade_sheet 视图行照抄，禁删列")
             continue
         if not any(w in str(r["confirm_rule"]) for w in CONFIRM_WORDS):
-            reasons.append(f"点位行{idx}（{r['type']}）触发列缺收盘确认语义：『{str(r['confirm_rule'])[:40]}』"
-                           f"——确认词表：收盘/触及/站上/跌破/收回/触发后")
+            reasons.append(f"[数据层] 点位行{idx}（{r['type']}）confirm_rule 缺收盘确认语义："
+                           f"『{str(r['confirm_rule'])[:40]}』——引擎 trade_sheet.rows 字段缺确认词"
+                           "（确认词表：收盘/触及/站上/跌破/收回/触发后），报告侧不可修（禁改报告，"
+                           "停笔上报引擎；修向：build_trade_sheet_view confirm_rule 合并确认语义）")
         if r["side"] == "买" and "入场带" in str(r.get("type", "")) and not r.get("conditional_winrate"):
             reasons.append(f"买行{idx}（入场带）缺 conditional_winrate 标注——动作列尾加（条件胜率 X，n=Y，as_of）")
     if reasons:

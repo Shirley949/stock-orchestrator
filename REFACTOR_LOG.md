@@ -1,3 +1,12 @@
+## 2026-10-04 S4b：modeB v3 全面对齐（gate/审计/路由/口径）——002171 会话 RCA 收口
+- **gate_definitions B 面 reason 合同化**（真值+行号+照抄锚四要素，参照 G80 c臂 L{n} 格式与 modeA G32/G31 [数据层] 范式）：G65 缺块臂给「方向预测：{direction}」直连锚+新增波动预算 ±1% 对拍（补零对拍缺口）；G66/G67 reason 给引擎头行照抄锚（执法逻辑零改——needle 与 v3 头行天然兼容）；G68 row_pat 扩展识别点位表行 type 列「止损档（level）」±1%（删「表式见 m6」stale 指针）；G69 `_scene_has_data` 补跳过 status∈{degraded,failed,error,throttled}（as-of 诚实降级契约；降级维不计分母不引导编造）+骨架改 b-trade-sheet §5 消费行形态+资金维主力净额 ±5% 对拍 b_head.main_net_yi（补 pending #10）；G70 presence 臂给 regime 锚；G71③ pess 臂挂 v3 分支撤除（v3「交易计划」无情景框架；v2「核心结论」回滚态保留）；G73 确认词臂加 [数据层] 前缀+「报告侧不可修」归因（引擎 rows 缺确认词=停笔上报）。
+- **GATE_HINTS 同步**：G65/G66/G67/G68/G69/G73 六门 hint 重写为照抄锚形态（G66 旧 hint 误指 TD 数据——stale 修复）。
+- **装载集单一真相源**：skill_dep_graph MODE_MODULE_FILES["B"] 六模块 → [b-trade-sheet]；test_load_set_single_source 三方锁适配（_token 剥 .md/parse_jit+parse_quality 泛化非 mNN token/红极换锚 b-trade-sheet）；test_g11_pairing_lock _DOCS 纳入 b-trade-sheet。
+- **token_audit B 面对齐**：VIEW_NAMES+trade_sheet；IS_B_SESSION 视图归属重映射 b-t（沿 xqvoice 分派范式）；MODULE_RE 泛化非 mNN 模块名；「模块 JIT 加载」单模块装载集豁免跨度判据（1 模块 1 轮=合法 JIT）。002171 会话回放：模块 JIT ✅/加载集 diff ✅（唯一剩 ❌=gate源码 Bash 侧历史访问，行为已由 reason 合同根治）。
+- **backtest_score**：日K fetch 补 adjust=qfq（与生产/回测语料同口径）；parse_forecast_block 增 v3 状态头文本解析兜底（v2 JSON 块保留）。
+- **trap_ledger**：G73#asof:confirm_rule_no_confirm_words、G69#asof:degraded_scene_has_value_false_positive 两条 pending → landed（引擎侧修复见 financial-data-routing S4b 条目）。
+- **验收**：两极验证（G65×3/G68×2/G69×4/G71×2 全按预期）；run_regression.sh exit 0 ×2（66 门漏报=0、reason 质量遍历 65 门、parity 3 票、三方锁 8/8）；002171 重放 verify quick 13/13 全 PASS self_score=100/100（基线 11/13·84）；token_audit 回放双 ❌ 清零。
+
 ## 2026-10-04 S4a：modeB 链改造（checklist/JIT/gate quick v3）+ G73 新增
 - **generate_checklist**：B 链 phase_3 五步（m38/m3/m6/m36+m37/m39）→ 三步（b-trade-sheet/策略段/T1-B 可选）；PHASE3_STEP_ANCHORS 不适用 B（A 锚表不变）。
 - **test_pipeline_atomic_steps**：B_PHASE3_FROZEN 冻结清单同步 v3 三步。

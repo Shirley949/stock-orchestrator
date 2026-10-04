@@ -1018,9 +1018,18 @@ SCENES = {
              "note": "模式B v2 集中子树（加法式，不动 s4 既有键）：short_term_engine 两层输出 "
                      "direction_forecast(v11 冻结规则)/multi_period/volume_check/divergence/risk_control/intraday_60m + report_view 投影；"
                      "presence-gate 单键可判；A 模式该键缺席（engine 仅 B 分支调用）"},
+            {"path": "data.b_head", "confidence": CONFIRMED,
+             "note": "模式B 头块视图（report_views.build_b_head_view 引擎直出）：state/头块字段 + head_draft_md "
+                     "整块渲染（v3 默认 4 行状态头，v2 回滚态 head_draft_v3=False）；写作侧只消费本视图禁回源手抄"},
+            {"path": "data.trade_sheet", "confidence": CONFIRMED,
+             "note": "模式B 交易指令单视图（report_views.build_trade_sheet_view 引擎直出）：rows 六列"
+                     "（side/price/type/confirm_rule/action/invalidation）+ kelly/state_tuple/event_calendar/fund_sustain；"
+                     "价位照抄 layers/stops，confirm_rule 含确认语义（G73 词表）"},
         ],
         "consumers": {
             "data.report_view":        ["m3-technical", "m6-decision"],
+            "data.b_head":             ["b-trade-sheet", "G65", "G71", "G73"],
+            "data.trade_sheet":        ["b-trade-sheet", "G63", "G68", "G71", "G73"],
             "data.short_term_enrich":  ["m36-short-term", "m6-decision", "G65", "G66", "G67", "G68", "m38-b-conclusion-head", "G71"],  # m36 周期状态表、m6 forecast block、G65-68+G71 消费对拍（m38 头块/G71 读 b_head 子树）
             "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
             "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41", "m38-b-conclusion-head"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验；m38 头块筹码槽经 b_head 换算消费）

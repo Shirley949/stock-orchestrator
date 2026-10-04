@@ -40,7 +40,7 @@ from parse_user_question import parse_user_question
 def detect_mode(user_prompt: str) -> str:
     """根据用户 prompt 自动判定分析模式。只支持 A/B 两种模式。
 
-    优先级（2026-08-26 v2 重排，模式B深度重构 P1）：
+    优先级（显式声明优先；词表权重序如下）：
       显式模式B > 显式模式A > B 时间窗/走势操作词 > A-strong（深度/整体/财报/全面）> 普通 A > 默认 A
     「帮我看看」降为普通 A 词（原 a_strong 截胡导致「帮我看看最近几天走势」误判 A）。
     """

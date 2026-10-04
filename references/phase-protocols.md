@@ -10,7 +10,7 @@
 - **幂等**：同日 status=ok 即跳过（零配额）；跨日旧 scene 当日重拉（站内声量是当日观点快照）。`--force` 强制重拉。
 - **配额保险丝**：当日 xqSearch 已用 >160（剩余 <40）→ 自动熔断写 `status="degraded_quota"`（零发问），报告数据局限节一行披露（R6），G80 全臂豁免。
 - **会话保留**：cid 落 `data.meta.cid`，**永不删除**（用户 review + 零配额恢复用）。
-- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。**模式 B**：T1-B 七维路由 = m39←d0+d2+d3+d4、m37←d0、m36←d1、m6←d1+d6、m3←d5、m38←summary；写作规则 R1-R6 见 m39 内联（G80-B 三臂执法）。
+- **写作期消费**（Phase 3）：视图 `snapshot_view.py <snap> xqvoice`（总评/stats/各维首 12 行；长引文 `--raw xq_market_voice.data.answers.<dim>` 定向兜底，仍为 CLI 审计合规）；模块路由 = `processed.module_map`（m12←summary、m1/m2/m25←d1_intel、m3←d5_moves、m4←d1+d3+d4、m7←d6_risk、m10←d2_analyst）。**写作规则 R1-R6 见 m4 §4.5**（引文逐字/传闻标注/反对处理/锚点/声量分歧/降级披露，G80 三臂执法）。**模式 B**：默认跳过声量（v3 单模板无声量必选节）；可选消费时 T1-B 七维一行落 b-trade-sheet §数据与口径，R1-R6 引文纪律见 m39 内联（G80-B 三臂执法）。
 - 路由表速查注：运行时真相源 = snapshot `processed.module_map` 投影，表与 snapshot 不一致时以 snapshot 为准。
 
 ## P2 web_research 素材落盘
