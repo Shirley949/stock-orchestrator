@@ -181,9 +181,9 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 ### 模式 B 调用顺序
 
-runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
+runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算 + `execution_shell` 执行壳重放（v3.3+T11 交易决策 + v3.1 辅助参考）——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
 
-### ⚠️ websearch 素材落 snapshot（读侧协议 v3）
+### ⚠️ websearch 素材落 snapshot（读侧协议——恒驻铁律见 `~/.claude/docs/tooling-playbook.md` §读侧协议，引擎读面见 `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`，载荷白名单/合并/修剪细则见 [`phase-protocols §P2`](references/phase-protocols.md#p2-web_research-素材落盘)）
 
 用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）。**读侧三步（全链路必走，缺一即断链）**：
 
@@ -206,9 +206,12 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
   --items '<json | @findings.json>' --accounting '@<accounting.json>'
 # 多批分次拉取直接重跑同命令：默认按 topic 合并（同 topic 整行替换=修正后到）；accounting 跨批累积；
 # 故意删行/推倒重建才加 --replace。误删面靠 stdout total>incoming 暴露。
+# 写回后读取（雪球同构活读面）：snapshot_view <snap> webfindings（策展清单直读）；
+# snapshot_view <snap> trade_sheet 尾部事件日历=读侧活算，写回当场新鲜（物化副本不聚合 webfindings）。
 # ⚠️ topic 须批内唯一（同批不同 entry_id 撞名=命名事故，引擎 WARN+末条覆盖丢数据，300502 实证）；
 #    account 用 --json 落盘纯净账（stdout 告警已迁 stderr）；items url 必非空（entries.json 取 .entries 子层）；
-#    items.value 数字清单用顿号「、」分隔（禁 `/` 连写数值——分词器当单 token，报告引用必 FAIL）。
+#    items.value 数字清单用顿号「、」分隔（禁 `/` 连写数值——分词器当单 token，报告引用必 FAIL）；
+#    items 载荷白名单 6 键（topic/value/provider/url/query/entry_id）——白名单外键丢弃+WARN，构造前见 phase-protocols §P2。
 ```
 
 - **G81 数字归属合同（写作前必读，执法者=G81-b / `parser lint-report`）**：①**行文规定动作：一句一 webfindings 锚、锚即句尾**——同行挂多个不同 topic 锚=切片归属不稳，多来源一律拆行；引用数字先读该条目 value 原文、按原形态照抄（万/亿/B/M→亿换算对拍，**照抄原值含小数位**，953.58 禁写 954）。②切片语义：行按 `[src:]` 标签切片，**每个数字归属其后首个锚**；`[src: snapshot.*]` 锚切片豁免 b 臂；**行尾残余**（末锚之后文本）归全行 webfindings 锚并集。③写章期预检（禁省）：webfindings 锚行 ≥3 的章节写完立即 `search_artifact_parser.py lint-report --report R --snapshot S --chapter <章锚>`（与引擎共用同一内核，勿等终验集中炸）。
@@ -254,8 +257,11 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json market_context # B：大盘
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json fund_flow     # B：资金流（当日+历史）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：状态头 4 行 + head_draft_md 预渲染（b-trade-sheet 照抄源）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json trade_sheet  # B：交易指令单 rows 六列 + kelly/state_tuple/event_calendar
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell   # B：v3.3+T11 执行壳交易决策（仓位/今日动作/出场栈/PFD）+ v3.1 辅助参考（权重=0）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqvoice       # 站内声量六/七维 + module_map（Phase 1.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqcheck       # 站内结论求证 verdicts/objections（Phase 4.5 产物）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json webfindings   # B：websearch 策展清单直读（topic/entry_id/url/value，写回后当场新鲜）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell    # B：执行壳（今日动作/挂单/PFD/账本，v3.3+T11）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）
 # any 探查（视图外数据的第一入口）：
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）

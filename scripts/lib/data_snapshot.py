@@ -987,10 +987,11 @@ class DataSnapshot:
         return warnings
 
     @staticmethod
-    def _check_staleness(result: dict, max_age_days: int = 7) -> Optional[str]:
+    def _check_staleness(result: dict, max_age_days: int = 10,
+                         now: Optional[datetime] = None) -> Optional[str]:
         """
         陈旧检查：全量扫描 data_full，自动发现日期列。
-        ★ 使用 quality_checks 模块。
+        ★ 使用 quality_checks 模块。now 供测试注入（缺省=当前时刻）。
         """
         if result.get("status") != "ok":
             return None
@@ -1022,7 +1023,7 @@ class DataSnapshot:
         if latest_date is None:
             return None
 
-        age = (datetime.now() - latest_date).days
+        age = ((now or datetime.now()) - latest_date).days
         if age > max_age_days:
             return (
                 f"[staleness] 数据陈旧: 最新日期 {latest_date.strftime('%Y-%m-%d')}，"

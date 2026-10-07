@@ -53,7 +53,9 @@ VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "hol
               # 模式B视图（B 面归属经 IS_B_SESSION 重映射到 b-trade-sheet）
               "short_term", "market_context", "fund_flow", "b_head", "trade_sheet",
               # 雪球站内声量视图（2026-09-09 原型）
-              "xqvoice", "xqcheck"]
+              "xqvoice", "xqcheck",
+              # websearch 策展清单 + 执行壳（2026-10-06/07 雪球同构批 + v3.3+T11）
+              "webfindings", "exec_shell"]
 # 视图 → 消费模块（A 语境缺省；模式B 会话经 :IS_B_SESSION 块重映射 b-t）
 VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": "m2",
                   "news": "m4", "events": "m4", "holder": "m4",
@@ -61,7 +63,8 @@ VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": 
                   "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
                   "short_term": "m36", "market_context": "m36", "fund_flow": "m37",
                   "b_head": "m38", "trade_sheet": "m37",
-                  "xqvoice": "m4", "xqcheck": "m6"}
+                  "xqvoice": "m4", "xqcheck": "m6",
+                  "webfindings": "m4", "exec_shell": "m37"}
 
 # 14 视图挂载点前缀（手写分级用：路径落在挂载点内 = 视图已覆盖仍手写 → ❌）
 VIEW_MOUNT_PREFIXES = [

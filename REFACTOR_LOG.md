@@ -1,3 +1,10 @@
+## 2026-10-07 雪球同构批读取面 + staleness 假期假阳性修复
+- **snapshot_view**：+webfindings 直读视图（scene 根活读，xqvoice 同款）+ _webfindings_events 事件分级活算（唯一实现地自 routing 物化层迁入）+ _print_trade_sheet 双参 (view, snap)（物化副本 stale 必被忽略）+ exec_shell 直读视图（raw 子树）+ _print_exec_shell。
+- **quality_checks/data_snapshot**：短阈值类 staleness 5/5/7→10/10/10（A 股最长闭市 8 自然日+2 边际；国庆 002222 实证 6>5 假阳性）；compute_staleness/_check_staleness 加可选 now 注入（向后兼容）。macro=60/financial=180/龙虎榜=10000 与 should_reject_cache 不动。
+- **token_audit**：VIEW_NAMES/VIEW_TO_MODULE 补 webfindings(m4)/exec_shell(m37)。
+- **regression-tests**：+test_webfindings_view_live_events（7 案）+ test_staleness_thresholds（6 案）并注册 run_regression。
+- **验收**：run_regression exit 0；staleness 6/6、webfindings 7/7。
+
 ## 2026-10-04 S4c：G73④ 双侧责任区分 + G65 双语锚
 - **gate_definitions**：G73④ 买行缺 conditional_winrate 按 src 区分——引擎值在档=报告侧照抄修法（带真值）；引擎缺档=[数据层] 前缀（禁编造停笔上报），消「引擎给不出的数字让报告补」死锁；G65 缺块臂锚与 GATE_HINTS 同步双语形态（中文括注位置合同：置于「（置信…）」之后）。
 - **test_short_term_engine_v12**：表键集合恒等式 + _RULE_ORDER 全规则 cw 可达 + panic 分支夹具（bias20<-10% 深跌序列，断言 rule_name==dn_oversold_panic ∧ confidence=HIGH ∧ cw=0.568 ∧ rebound_spec 在档）+ DSNH 门控两极夹具（个股下跌态+指数上行=True；个股上行态+指数下行=False）。

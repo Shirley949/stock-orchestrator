@@ -43,6 +43,8 @@ echo "[① 契约层] test_segment_dimensions.py（三维主营构成 + 海外�
 python3 "$HERE/test_segment_dimensions.py" 2>&1 | tail -3
 echo "[① 契约层] test_westock_integration.py（westock_client + fetcher reshape）"
 python3 -m pytest "$ROUTING/test_westock_integration.py" -q 2>&1 | tail -2
+echo "[① 契约层] test_execution_shell_golden.py（v3.3+T11 执行壳黄金闸门：双壳×八股逐笔 0 diff）"
+python3 "$ROUTING/test_execution_shell_golden.py" 2>&1 | tail -2 || { echo "❌ execution_shell 黄金闸门失败——壳/账本/资金流解析改动未过 0 diff，阻断"; exit 1; }
 echo "[① 契约层] test_dongcai_client.py（东财 client 三态+缓存命中/中毒双判+重试+URL 拼接）"
 python3 "$ROUTING/test_dongcai_client.py" 2>&1 | tail -3
 echo "[① 契约层] test_sina_client.py（S8 sina_client：行情 GBK 快照解析+杜邦 SSR HTML 切期/_profile/_dupont_is_empty 冻结响应 golden）"
@@ -65,6 +67,8 @@ echo "[① 契约层] test_g30_label_format.py（G30 表格 label 加粗口径�
 python3 "$HERE/test_g30_label_format.py" 2>&1 | tail -3
 echo "[① 契约层] test_b_head_g71.py（b_head 头块视图：18 票语料回放+分支/幂等 + G71 两极四项 + ④收窄 corpus FLIP/INVARIANT/ENUMERATION）"
 python3 "$HERE/test_b_head_g71.py" 2>&1 | tail -3
+echo "[① 契约层] test_g74_exec_shell.py（G74 执行壳对拍：PFD ±0.01 两极 + [数据层] 臂 + reason 真值合同）"
+python3 "$HERE/test_g74_exec_shell.py" 2>&1 | tail -3
 echo "[① 契约层] test_verify_banner.py（横幅三分 ✅iff零失败 + get_profile fail-loud，P0 2026-09-03）"
 python3 "$HERE/test_verify_banner.py" 2>&1 | tail -3
 echo "[① 契约层] test_g11_pairing_lock.py（G11 字面锚配对锁：m38/m12/m8 活文档投影喂真 gate + 冻结红极，P1a 2026-09-03）"
@@ -145,6 +149,10 @@ echo "[① 契约层] test_web_research_merge_writeback.py（F4#multicall_overwr
 python3 "$HERE/test_web_research_merge_writeback.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_web_research_autodiscovery.py（D3 自动发现：无文件WARN/窗内携账/窗外留痕）"
 python3 "$HERE/test_web_research_autodiscovery.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_webfindings_view_live_events.py（webfindings 直读视图 + trade_sheet 事件日历读侧活算：双键信封两极+stale物化副本必被忽略+cap5）"
+python3 "$HERE/test_webfindings_view_live_events.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_staleness_thresholds.py（staleness 阈值契约：短阈值类=10 覆盖长假闭市 8+2、假期不误报、真陈旧照告、边界 10/11）"
+python3 "$HERE/test_staleness_thresholds.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 
 echo "[① 契约层] test_search_artifact_parser.py（读侧协议：解析矩阵/002273 回放 92=74+18/对账 M+K==N+waive/对撞预筛/追读登记）"
 python3 "$HERE/test_search_artifact_parser.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3

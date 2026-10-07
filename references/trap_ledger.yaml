@@ -663,3 +663,33 @@ entries:
   status: pending
   root_cause: engine
   fix: 's8_buy_plus_grade B 级（2/3 条件）无回测依据（A 级三条件合取有 P3 RUN-S8_buy_plus 证据）。处置：补 B 级回测或引擎注释降级为「无回测依据」提示字段——引擎注释已先行标注，回测补齐另批。'
+- signature: engine#webfindings_envelope:items_bare_key_vs_data_envelope
+  gate: meta
+  subcheck: trade_sheet.event_calendar/b_head.event_top
+  reason_class: envelope_key_path_mismatch
+  match: report_views
+  count: 1
+  last_seen: '2026-10-06'
+  status: landed
+  root_cause: engine
+  fix: 'build_trade_sheet_view/build_b_head_view 读 web_research_findings 用裸键 wr.items，写回侧落标准信封 data.items（键名/路径映射裸字符串合同破裂，002222 实锤：10 条在账事件恒 0）。处置：b_head.event_top 双键兜底（data.items 优先、旧裸键兼容）；trade_sheet 事件面随 stale trap 一并迁读取面活算（本批同修）。执法：test_webfindings_view_live_events 双键两极等价断言。'
+- signature: engine#webfindings_stale:fetch_time_materialization_of_writeback_scene
+  gate: meta
+  subcheck: trade_sheet.event_calendar
+  reason_class: cross_phase_materialization_stale
+  match: report_views
+  count: 1
+  last_seen: '2026-10-06'
+  status: landed
+  root_cause: engine
+  fix: '事件日历在 fetch 期物化视图（s4_technical.data.trade_sheet）聚合写回期 scene web_research_findings——物化时机恒早于数据到达，同会话永 stale；写回侧重物化被 §3 字节隔离（test_web_research_merge_writeback test_03，s11_peer 全 scene md5 含派生 report_view）正确拦截=架构约束非测试过时。处置（雪球同构）：物化层删事件聚合块；读取面 snapshot_view._webfindings_events 活算（§4 分级唯一实现地随迁）+ webfindings 直读视图（VIEW_PATHS 挂 scene 根）；runner web_research 写回零改动。执法：test_webfindings_view_live_events（stale 物化副本必被忽略断言）+ test_03 隔离保持绿。'
+- signature: engine#g65:conditional_vs_sample_head_gate_divergence
+  gate: G65
+  subcheck: win_rate_par
+  reason_class: renderer_gate_truth_divergence
+  match: short_term_engine
+  count: 1
+  last_seen: '2026-10-06'
+  status: pending
+  root_cause: engine
+  fix: 'G65 胜率臂取 sample_win_rate（v11 申报值 panic=0.71，同文件 engine#kelly:legacy_probability_drive P2 已判非重叠口径不可复现）作对拍真值，而 b_head/head_draft_md 渲染 conditional_winrate（0.568、n=185、as_of 2026-10-03 可复现口径）→ 000657 实锤照抄引擎头行恒 1 FAIL（软过阈值内 PASS，报告采 0.568+分析局限标注=写作侧规避，引擎修复同批删除）。修向：G65 胜率臂改锚 conditional_winrate（与已 landed 的 engine#winrate_table:key_name_mismatch 同向），两侧同源后规避行退役。'

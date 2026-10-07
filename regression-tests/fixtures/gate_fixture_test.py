@@ -122,6 +122,7 @@ EXPECTED = {
     # v12 交易点位表完整性门（2026-10-04 S4a）：池票快照（v2 runner 产出）无 trade_sheet 键
     # → 全臂豁免恒 True；两极执法由 SECTION_PROBES 带构造快照的 G73 探针覆盖
     "G73": {"000988": True,  "002008": True,  "300394": True},
+    "G74": {"000988": True,  "002008": True,  "300394": True},
     "G81": {"000988": True,  "002008": True,  "300394": True},   # 冻结池零 webfindings 引用→scene缺+无引用=豁免
 }
 

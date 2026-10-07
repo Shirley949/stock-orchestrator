@@ -246,6 +246,70 @@ def fetch_inoutvol_sina(code: str) -> dict:
         return _failed(api, "sina", str(e)[:150])
 
 
+def fetch_ticks_sina(code: str, num: int = 20000) -> dict:
+    """Sina CN_TransListV2.php 逐笔成交流（当日全天，新→旧）。
+
+    同端点复用：num=11 时仅返回末梢（fetch_inoutvol_sina 只取 INVOL/OUTVOL 汇总行）；
+    num 大时返回当日全部逐笔。`page` 参数服务端忽略（2026-09-30 实测），单次大 num 即全天。
+    方向标签 = 成交价相对前一笔的变动（UP 价升 / DOWN 价降 / EQUAL 平价），
+    ≠ 交易所主动买卖口径（与 INVOL/OUTVOL 数值不一致，实测差 ~20%）。
+
+    Returns envelope.data = {
+        "rows": [["HH:MM:SS", vol股(int), price(float), "UP"|"DOWN"|"EQUAL"], ...],
+        "count": int,
+    }
+    """
+    api = "fetch_ticks_sina"
+    sym = _normalize_code(code)
+    rn = int(__import__("time").time() * 1000) % 100000000  # cache-buster
+    url = (f"https://vip.stock.finance.sina.com.cn/quotes_service/view/"
+           f"CN_TransListV2.php?num={num}&symbol={sym}&rn={rn}")
+    try:
+        text = _curl(url, referer=f"https://finance.sina.com.cn/realstock/company/{sym}/")
+        raw = re.findall(
+            r"new Array\('([\d:]+)',\s*'(\d+)',\s*'([\d.]+)',\s*'(\w+)'\)", text)
+        rows = [[t, int(v), float(p), d] for t, v, p, d in raw]
+        if not rows:
+            return _failed(api, "sina", "逐笔列表为空（停牌或非交易日）")
+        return _ok(api, "sina", {"rows": rows, "count": len(rows)})
+    except Exception as e:
+        return _failed(api, "sina", str(e)[:150])
+
+
+def fetch_fundflow_hist_sina(code: str, limit: int = 30) -> dict:
+    """Sina MoneyFlow.ssl_qsfx_zjlrqs —— 历史日级资金流序列（纯交易日，新→旧）。
+
+    2026-09-30 实测：默认 1130 条（~2022 至今），周末 0 混入；盘中今日不入列
+    （今日走 fetch_fund_flow_sina 快照）。端点 num 参数无效，limit 在解析后截取。
+    字段仅有特大单(r0_net)与总净额(netamount)，无大单桶——大单级历史需逐笔重算，
+    Sina 不存历史逐笔，任何免费源不可得。
+
+    Returns envelope.data = {
+        "rows": [{"date", "close", "changeratio", "netamount"(元), "r0_net"(元)}, ...],
+        "count": int,   # ≤ limit
+    }
+    """
+    api = "fetch_fundflow_hist_sina"
+    sym = _normalize_code(code)
+    rn = int(__import__("time").time() * 1000) % 100000000  # cache-buster
+    url = (f"https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+           f"MoneyFlow.ssl_qsfx_zjlrqs?daima={sym}&rn={rn}")
+    try:
+        text = _curl(url, referer="https://vip.stock.finance.sina.com.cn/moneyflow/")
+        raw = json.loads(text)
+        rows = [
+            {"date": r["opendate"], "close": float(r["trade"]),
+             "changeratio": float(r["changeratio"]),
+             "netamount": float(r["netamount"]), "r0_net": float(r["r0_net"])}
+            for r in raw[:limit]
+        ]
+        if not rows:
+            return _failed(api, "sina", "历史资金流序列为空")
+        return _ok(api, "sina", {"rows": rows, "count": len(rows)})
+    except Exception as e:
+        return _failed(api, "sina", str(e)[:150])
+
+
 def fetch_pricezone_tencent(code: str, topn: int = 3) -> dict:
     """腾讯 s_p{code} 分价表 —— 成交密集区 topN。
 
@@ -296,12 +360,15 @@ def fetch_pricezone_tencent(code: str, topn: int = 3) -> dict:
 
 
 def fetch_snapshot_tencent(code: str) -> dict:
-    """腾讯 q={code} 五档快照 —— 当前价/涨跌幅/换手/内外盘/五档。
+    """腾讯 q={code} 五档快照 —— 当前价/涨跌幅/换手/内外盘/五档 + 当日 OHLC。
 
     Returns envelope.data = {
         "price": float, "pct": float, "turnover": float,
         "outvol": float, "invvol": float,
         "bid": [5 floats], "bidvol": [5], "ask": [5], "askvol": [5],
+        "open": float, "high": float, "low": float, "prev_close": float,
+        "volume_hand": float, "amount_wan": float,   # 成交额单位=万
+        "quote_time": str,                           # "YYYYMMDDHHMMSS"，缺失=""
     }
     """
     api = "fetch_snapshot_tencent"
@@ -326,6 +393,14 @@ def fetch_snapshot_tencent(code: str) -> dict:
         turnover = g(38)
         outvol = g(7)
         invvol = g(8)
+        # 当日 OHLC + 昨收 + 量额 + 行情时间（字段索引 2026-09-29 实测对拍）
+        prev_close = g(4)
+        day_open = g(5)
+        high = g(33)
+        low = g(34)
+        volume_hand = g(36)
+        amount_wan = g(37)
+        quote_time = f[30] if len(f) > 30 else ""
         # 五档：买1-5 在索引 9..18（价量交替），卖1-5 在 19..28
         bid, bidvol, ask, askvol = [], [], [], []
         for k in range(5):
@@ -337,6 +412,9 @@ def fetch_snapshot_tencent(code: str) -> dict:
             "price": price, "pct": pct, "turnover": turnover,
             "outvol": outvol, "invvol": invvol,
             "bid": bid, "bidvol": bidvol, "ask": ask, "askvol": askvol,
+            "open": day_open, "high": high, "low": low,
+            "prev_close": prev_close, "volume_hand": volume_hand,
+            "amount_wan": amount_wan, "quote_time": quote_time,
         })
     except Exception as e:
         return _failed(api, "tencent", str(e)[:150])

@@ -110,6 +110,7 @@ GATE_DESCS = {
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
     "G73": "模式B交易点位表完整性（v3：每行六列齐[方向/价位/类型/触发/动作/失效] + 触发列含收盘确认语义 + 失效列非空 + 买行带 conditional_winrate；trade_sheet.rows 为真相源）",
+    "G74": "模式B执行壳消费对拍（PFD 语境行首个数值 vs execution_shell.pfd.ratio_5d 绝对容差 ±0.01（视图渲染舍入形在容差内）+ 今日动作行中文括注= results.v33_t11.end_state.position；真相源钉死长名 execution_shell，勿读短名 exec_shell 死副本；缺档未写=PASS 豁免、写而缺档=[数据层]）",
     "G80": "雪球站内声量三臂（a 站内词+xq src 同段共现 / b 反对逐条处理段带证据 token / c 站内引文≥12字须为语料子串；status≠ok 全臂豁免，配额熔断/拉取失败禁编造）",
     "G81": "webfindings 消费三臂（a 引用完整性+反向消费：topic 锚命中/未消费 kept 列清单；b 数字一致性：同行数字万/亿/B 换算后 ⊆ 条目 value∪对撞区间；c 口径披露：caliber_flags 非空须披露 token；accounting 缺=反向+c 豁免）",
     "G61": "千股千评结论一等公民完整性（四段闭环仿G1，根治「只拉不用」：①status三态 failed→FAIL禁编造/missing→PASS真空豁免 ②conclusions非空+四键(dimension/text/severity/source_api)+latest_period信封 ③双兜底data/data_full读取 ④每ok结论维度报告须surface词+反编造须[src:]锚；旧snapshot无s_stock_evaluation→PASS向后兼容）",
@@ -235,6 +236,10 @@ GATE_HINTS = {
     "G73": "交易点位表完整性：trade_sheet.rows 每行六列齐（方向/价位/类型/触发/动作/失效），"
            "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注。"
            "带 [数据层] 前缀的 FAIL=引擎 rows 字段缺确认词，不改报告，停笔上报引擎",
+    "G74": "执行壳消费对拍：PFD 行数值 vs execution_shell.pfd.ratio_5d ±0.01（视图渲染舍入形 "
+           "-0.7354→-0.74 在容差内，照抄 reason 给的真值）；今日动作行须带中文括注且= end_state.position"
+           "（禁英文枚举裸出，照抄视图「今日动作：NONE（空仓）」形）。带 [数据层] 前缀的 FAIL="
+           "execution_shell 缺档，不改报告，重跑 runner B 或上报引擎。数据核对：snapshot_view <S> exec_shell",
     "G69": "筹码/资金消费行（词/值/src 同行，禁贴披露词）：`- 当日资金流：主力净流入 X 亿 vs 小单净流出 Y 亿 [src: snapshot.s3_fund_flow.data.fund_flow]`；"
            "`- 融资杠杆：融资余额 X 亿元 [src: snapshot.s_margin.data]`（值照抄 b_head [资金] 行/s_margin 视图；降级维自动豁免不计分母；主力净额 ±5% 对拍 main_net_yi）",
     "G68": "止损档位在点位表行内 ±1% 对拍（`| 卖 | 12.678 | 止损档（daily_ma20） | … |` type 列含 level 名即命中）+ ATR 止损行 + kelly=N；"
@@ -250,7 +255,7 @@ GATE_HINTS = {
 
 # 综合研判 capstone = G30；活跃 gate = G1, G6–G29（不含G24）, G30, G31–G61（不含退役 G10/G18/G46/G50，见 RETIRED_GATES）
 ALL_GATES = ["G1"] + [f"G{i}" for i in range(6, 30) if i not in (10, 18, 24)] + ["G30", "G31", "G32", "G33", "G34", "G35", "G36", "G37", "G38", "G39", "G40", "G41", "G42", "G43", "G44", "G45", "G47", "G48", "G49", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59", "G60", "G61", "G62", "G63", "G64",
-         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G73", "G80", "G81"]
+         "G65", "G66", "G67", "G68", "G69", "G70", "G71", "G72", "G73", "G74", "G80", "G81"]
 
 # ============================================================
 # Gate 分层 (PR 10: Tier 1 Hard = Python-enforced, Tier 2 Soft = LLM self-assessment)
@@ -293,7 +298,7 @@ PROFILES = {
 # —— 模式B gate 隔离（双保险之一；2026-08-26 B v2）——
 # G65-G70 只在 profile_quick 实跑：A 报告（profile_full）结构上不含这些 gate；
 # A 快照即便误跑 quick 也被每个 check 顶部的 mode 短路放行（双保险之二）。
-B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70", "G71", "G73"]
+B_ONLY_GATES = ["G65", "G66", "G67", "G68", "G69", "G70", "G71", "G73", "G74"]
 PROFILES["profile_full"]["gates"] = [g for g in ALL_GATES if g not in B_ONLY_GATES]
 PROFILES["profile_quick"]["gates"] = PROFILES["profile_quick"]["gates"] + B_ONLY_GATES
 
@@ -4340,7 +4345,7 @@ def check_g68(report: str, data: dict) -> bool:
             return GateResult(passed=False, reasons=[
                 f"分级止损表不足：快照 {len(stops)} 档带价位（{_lvtxt}），"
                 f"止损表行/forecast block 须 ≥{min(3, len(stops))} 档（risk_control.stops[].price ±1% 对拍）"
-                f"——照抄点位表行（trade_sheet.rows 直出）：`| 卖 | {level_price.get('daily_ma20', '…')} | 止损档（daily_ma20） | 日MA20-2%×2日 收盘跌破执行 | 已触发→反抽不过离场；未触发→收盘跌破执行 | 收回该位上方 2 日则取消 |`"])
+                f"——照抄点位表行（trade_sheet.rows 直出）：`| 卖 | {level_price.get('daily_ma20', '…')} | 止损档（daily_ma20） | 日MA20-2%×2日 收盘跌破执行 | 已触发（现价在位下方）→ 反抽不过则离场 / 未触发 → 收盘跌破执行（type 列含语义分段：反抽离场位/下方止损位） | 收回该位上方 2 日则取消 |`"])
     atr = (rc.get("atr") or {}).get("atr_stop")
     if isinstance(atr, (int, float)):
         atr_nums = [n for ln in report.splitlines()
@@ -4689,6 +4694,70 @@ def check_g73(report: str, data: dict) -> bool:
     if rows and not re.search(r'触发（.*确认.*）|失效条件', report):
         return GateResult(passed=False, reasons=[
             "报告缺交易点位表：b-trade-sheet 模板须渲染 trade_sheet.rows（六列表，表头含 触发（收盘确认）/失效条件）"])
+    return True
+
+
+def check_g74(report: str, data: dict) -> bool:
+    """G74: 模式B执行壳消费对拍（PFD ±0.01 + 今日动作一致性）。SOFT(weight1)。
+    真相源：s4_technical.data.execution_shell（runner 原生长名；勿读短名 exec_shell——
+    report_views.attach 的物化副本键，零消费）。
+    执法面：① PFD 语境行首个数值 vs pfd.ratio_5d 绝对容差 ±0.01（比率量纲，学 G68 kelly；
+    视图渲染舍入 -0.7354→-0.74 diff=0.0046 在容差内）；② 今日动作行中文括注 vs
+    results.v33_t11.end_state.position（禁英文枚举裸出）。
+    豁免：快照缺档且报告未写执行壳=PASS（披露归 G72）；写了而快照缺档=[数据层]
+    （引擎臂缺产出，报告侧不可修，fix 不含改稿动词）。"""
+    if not _b_gate_active(data):
+        return True
+    es = _snapshot_get(data, "s4_technical.data.execution_shell")
+    es_ok = isinstance(es, dict) and es.get("status") == "ok"
+    lines = report.splitlines()
+    pfd_rows = [(i, ln) for i, ln in enumerate(lines, 1) if "PFD" in ln]
+    act_rows = [(i, ln) for i, ln in enumerate(lines, 1) if "今日动作" in ln]
+
+    if not es_ok:
+        if not pfd_rows and not act_rows:
+            return True
+        _st = es.get("status") if isinstance(es, dict) else "missing"
+        return GateResult(passed=False, reasons=[
+            f"[数据层] 报告写执行壳（PFD/今日动作）而 execution_shell 缺档（status={_st}）"
+            "——报告侧不可修（禁改报告，停笔上报引擎；修向：runner fetch-B execution_shell 臂）"],
+            diag={"subcheck": "es_present", "expected": "s4_technical.data.execution_shell.status=ok",
+                  "found": f"status={_st}", "fix": "重跑 runner B 拉取或上报数据源异常",
+                  "src": "report 执行壳段 vs snapshot.execution_shell"})
+
+    reasons = []
+    # 臂①：PFD 数值对拍（±0.01 绝对容差；真值+路径+L{n}:『原句』+照抄修法四件套，多行全量收集）
+    truth_pfd = (es.get("pfd") or {}).get("ratio_5d")
+    for i, ln in pfd_rows:
+        m = re.search(r'PFD[^：\n]*：\s*(-?\d+(?:\.\d+)?)', ln)
+        if m is None:
+            if truth_pfd is not None:
+                reasons.append(f"L{i}:『{ln.strip()[:46]}…』PFD 行无数值——照抄快照值 "
+                               f"{truth_pfd}（视图渲染舍入形 {round(truth_pfd, 2)} 亦在 ±0.01 容差内）")
+            continue
+        rep = float(m.group(1))
+        if not isinstance(truth_pfd, (int, float)):
+            reasons.append(f"[数据层] L{i}:『{ln.strip()[:46]}…』报告写 PFD 数值而快照 pfd.ratio_5d "
+                           "无真值——报告侧不可修，停笔上报引擎（修向：execution_shell pfd 提取臂）")
+        elif abs(rep - truth_pfd) > 0.01:
+            reasons.append(f"PFD 值不符：报告 {rep} vs 快照 s4_technical.data.execution_shell."
+                           f"pfd.ratio_5d = {truth_pfd}；{_fmt_violation_lines([(i, ln)])}"
+                           f"——照抄 {truth_pfd}（或视图渲染形 {round(truth_pfd, 2)}，均在 ±0.01 容差内）")
+    # 臂②：今日动作中文括注 vs end_state.position（窄口径：有括注比对一致性，缺括注给模板形）
+    pos = (((es.get("results") or {}).get("v33_t11") or {}).get("end_state") or {}).get("position")
+    for i, ln in act_rows:
+        m = re.search(r'今日动作[：:]\s*\S*?（([^（）]{1,8})）', ln)
+        if m is None:
+            if pos:
+                reasons.append(f"L{i}:『{ln.strip()[:46]}…』今日动作行缺中文括注——照抄视图形"
+                               f"「今日动作：NONE（{pos}）」（禁英文枚举裸出）")
+            continue
+        if pos and m.group(1) != pos:
+            reasons.append(f"今日动作括注不符：报告（{m.group(1)}） vs 快照 results.v33_t11."
+                           f"end_state.position = {pos}；{_fmt_violation_lines([(i, ln)])}"
+                           f"——照抄视图 exec_shell 今日动作行（括注=「（{pos}）」）")
+    if reasons:
+        return GateResult(passed=False, reasons=reasons[:5])
     return True
 
 
@@ -5192,6 +5261,7 @@ GATE_CHECKERS = {
     "G68": check_g68, "G69": check_g69, "G70": check_g70, "G71": check_g71,
     "G72": check_g72,
     "G73": check_g73,
+    "G74": check_g74,
     "G80": check_g80, "G81": check_g81,
 }
 
@@ -5469,6 +5539,11 @@ GATE_REGISTRY = {
             "data_dim": "s4_technical.data.trade_sheet",
             "requires": "交易点位表每行六列齐（方向/价位/类型/触发/动作/失效）；触发列含收盘确认语义；失效列非空；买行（rebound_spec）带 conditional_winrate；减仓带行带 LLM 判断位标记",
             "fail_hint": "照 trade_sheet 视图行照抄；缺列行补列、失效空行补失效条款、买行补条件胜率标注（禁自行发明价位——价位照抄 layers/stops/rebound_spec）"},
+
+    "G74": {"checker": check_g74, "weight": 1, "owner": ["b-trade-sheet"],
+            "data_dim": "s4_technical.data.execution_shell",
+            "requires": "PFD 语境行首个数值 ±0.01 对拍 pfd.ratio_5d（视图渲染舍入形在容差内）；今日动作行中文括注= end_state.position；快照缺档而报告写执行壳=[数据层]",
+            "fail_hint": "PFD/括注照抄 reason 给的真值与可复制目标文本；[数据层]=缺档不改报告，重跑 runner B 或上报引擎"},
 
     "G80": {"checker": check_g80, "weight": 3, "owner": ["m4", "m6"],
             "data_dim": "xq_market_voice/xq_conclusion_check",

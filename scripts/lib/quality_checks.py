@@ -126,17 +126,24 @@ def compute_staleness(
     api_name: str,
     data: list,
     date_col: str,
+    now: Optional[datetime] = None,
 ) -> Tuple[Optional[int], Optional[datetime]]:
-    """计算数据陈旧度 (days_old, latest_date)。"""
+    """计算数据陈旧度 (days_old, latest_date)。now 供测试注入（缺省=当前时刻）。"""
     latest = find_latest_date(data, date_col)
     if latest is None:
         return None, None
-    days_old = (datetime.now() - latest).days
+    days_old = ((now or datetime.now()) - latest).days
     return days_old, latest
 
 
 def get_staleness_threshold(api_name: str) -> int:
-    """返回陈旧告警阈值（天数）。用于 _check_staleness()。"""
+    """返回陈旧告警阈值（自然日）。
+
+    短阈值类（日频行情/评论）=10：覆盖 A 股全年最长连续闭市（春节/国庆 8 自然日，
+    法定+调休+周末）+2 边际——周末/节假日拉取不产生假阳性（2026-10-06 国庆实证：
+    9-30 数据在 10-06 看 6 自然日 > 旧阈值 5，数据实为全局最新）。信号不稀释：
+    10 自然日 ≈ 6+ 个交易 session，真陈旧照告。
+    """
     KLINE_APIS = {"stock_zh_a_daily", "stock_zh_a_hist", "curl_eastmoney_kline",
                   "stock_zh_a_hist_min_em"}
     DAILY_APIS = {"stock_comment_detail_zlkp_jgcyd_em"}
@@ -144,7 +151,7 @@ def get_staleness_threshold(api_name: str) -> int:
     if api_name in {"stock_lhb_stock_detail_date_em", "stock_lhb_stock_detail_em"}:
         return 10_000  # 永不告警（与 should_reject_cache 豁免一致）
     if api_name in KLINE_APIS or api_name in DAILY_APIS:
-        return 5
+        return 10  # 最长闭市 8 自然日 + 2 边际（详见 docstring；旧值 5 被长假系统性击穿）
     elif "financial" in api_name or api_name in {
         "stock_financial_report_sina", "stock_financial_abstract",
         "stock_financial_abstract_ths",
@@ -159,7 +166,7 @@ def get_staleness_threshold(api_name: str) -> int:
         return 180  # 季度/不定期数据（统一 180d 口径，原 120）
     elif api_name.startswith("macro_"):
         return 60
-    return 7
+    return 10  # 默认类（日频杂项）：与短阈值类同口径，闭市 8 天不再贴边误报（旧值 7）
 
 
 def should_reject_cache(api_name: str, days_old: int, row_count: int = 0) -> bool:

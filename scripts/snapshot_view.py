@@ -25,6 +25,9 @@
 设计（2026-08-20）：视图由 runner 落盘时挂载（report_views.attach_report_views），
 本 CLI 只做「格式化直出」——LLM 一条命令拿到已裁剪/已反转/已换算的紧凑表格，
 禁止再手写提取脚本。输出对齐文本表（人读友好 + token 紧凑）。
+例外（2026-10-06）：webfindings 直连写回期 scene 根活读（xqvoice 同款）；
+trade_sheet 事件日历读侧活算（_webfindings_events）——web_research_findings
+为写回期 scene，物化聚合恒 stale，读侧直读才与写回同帧新鲜。
 """
 import argparse
 import contextlib
@@ -42,6 +45,7 @@ VIEW_PATHS = {
     "news":      ("s5_events", "data", "news", "report_view"),
     "events":    ("s5_events", "data", "risk_signals", "report_view"),
     "timeline":  ("s5_events", "data", "risk_signals", "processed", "report_view"),
+    "exec_shell": ("s4_technical", "data", "execution_shell"),
     "technical": ("s4_technical", "data", "report_view"),
     # 模式B v2 三视图（2026-08-26）：short_term presence-gated（A 快照缺席时 no-op）
     "short_term":    ("s4_technical", "data", "short_term_enrich", "report_view"),
@@ -58,6 +62,8 @@ VIEW_PATHS = {
     # 雪球站内声量（2026-09-09 原型）：直连 scene 根（fund_flow/b_head 同款），printer 自渲染
     "xqvoice":    ("xq_market_voice",),
     "xqcheck":    ("xq_conclusion_check",),
+    # websearch 策展清单（2026-10-06）：直连 scene 根（xqvoice 同款活读）——写回后当场新鲜
+    "webfindings": ("web_research_findings",),
 }
 
 # 各视图表格列（列名, 取值键/取值函数）
@@ -415,8 +421,34 @@ def _print_fund_flow(v):
               f"(占比 {_fmt(it.get('in_ratio'))}/{_fmt(it.get('out_ratio'))})")
 
 
-def _print_trade_sheet(v):
-    """v12 交易指令单视图：行集 + 确认器 + 资金持续性 + 事件日历（b-trade-sheet 模板数据源）。"""
+def _webfindings_events(snap):
+    """事件日历活算（§4 权威度分级唯一实现地，自 report_views 物化层迁入 2026-10-06）。
+
+    web_research_findings 为写回期 scene，fetch 期物化聚合恒 stale——读侧直读当场新鲜。
+    双键兜底：标准信封 data.items（runner web_research 落点）/ 旧裸键 items。
+    分级：巨潮/cninfo/交易所/证监会（文本或 url）=实锤；含公告/业绩/发布会/解禁/减持/回购=待证；其余不入。
+    返回 (events[:5], source_label)。
+    """
+    wr = snap.get("web_research_findings") or {}
+    items = ((wr.get("items") or (wr.get("data") or {}).get("items"))
+             if isinstance(wr, dict) else None) or []
+    TIER1 = ("cninfo", "sse.com.cn", "szse.cn", "巨潮", "交易所", "证监会")
+    events = []
+    for it in items:
+        val = str(it.get("value", ""))[:120]
+        src = str(it.get("url") or it.get("source") or "")
+        grade = "实锤" if any(k in val or k in src for k in TIER1) else "待证"
+        if grade == "实锤" or any(k in val for k in ("公告", "业绩", "发布会", "解禁", "减持", "回购")):
+            events.append({"grade": grade, "text": val})
+    return events[:5], ("web_research_findings" if items else "未拉取（websearch 可选增强）")
+
+
+def _print_trade_sheet(v, snap=None):
+    """v12 交易指令单视图：行集 + 确认器 + 资金持续性 + 事件日历（b-trade-sheet 模板数据源）。
+
+    事件日历=读侧活算（_webfindings_events，webfindings 写回期 scene 直读，当场新鲜）；
+    snap=None 时回退读物化副本（旧签名兼容）。
+    """
     print(f"## 交易指令单 status={_fmt(v.get('status'))} kelly={_fmt(v.get('kelly'))}")
     stt = v.get("state_tuple") or {}
     print(f"  状态：趋势={_fmt(stt.get('trend_state'))} regime={_fmt(stt.get('regime'))} "
@@ -433,10 +465,63 @@ def _print_trade_sheet(v):
     fs = v.get("fund_sustain")
     print(f"  资金持续性：{_fmt(fs and fs.get('verdict'))}（7日正天数 {_fmt(fs and fs.get('pos_days_7'))}）"
           if fs else "  资金持续性：None（缺档降级）")
-    ec = v.get("event_calendar") or []
-    print(f"  事件日历（{v.get('event_calendar_source')}）：{len(ec)} 条")
+    if snap is not None:
+        ec, ec_src = _webfindings_events(snap)
+    else:
+        ec, ec_src = v.get("event_calendar") or [], v.get("event_calendar_source")
+    print(f"  事件日历（{ec_src}）：{len(ec)} 条")
     for e in ec:
         print(f"   [{e.get('grade')}] {e.get('text')}")
+
+
+def _print_webfindings(v):
+    """websearch 策展清单直读视图（websearch 版 xqvoice，活读 scene 根，写回后当场新鲜）。"""
+    data = v.get("data") or {}
+    items = data.get("items") or v.get("items") or []   # 双键兜底：标准信封 data.items / 旧裸键
+    acc = data.get("accounting") or {}
+    print(f"## webfindings status={_fmt(data.get('status'))} items={len(items)} "
+          f"substantive={_fmt(data.get('substantive'))} source={_fmt(data.get('source'))}")
+    if acc:
+        print(f"  [accounting] raw_n_total={_fmt(acc.get('raw_n_total'))} "
+              f"discarded_total={_fmt(acc.get('discarded_total'))} "
+              f"caliber_flags={len(acc.get('caliber_flags') or [])} batches={len(acc.get('per_batch') or [])}")
+    for it in items:
+        print(f"[{it.get('topic') or '（无topic）'}] {it.get('entry_id') or '（无entry_id）'}")
+        print(f"  {str(it.get('value') or '')[:160]}")
+        print(f"  url: {it.get('url') or '（空）'}")
+    if not items:
+        print("  （空——未拉取或写回为空；拉取流程见 orchestrator SKILL.md Phase 2 读侧协议）")
+
+
+def _print_exec_shell(v):
+    """执行壳视图（v3.3+T11）：机械执行层直出（b-trade-sheet §执行壳 数据源；raw enrich 子树）。"""
+    print(f"## 执行壳 status={_fmt(v.get('status'))} rules={_fmt(v.get('rules_id'))}")
+    td = v.get('today') or {}
+    if td:
+        print(f"  今日动作：{_fmt(td.get('action'))}（{_fmt(td.get('end_position'))}） ｜ 触发：{_fmt(td.get('trigger'))}")
+    orders = v.get('orders') or []
+    if orders:
+        for o in orders:
+            print(f"    挂单 [{_fmt(o.get('side'))}] {_fmt(o.get('price'))}（{_fmt(o.get('condition'))}）")
+    else:
+        print("  出场栈活跃档 / 挂单：无挂单")
+    pfd = v.get('pfd') or {}
+    print(f"  PFD（5 日主力净流占比）：{_fmt(pfd.get('ratio_5d'))}（as-of {_fmt(pfd.get('as_of_date'))}；"
+          f"警戒线 {_fmt(pfd.get('th'))}；状态 {_fmt(pfd.get('status'))}）")
+    cmp_ = v.get('comparison') or {}
+    v33 = cmp_.get('v33_t11') or {}
+    if v33:
+        print(f"  主方案 v3.3+T11：净盈亏 {_fmt(v33.get('net_pnl'))}"
+              f"（{_fmt(v33.get('trades_n'))} 笔，期末 {_fmt(v33.get('end_position'))}）")
+    v31 = cmp_.get('v31_ref') or {}
+    if v31:
+        print(f"  v3.1 辅助参考（权重=0，禁据此切换核心状态机）：净盈亏 {_fmt(v31.get('net_pnl'))}"
+              f"（期末 {_fmt(v31.get('end_position'))}）")
+    fold = v.get('fold') or {}
+    print(f"  账本：{_fmt(fold.get('ledger_rows'))} 行（起点 {_fmt(fold.get('kline_start_v33_t11'))}）")
+    cp = v.get('context_panel') or {}
+    print(f"  L2 上下文面板（权重=0，不进状态机）：news_n={_fmt(cp.get('news_n'))} "
+          f"announcements_n={_fmt(cp.get('announcements_n'))} xq_voice_n={_fmt(cp.get('xq_voice_n'))}")
 
 
 def _print_b_head(v):
@@ -547,6 +632,8 @@ PRINTERS = {
     "fund_flow": _print_fund_flow, "b_head": _print_b_head,
     "trade_sheet": _print_trade_sheet,
     "xqvoice": _print_xqvoice, "xqcheck": _print_xqcheck,
+    "webfindings": _print_webfindings,
+    "exec_shell": _print_exec_shell,
 }
 
 
@@ -711,6 +798,8 @@ def main():
         sys.exit(1)
     if args.view == "balance":
         PRINTERS["balance"](view, snap)   # footer 需 raw 8 期合同负债（视图仅 4 期）
+    elif args.view == "trade_sheet":
+        PRINTERS["trade_sheet"](view, snap)   # 事件日历读侧活算（webfindings 写回期 scene 直读，当场新鲜）
     else:
         PRINTERS[args.view](view)
 

@@ -1023,7 +1023,8 @@ SCENES = {
                      "整块渲染（v3 默认 4 行状态头，v2 回滚态 head_draft_v3=False）；写作侧只消费本视图禁回源手抄"},
             {"path": "data.trade_sheet", "confidence": CONFIRMED,
              "note": "模式B 交易指令单视图（report_views.build_trade_sheet_view 引擎直出）：rows 六列"
-                     "（side/price/type/confirm_rule/action/invalidation）+ kelly/state_tuple/event_calendar/fund_sustain；"
+                     "（side/price/type/confirm_rule/action/invalidation）+ kelly/state_tuple/fund_sustain；"
+                     "事件日历不物化（webfindings 写回期 scene，读取面活算 snapshot_view._webfindings_events）；"
                      "价位照抄 layers/stops，confirm_rule 含确认语义（G73 词表）"},
         ],
         "consumers": {
