@@ -693,3 +693,13 @@ entries:
   status: pending
   root_cause: engine
   fix: 'G65 胜率臂取 sample_win_rate（v11 申报值 panic=0.71，同文件 engine#kelly:legacy_probability_drive P2 已判非重叠口径不可复现）作对拍真值，而 b_head/head_draft_md 渲染 conditional_winrate（0.568、n=185、as_of 2026-10-03 可复现口径）→ 000657 实锤照抄引擎头行恒 1 FAIL（软过阈值内 PASS，报告采 0.568+分析局限标注=写作侧规避，引擎修复同批删除）。修向：G65 胜率臂改锚 conditional_winrate（与已 landed 的 engine#winrate_table:key_name_mismatch 同向），两侧同源后规避行退役。'
+- signature: G73#dsnh_row:price_none_soft_fail
+  gate: G73
+  subcheck: dsnh_row
+  reason_class: price_none_soft_fail
+  match: 缺列/空列
+  count: 1
+  last_seen: '2026-10-07'
+  status: landed
+  root_cause: engine
+  fix: '（300408 实锤，同日 landed）根因=G73 六列循环遍历快照引擎行，DSNH/DSNL 参考行（report_views 刻意 price=None 非机械执行）被机械行合同误伤，且 fixture 池无 DSNH 触发态+软权重永不红故出生三日未暴露。修法=合同归位：引擎参考行加显式 row_class=reference（优于 type 文本猜测），G73 参考行豁免价位/确认词/买行cw 三臂、五列完备仍执法；执法者=test_g73_reference_rows 两极 6 案+run_regression 注册。报告侧「分析局限性标注」规避条款同批删除（300408 报告已重验重发）。'

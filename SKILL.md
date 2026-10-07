@@ -70,6 +70,7 @@ python ~/.hermes/skills/stock-analysis/stock-orchestrator/scripts/verify_gates.p
 - **m11 区只放指针行，禁止手填分数**：`[verified: self_score=N profile=full | see analysis_report.verified.json]`
 - **c70 打勾必须用 sidecar 路径**（`update_checklist.py --check c70 --evidence-from /tmp/analysis_report_<code>_mode<X>.verified.json`）——`verdict==PASS` + `self_score>=80` + 新鲜度由代码强制，任一不满足 `sys.exit(1)`。
 - `verify_gates` 退出码 1 = `verdict==FAIL`，报告不能输出，必须补全失败的 Gate。
+- **verify 输出禁走管道**：`verify_gates … | tail && 勾选` 链中 tail 的 exit 0 顶替 verify 退出码，FAIL 照样打勾。一律重定向落盘 + 显式判 `$?`（`> /tmp/v.log 2>&1; [ $? -eq 0 ] && 勾选`）；快速看结果 grep 落盘文件。
 → 原因：Gate 校验是最后一道质量关卡。**分数、verdict、≥80 阈值全部由代码强制**（根治"三套分数 87/93/95"漂移：手填分数从不进报告，引擎产出无下游消费）。
 
 ### 约束 6：两段式问题映射
@@ -196,7 +197,8 @@ runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_
 # ② 解析+清点（唯一合法读取面；禁手写解析/禁 text[:N] 截断打印当结果——Exa 流 json.load 必炸=「文本格式」错觉）
 python3 ~/.hermes/skills/stock-analysis/financial-data-routing/search_artifact_parser.py parse \
   --files /tmp/<code>/<工件...> --session-stock <code> --json /tmp/<code>/entries.json
-#    （多批分次解析直接重跑同命令：--json 按 entry_id 累积合并，末批禁覆盖前批）
+#    （多批分次解析直接重跑同命令：--json 按 entry_id 累积合并，末批禁覆盖前批——限同运行；
+#      账本按 run_id 归运行，隔日/新分析加 --fresh 归档旧账再开新账，跨运行残留 stderr WARN）
 # ③ 策展全处置对账（M+K==N 硬断言，缺处置=阻断；kept 引用 entry_id+value 含数字；弃读须规则+理由）
 python3 ~/.hermes/skills/stock-analysis/financial-data-routing/search_artifact_parser.py account \
   --entries /tmp/<code>/entries.json --curation /tmp/<code>/curation_<batch>.json
@@ -292,15 +294,15 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
 2. 运行 Gate 校验脚本（**命令与参数见约束 5**，单一真相源；**自动产出 sidecar**；同时校验 report mtime ≥ snapshot mtime，报告早于快照 = 错文件/陈旧拷贝 → exit 2）。
 3. **Gate 全过后归档到固定目录 `/home/ubuntu/analysis_report/`**（原始 md + sidecar + 发布副本三件套一起归档；**归档命令必须保 mtime**——三件套逐文件 `cp -p <src> <dst>`（或目录整体 `cp -rp`，发布副本 mdx 一并覆盖），禁裸 `cp`：裸 cp 刷新 mtime，任何基于归档副本的 mtime 时序审计（V11 类）都会失真）：
    ```
-   ~/analysis_report/analysis_report-<模型>-<股票名>-mode<A|B>-<代码>/   ← 每股×模式一目录
-       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
-       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>.verified.json   ← sidecar（= 报告 stem + .verified.json）
-       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<代码>_publish.md   ← 发布副本（已剥 src）
+   ~/analysis_report/analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>/   ← 每股×模式×运行日一目录
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>.md          ← 原始报告（明文 [src:]，gate 执法用，永不剥离）
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>.verified.json   ← sidecar（= 报告 stem + .verified.json）
+       ├── analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>_publish.md   ← 发布副本（已剥 src）
        └── runner_snapshot_<代码>_mode<A|B>.json（可选，同期快照——diff_engine 同期配对优先用）
    ```
-   示例：`~/analysis_report/analysis_report-glm5.1-源杰科技-modeA-688498/analysis_report-glm5.1-源杰科技-modeA-688498.md`
-   > `<模型>` = 当前会话模型简称；**模式段 `mode<A|B>` 置于股票名后、代码前——目录名尾 6 位必须仍是代码**（token_audit `endswith("-{code}")` 与 diff_engine 正则的既有合同，勿破坏）。
-   > **覆盖规则（用户裁定 2026-09-09）：只有同模式才可覆盖**——模式B 只写自己的 `modeB` 目录，模式A 目录（含无 mode 段的旧目录，原地保留不再改名）永不触碰。runner 数据存档 `~/.cache/skill-snapshots/full/` 本就按日并集合并（A∪B），无需处理。
+   示例：`~/analysis_report/analysis_report-glm5.3flash-三环集团-modeB-20261007-300408/analysis_report-glm5.3flash-三环集团-modeB-20261007-300408.md`（日期段=运行日 YYYYMMDD；无日期旧目录如 `analysis_report-glm5.1-源杰科技-modeA-688498/` 原地保留兼容）
+   > `<模型>` = 当前会话模型简称；**模式段 `mode<A|B>` 置于股票名后；日期段（如有）置于代码前——目录名尾 6 位必须仍是代码**（token_audit `endswith("-{code}")` 与 diff_engine 正则的既有合同，勿破坏）。
+   > **覆盖规则（用户裁定 2026-09-09）：只有同模式才可覆盖**——模式B 只写自己的 `modeB` 目录，模式A 目录（含无 mode 段的旧目录，原地保留不再改名）永不触碰；带日期段后同股多日运行各自成目录天然不互覆。runner 数据存档 `~/.cache/skill-snapshots/full/` 本就按日并集合并（A∪B），无需处理。
 3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
    **FAIL 修法直接看 verify 输出**：action_required 自带 `💡 Gxx 修法` hint（GATE_HINTS，高频 gate
    败因+修法速查）。hint 不足再 Read `stock-analysis-quality/references/modules/m11-gates.md` 对应节；

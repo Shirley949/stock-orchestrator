@@ -57,6 +57,18 @@ echo "[① 契约层] test_view_envelope_contract.py（视图信封合同：挂�
 python3 "$HERE/test_view_envelope_contract.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"
 python3 "$ROUTING/test_lixinger_client.py" 2>&1 | tail -1
+echo "[① 契约层] test_ths_client.py（批次0 ths_client：normalize 含 .BJ/毫秒锚点/token 三态/2004 快败/429 退避+fail_cache/游资红线机拒 冻结响应 golden）"
+python3 "$ROUTING/test_ths_client.py" 2>&1 | tail -1
+echo "[① 契约层] test_s2_quote_bases.py（批次1 s2 三底座统一：sina/THS/腾讯 信封键集合+单位契约 股/元+fallback 如实语义+腾讯单次拉取）"
+python3 "$ROUTING/test_s2_quote_bases.py" 2>&1 | tail -1
+echo "[① 契约层] test_s2_kline_ths_fallback.py（批次2 s2 日K THS fallback：3年窗/单源整段口径 warning/latest_period 挂载/失败如实）"
+python3 "$ROUTING/test_s2_kline_ths_fallback.py" 2>&1 | tail -1
+echo "[① 契约层] test_s3_sina_fallback.py（批次4 s3 sina fallback：符号桶单一语义/G26 四档名/富字段如实 None/双失败如实/westock 主路径零调用隔离）"
+python3 "$ROUTING/test_s3_sina_fallback.py" 2>&1 | tail -1
+echo "[① 契约层] test_valuation_ths_fallback.py（批次3 估值 THS fallback：baidu 缺口补齐/pe_mrq 禁映射 peLyr/负 PE 亏损语义/THS 也挂不崩/percentile 域不动）"
+python3 "$ROUTING/test_valuation_ths_fallback.py" 2>&1 | tail -1
+echo "[① 契约层] test_lhb_ths_official.py（批次5 lhb THS 官方榜：daily 兜底万元口径/游资内嵌提取仅本股/东财 seats 键不动/不在榜零污染）"
+python3 "$ROUTING/test_lhb_ths_official.py" 2>&1 | tail -1
 echo "[① 契约层] test_lhb_northbound_processor.py（LHB/北向 processed 纯函数四情境）"
 python3 "$HERE/test_lhb_northbound_processor.py" 2>&1 | tail -3
 echo "[① 契约层] test_financial_indicators_ladder.py（次新股 start_year 降档 2018→2024，真实 payload fixtures 离线回放）"
@@ -153,6 +165,8 @@ echo "[① 契约层] test_webfindings_view_live_events.py（webfindings 直读�
 python3 "$HERE/test_webfindings_view_live_events.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
 echo "[① 契约层] test_staleness_thresholds.py（staleness 阈值契约：短阈值类=10 覆盖长假闭市 8+2、假期不误报、真陈旧照告、边界 10/11）"
 python3 "$HERE/test_staleness_thresholds.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3
+echo "[① 契约层] test_g73_reference_rows.py（G73 参考行合同两极：row_class=reference 豁免价位/确认词/cw 三臂+机械行豁免不泄漏+引擎接线正反例）"
+python3 "$HERE/test_g73_reference_rows.py" 2>&1 | grep -E '^(OK|FAILED|❌)' | tail -3
 
 echo "[① 契约层] test_search_artifact_parser.py（读侧协议：解析矩阵/002273 回放 92=74+18/对账 M+K==N+waive/对撞预筛/追读登记）"
 python3 "$HERE/test_search_artifact_parser.py" 2>&1 | grep -E '^(OK|FAILED|Ran|AssertionError|ERROR)' | tail -3

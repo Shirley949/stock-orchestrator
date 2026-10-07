@@ -103,6 +103,31 @@ def extract_stock_codes(user_prompt: str) -> list[str]:
     return all_codes
 
 
+def extract_position(user_prompt: str) -> dict:
+    """从用户 prompt 确定性提取持仓股数与成本 → 模式B runner --position（输入腿代码化）。
+    执法者=本函数（清单命令块直出具体 flag）；提取值打印进清单供 LLM 对照原文复核。
+    未检出时命令块出双态提示行（缺输入=报告走空仓视角的静默降级面）。"""
+    if not user_prompt:
+        return {}
+    shares = cost = None
+    m = re.search(r'(\d+)\s*股\s*@\s*([\d.]+)', user_prompt) or \
+        re.search(r'仓位[:：]?\s*(\d+)\s*股?\s*@\s*([\d.]+)', user_prompt) or \
+        re.search(r'持仓[:：]?\s*(\d+)\s*股[，,;\s]*成本[:：]?\s*([\d.]+)', user_prompt)
+    if m:
+        shares, cost = int(m.group(1)), float(m.group(2))
+    if cost is None:
+        m = re.search(r'成本[价格]?[:：]?\s*([\d.]+)', user_prompt) or \
+            re.search(r'买入价[:：]?\s*([\d.]+)', user_prompt)
+        if m:
+            cost = float(m.group(1))
+    if shares is None:
+        m = re.search(r'(?:仓位|持仓)[:：]?\s*(\d+)\s*股', user_prompt) or \
+            re.search(r'(\d+)\s*股', user_prompt)
+        if m:
+            shares = int(m.group(1))
+    return {"shares": shares, "cost": cost} if shares is not None and cost is not None else {}
+
+
 # ============================================================
 # Phase 步骤定义
 # ============================================================
@@ -423,7 +448,14 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         elif mode == "B":
             lines.append(f"# 数据拉取（routing runner）")
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
-            lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
+            _pos = extract_position(user_prompt)
+            if _pos:
+                lines.append(f"# 仓位已从原文检出：shares={_pos['shares']} cost={_pos['cost']}（personal overlay 不进状态机；报告照抄 execution_shell.user_position，勿手算盈亏）")
+                lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
+                lines.append(f"  --position \"shares={_pos['shares']},cost={_pos['cost']}\" \\")
+            else:
+                lines.append(f"# ⚠️ 未检出仓位/成本——若用户原文给了持仓须补 --position \"shares=N,cost=M\" 重拉；确无仓位则直接跑（缺输入=报告走空仓视角）")
+                lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
             lines.append(f"  > /tmp/runner_snapshot_{sc}_mode{mode}.json 2>/tmp/runner_stderr_{sc}_mode{mode}.log")
         # Step 2: 错码核对 + 视图认知（P1c 2026-09-03，内联产生真相的命令、拒绝视图计数）
         lines.append(f"# Step 2: 错码核对（不一致立即停——错码跑完全量拉取落盘后才在 [verify] 行暴露，白跑一次）")

@@ -230,6 +230,13 @@ class DataSnapshot:
             sina_client.set_logger(self._fetch_log.append)
         except ImportError:
             pass
+        # 镜像挂 ths fetch_log 钩子（同花顺官方 Financial-API fallback 源，source="ths_fuyao"）。
+        # ths_client 与 sina_client 同目录（runner 已加 sys.path），独立测试静默跳过。
+        try:
+            import ths_client
+            ths_client.set_logger(self._fetch_log.append)
+        except ImportError:
+            pass
 
     # --------------------------------------------------------
     # 缓存键生成

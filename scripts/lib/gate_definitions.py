@@ -109,7 +109,7 @@ GATE_DESCS = {
     "G70": "模式B大盘 regime 对拍（报告 regime 断言与 market_context verdict 一致；缺席禁编造）",
     "G71": "模式B核心结论头块执法（存在性/10槽锚词齐/纪律位散文标签对拍/头表概率=§5投影）",
     "G72": "降级源点名披露（m8；snapshot._warnings 非空→逐条点名各降级源特征 token（API 名/域名/源标签），样板话不算；ts<2026-09-01 豁免向后兼容）",
-    "G73": "模式B交易点位表完整性（v3：每行六列齐[方向/价位/类型/触发/动作/失效] + 触发列含收盘确认语义 + 失效列非空 + 买行带 conditional_winrate；trade_sheet.rows 为真相源）",
+    "G73": "模式B交易点位表完整性（v3：机械行每行六列齐[方向/价位/类型/触发/动作/失效] + 触发列含收盘确认语义 + 失效列非空 + 买行带 conditional_winrate；row_class=reference 参考行豁免价位/确认词/买行cw三臂；trade_sheet.rows 为真相源）",
     "G74": "模式B执行壳消费对拍（PFD 语境行首个数值 vs execution_shell.pfd.ratio_5d 绝对容差 ±0.01（视图渲染舍入形在容差内）+ 今日动作行中文括注= results.v33_t11.end_state.position；真相源钉死长名 execution_shell，勿读短名 exec_shell 死副本；缺档未写=PASS 豁免、写而缺档=[数据层]）",
     "G80": "雪球站内声量三臂（a 站内词+xq src 同段共现 / b 反对逐条处理段带证据 token / c 站内引文≥12字须为语料子串；status≠ok 全臂豁免，配额熔断/拉取失败禁编造）",
     "G81": "webfindings 消费三臂（a 引用完整性+反向消费：topic 锚命中/未消费 kept 列清单；b 数字一致性：同行数字万/亿/B 换算后 ⊆ 条目 value∪对撞区间；c 口径披露：caliber_flags 非空须披露 token；accounting 缺=反向+c 豁免）",
@@ -233,8 +233,9 @@ GATE_HINTS = {
            "（API 名/域名/源标签，如 stock_zh_a_daily / qt.gtimg.cn / curl_sina），"
            "样板话（「已披露数据降级」不带源名）不算。修法：照 FAIL reason 里的"
            "『可写 token』清单在 m8 补点名行。ts<2026-09-01 的旧快照豁免。",
-    "G73": "交易点位表完整性：trade_sheet.rows 每行六列齐（方向/价位/类型/触发/动作/失效），"
-           "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注。"
+    "G73": "交易点位表完整性：trade_sheet.rows 机械行每行六列齐（方向/价位/类型/触发/动作/失效），"
+           "触发列须含收盘确认语义，失效列非空；买行（rebound_spec）带条件胜率标注；"
+           "row_class=reference 参考行（DSNH/DSNL 提示）豁免价位/确认词/买行cw三臂，仅查五列完备。"
            "带 [数据层] 前缀的 FAIL=引擎 rows 字段缺确认词，不改报告，停笔上报引擎",
     "G74": "执行壳消费对拍：PFD 行数值 vs execution_shell.pfd.ratio_5d ±0.01（视图渲染舍入形 "
            "-0.7354→-0.74 在容差内，照抄 reason 给的真值）；今日动作行须带中文括注且= end_state.position"
@@ -4650,10 +4651,13 @@ def check_g73(report: str, data: dict) -> bool:
     """G73（v3 新增）：模式B交易点位表完整性。HARD(weight2)。
     真相源：s4.data.trade_sheet.rows（report_views.build_trade_sheet_view 引擎直出）。
     执法面（P2/P3 盲测裁决的落地合同）：
-    ① 报告含点位表（B 报告必有）→ 每行六列语义齐（方向/价位/类型/触发/动作/失效）；
-    ② 触发列含收盘确认语义词（收盘|触及|站上|跌破|收回）；
-    ③ 失效列非空（空=引擎 bug，停笔上报而非自行补写）；
+    ① 机械行每行六列语义齐（方向/价位/类型/触发/动作/失效）；
+    ② 机械行触发列含收盘确认语义词（收盘|触及|站上|跌破|收回）；
+    ③ 失效列非空（空=引擎 bug，停笔上报而非自行补写）——机械行与参考行都执法；
     ④ 买行（入场带/rebound_spec）带 conditional_winrate 标注。
+    参考行（row_class=reference，DSNH/DSNL 条件提示行）：无价位/确认词/买行 cw 是设计
+    语义非缺陷——豁免①②④臂，仅执法 side/type/confirm_rule/action/invalidation 完备
+    （执法者=test_g73_reference_rows 两极）。
     降级：trade_sheet.status≠ok → 全臂豁免（照实披露即可）。"""
     if not _b_gate_active(data):
         return True
@@ -4668,18 +4672,20 @@ def check_g73(report: str, data: dict) -> bool:
     for idx, r in enumerate(rows, 1):
         if not isinstance(r, dict):
             continue
-        missing_cols = [c for c in ("side", "price", "type", "confirm_rule", "action", "invalidation")
-                        if not r.get(c)]
+        _is_ref = r.get("row_class") == "reference"
+        _cols = ("side", "type", "confirm_rule", "action", "invalidation") if _is_ref \
+            else ("side", "price", "type", "confirm_rule", "action", "invalidation")
+        missing_cols = [c for c in _cols if not r.get(c)]
         if missing_cols:
             reasons.append(f"点位行{idx}（{r.get('type', '?')}）缺列/空列：{missing_cols}"
                            f"——照 trade_sheet 视图行照抄，禁删列")
             continue
-        if not any(w in str(r["confirm_rule"]) for w in CONFIRM_WORDS):
+        if not _is_ref and not any(w in str(r["confirm_rule"]) for w in CONFIRM_WORDS):
             reasons.append(f"[数据层] 点位行{idx}（{r['type']}）confirm_rule 缺收盘确认语义："
                            f"『{str(r['confirm_rule'])[:40]}』——引擎 trade_sheet.rows 字段缺确认词"
                            "（确认词表：收盘/触及/站上/跌破/收回/触发后），报告侧不可修（禁改报告，"
                            "停笔上报引擎；修向：build_trade_sheet_view confirm_rule 合并确认语义）")
-        if r["side"] == "买" and "入场带" in str(r.get("type", "")) and not r.get("conditional_winrate"):
+        if not _is_ref and r["side"] == "买" and "入场带" in str(r.get("type", "")) and not r.get("conditional_winrate"):
             _src_cw = ((_snapshot_get(data, _B_STE + ".direction_forecast") or {}).get("conditional_winrate"))
             if _src_cw:
                 reasons.append(f"买行{idx}（入场带）缺 conditional_winrate 标注——引擎值在档，"

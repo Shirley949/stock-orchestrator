@@ -1,3 +1,19 @@
+## 2026-10-08 归档目录名加运行日期段（用户裁定）
+- **SKILL.md Phase 4 归档布局**：`analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>/`——日期段=运行日，置于代码前（尾 6 位=代码的 token_audit/diff_engine 合同不破）；同股多日运行各自成目录天然不互覆；无日期旧目录原地保留兼容。300408 归档已按新名落地（mv 保 mtime）。报告 H1 模板不变（{票名}({code}) 交易计划）。
+
+## 2026-10-07 G73 参考行合同归位（DSNH/DSNL price=None 误伤根修）+ 300408 报告重验重发
+- **gate_definitions check_g73**：六列循环遍历的是快照引擎行（非报告文本），DSNH/DSNL 参考行（report_views 刻意 price=None 非机械执行）被机械行合同误伤 → 凡触发 DSNH 的 modeB 票恒 1 软 FAIL（出生三日未暴露：fixture 池无 DSNH 触发态 + weight2<阈值2 永不红）。修法=合同归位：参考行（row_class=reference）豁免价位/确认词/买行cw 三臂，side/type/confirm_rule/action/invalidation 五列完备仍执法；G73 desc/GATE_HINTS 同步。
+- **regression-tests**：+test_g73_reference_rows（6 案两极：参考行 PASS／机械行缺价仍 FAIL／参考行缺失效仍 FAIL／机械行缺确认词仍 [数据层]／引擎接线正反例——含浅拷贝夹具自噬反例）并注册 run_regression。
+- **trap_ledger**：G73#dsnh_row:price_none_soft_fail → landed（engine_pending 7→6）。
+- **300408 报告**：分析局限性标注（写作侧规避条款）同批删除，重验后重发腾讯文档（宪法② landed 批删除）。
+- **验收**：run_regression exit 0（67 门漏报=0）；test_g73_reference_rows 6/6。
+
+## 2026-10-07 模式B 仓位输入腿代码化（prompt→CLI 静默降级根修）
+- **generate_checklist**：+`extract_position`（正则检出用户原文的 仓位N@M / N股@M / N股+成本价 / 成本(价)/买入价 组合，两极 8 例夹具过）；模式B 命令块按检出态直出具体 `--position "shares=N,cost=M"`，未检出态出显性提示行（缺输入=报告走空仓视角，此前为无任何文档指引的静默降级面——300408 会话实测 grep 引擎 argv 才发现 flag）。
+- **routing SKILL.md**：模式B 命令示例补 `--position` 语法行；**b-trade-sheet §7**：补持仓输入链一行（原文→清单→runner→user_position overlay→§1 渲染）。
+- **边界**：overlay 仍 weight=personal_overlay 不进状态机，L0 冻结面零改动，黄金闸门不涉；CLAUDE.md/memory 不落（命令块=单一真相源，防第三份手抄）。
+- **验收**：extract_position 两极 8/8；清单端到端正/反例命令块形态各验一次；run_regression exit 0（67 门漏报=0，engine_pending=6 为存量）。
+
 ## 2026-10-07 雪球同构批读取面 + staleness 假期假阳性修复
 - **snapshot_view**：+webfindings 直读视图（scene 根活读，xqvoice 同款）+ _webfindings_events 事件分级活算（唯一实现地自 routing 物化层迁入）+ _print_trade_sheet 双参 (view, snap)（物化副本 stale 必被忽略）+ exec_shell 直读视图（raw 子树）+ _print_exec_shell。
 - **quality_checks/data_snapshot**：短阈值类 staleness 5/5/7→10/10/10（A 股最长闭市 8 自然日+2 边际；国庆 002222 实证 6>5 假阳性）；compute_staleness/_check_staleness 加可选 now 注入（向后兼容）。macro=60/financial=180/龙虎榜=10000 与 should_reject_cache 不动。
