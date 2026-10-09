@@ -703,3 +703,23 @@ entries:
   status: landed
   root_cause: engine
   fix: '（300408 实锤，同日 landed）根因=G73 六列循环遍历快照引擎行，DSNH/DSNL 参考行（report_views 刻意 price=None 非机械执行）被机械行合同误伤，且 fixture 池无 DSNH 触发态+软权重永不红故出生三日未暴露。修法=合同归位：引擎参考行加显式 row_class=reference（优于 type 文本猜测），G73 参考行豁免价位/确认词/买行cw 三臂、五列完备仍执法；执法者=test_g73_reference_rows 两极 6 案+run_regression 注册。报告侧「分析局限性标注」规避条款同批删除（300408 报告已重验重发）。'
+- signature: engine#exec_shell_view:user_position_render_gap
+  gate: meta
+  subcheck: exec_shell.user_position
+  reason_class: view_renderer_schema_lag
+  match: report_views
+  count: 3
+  last_seen: '2026-10-08'
+  status: landed
+  root_cause: engine
+  fix: '（300502 实锤，视图层落后快照 schema 演化族第 3 例）v3.3+T11 批 execution_shell 子树加 user_position（execution_shell.py:522）+ b-trade-sheet §1/§7 写明「你的持仓」行消费合同，唯 _print_exec_shell 漏同步渲染行 → 视图缺口，写作侧被迫 --raw 绕过；持仓行无 gate 执法（personal overlay 不进状态机，G74 只管 PFD/今日动作），漏渲染=报告静默缺失。同族前例：webfindings_stale/webfindings_key_contract（均 2026-10-06 landed）。修法：_print_exec_shell 补 user_position 渲染行（三态：有仓 5 字段/空仓 watch.spec_band/无键兜底行）。执法：test_exec_shell_view_user_position 5 案两极（有仓全字段/空仓 WAIT+spec_band/无键不崩/invalid 不崩/视图注册）+ run_regression 注册。'
+- signature: G65#winrate:dual_source_draft_vs_gate
+  gate: G65
+  subcheck: winrate
+  reason_class: dual_source_draft_vs_gate
+  match: 胜率对拍不一致
+  count: 3
+  last_seen: '2026-10-09'
+  status: inflight
+  root_cause: engine
+  fix: '（600378 首证；605376 二证同日 2026-10-08，晋级 inflight；2026-10-09 605376 盘中批三证）head_draft_v3 渲染 conditional_winrate 0.568(n=185)（规则条件胜率口径），G65 真值源读 sample_win_rate=0.71（方向概率口径）——两统计量并存且不等时，照抄 hint 修法（bull 形态照抄头行）仍恒软 FAIL；写作侧按引擎软过路径走「分析局限性」标注+方向概率锚行双披露（快照两字段均实证：direction_forecast.probability/win_rate_ref/sample_win_rate=0.71 vs conditional_winrate.win_rate=0.568）。修向=引擎统一 draft 与 gate 胜率口径（draft 双值并列或 gate 兼容 conditional 口径）。三证补充：写作侧已验证更优形态=头行置信括注内联双披露「置信：高（恐慌超跌规则，规则回测胜率 0.71）」——报告首个「胜率 N」匹配=sample_win_rate 过 gate 臂、条件胜率 0.568 照旧披露，全过零软过，引擎修复后此括注形态同批退役。买行 cw 括注 as_of 照抄 conditional_winrate.as_of（2026-10-03，非快照日）。'

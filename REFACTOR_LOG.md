@@ -1,3 +1,28 @@
+## 2026-10-09 Phase 6 批：多票合集报告链（run_batch_B + b_portfolio_sheet + token_audit --label）
+- **新增 ① `scripts/run_batch_B.sh`**：12 票批跑固化（/tmp/batch_runner_B.sh 实战两轮原型）——`--label`（必填 ≤16 字符禁空白）/`--codes` 子集 6 位校验/`--dry-run`/`--stop-on-fail`；NAME 中文名映射启用 runner RCA-1 `--expected-name` 守卫（名不符 exit 2 硬失败该票防错标快照混入合集）；快照后检 json+三键（execution_shell/t0_check/realtime_quote，rc=0 半吊子仍记 FAIL）；manifest.tsv（④ 的输入契约）+ batch_checklist.md（机器数据面+人工报告面 5 项）；RUNROOT=`/tmp/run_batch_B_{label}_{date}` 避开 c2 glob；退出码 0/1/2/3。
+- **新增 ② `scripts/b_portfolio_sheet.py`**：合集渲染件，纯照抄零引擎调用——表1 综合判断六列（现价/今日/主力净额/方向/今日动作）/表2 决策档（t0 rows hit==True 全集重算，kind→确认映射）/表3 持仓纪律（持续态 SELL_ALL/SELL_PARTIAL + HOLD 触及后收回）/账本总持仓（trades 今日变动四词状态机；盘中缺键不降级，盘后缺键 exit 3）；`cell()` 全格溯源 + selfcheck 二次独立重读对拍（不等→exit 2 零写出）；title=`{m}-{d}{相位}{K}票合集` ≤33 硬断言；`BP_SNAPSHOT_DIR` 环境钩子供测试隔离。
+- **③ `token_audit.py` --label 五处**：argparse/R8 闸零改（label 模式无 --stock 天然放行，同传照常执法）/stock 归因 label 优先于自提码（防混拉批次错标第一票）/history 加 label 键/输出落 `token_audits/label-{label}-*.md` 不进单票目录/自提码行加「未采用」注。
+- **snapshot_view printer**：exec_shell 视图加「逐笔（近3）」+「v3.1 适用性」渲染行（主方案行后；旧快照无键零输出零崩溃）。
+- **执法面**：test_token_audit_label.py（6 用例含 R8 护栏不松动正例）/test_b_portfolio_sheet.py（16 用例空态全覆盖）/test_exec_shell_view_trades.py——三条挂 run_regression.sh 注册。
+- **验收**：V1 零漂移闸 `--label preview --date 20261009` vs 预览全文 diff==0（108 cells 全对 exit 0）；全量回归 exit 0 全绿。
+- **含遗留**：10-08 盘中增强批（t0_check/user_position 测试与注册、day_cache_lifecycle、仓位输入腿 generate_checklist 等）按本仓括注惯例同提。
+
+## 2026-10-08 数据生命周期：as-of 不落盘 + 日分片 save 尾自清（9.2G→118M 根治堆积）
+- **根因**：`runner.py:8932` `ds.save()` 对 as-of 回放也无条件落盘 + `data_snapshot.py` __init__ as-of 时 `_today`=as-of 日期 → 每个回放日期一个永久分片（92%=7 票×~490 交易日回填；单片 ~3MB，大头=entries.data_full 内嵌全史上证日K 8736 行未截断）。根层分片唯一读者=同 (code,date) 重跑暖启动（`_load_disk_cache` 只读自身文件，mode 不是 key），隔日零读者；唯一批量清理是人工 cleanup_stale_cache.sh → 堆积至 3723 片/9.2G（df 占比 81%）。
+- **data_snapshot.py**：①`__init__` 存 `self._as_of` 标记；②`save()` 顶部 getattr 守卫（`_FrozenDS` 子类绕 `__init__` 无属性）——as-of 打 stderr 提示后直接 return（不写不扫，保持只读语义）；③save 尾 `_sweep_stale_root()`：仅删形态确证 `\d{6}(?:\.[A-Z]{2})?_\d{8}` 且非今日（now() 基准，自身豁免防跨午夜自删）的根层 *.json；full/ 与 modeb_ledger/ 子目录豁免；非形态散件永不自动删；异常包死仅 warning。
+- **cleanup_stale_cache.sh**：增 /tmp as-of 工件段（真实命名 `runner_*_asof{date}`，>24h 才删，含 .log stderr 件）。
+- **测试注册**：+test_day_cache_lifecycle.py（4 案两极：live 落盘+自清+他票今日保留+子目录豁免+散件白名单+异常容忍；as-of 零落盘+不清扫+stderr）入 run_regression.sh。
+- **删除四级验证留痕**：⑤-1 干跑盘点（3723=3720 形态+3 散件+7 今日，将删 3713）→ ⑤-2 金丝雀单票 000657 490 片（回归绿+full/11 档无损+snapshot_view 可读）→ ⑤-3 散件 3 个显式删（逐个查验 stock_code="A"/entries=0=测试污染，即 datasnapshot-save 陷阱实证）→ ⑤-4 官方脚本全量（3223 片）+复验（full/191、ledger/10 分毫无损；对账 490+3223+3=3716 删，3723-3716=7 留）。
+- **验收实测**：skill-snapshots 9.2G→118M；df 31G→22G used（81%→57%，余 17G）；/tmp asof 工件 16 件清零；全量回归绿×3（改后/金丝雀后/全删后）。
+- **语义披露**：as-of 同日期重跑从「暖缓存逐字节复现」改为按当前 qfq 复权基准重新实拉（前复权历史随分红除权被数据源追溯改写，数值可能微漂）；任一新 as-of 日期本就全史实拉+切片，与现状一致。无备份删除（余量不足 11G），缓解=零读者证据链+金丝雀分阶段+三级回归复验。
+- **不做**：runner.py 零改动（守卫在 save() 内部）；缓存不挪 /tmp（同分区不省空间）；HISTORY_APIS 不加指数日K截断（fetch 期截断影响 regime 计算面）；full/、modeb_ledger/、~/analysis_report 三件套不删。
+
+## 2026-10-08 exec_shell 视图补 user_position 渲染行（视图层落后快照 schema 族第 3 例根修）
+- **snapshot_view `_print_exec_shell`**：补「你的持仓（personal overlay）」渲染行——三态全覆盖：有仓（position/action/reason/ladder/atr_stop 5 字段）＋空仓态（execution_shell.py 无 --position 形状：position=空仓（未提供持仓）+watch.spec_band）＋无键旧快照兜底行。此前 v3.3+T11 批生产端（execution_shell.py:522）与消费合同端（b-trade-sheet §1/§7）同批落、读取面漏同步 → 写作侧被迫 --raw 绕过且持仓行无 gate 执法（漏渲染=报告静默缺失，300502 实锤）。
+- **regression-tests**：+test_exec_shell_view_user_position（5 案两极：有仓全字段/空仓 WAIT+spec_band/无键不崩/invalid 不崩/视图注册）并注册 run_regression。
+- **trap_ledger**：engine#exec_shell_view:user_position_render_gap → landed（同族前例 webfindings_stale/webfindings_key_contract 均 10-06 landed；族根源=视图渲染完整性无测试守卫+漏渲染静默）。
+- **验收**：两极手验 3 态各 1 次（真快照有仓/构造空仓/构造无键）；run_regression exit 0（67 门漏报=0）。
+
 ## 2026-10-08 归档目录名加运行日期段（用户裁定）
 - **SKILL.md Phase 4 归档布局**：`analysis_report-<模型>-<股票名>-mode<A|B>-<YYYYMMDD>-<代码>/`——日期段=运行日，置于代码前（尾 6 位=代码的 token_audit/diff_engine 合同不破）；同股多日运行各自成目录天然不互覆；无日期旧目录原地保留兼容。300408 归档已按新名落地（mv 保 mtime）。报告 H1 模板不变（{票名}({code}) 交易计划）。
 
@@ -960,3 +985,8 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 ## 2026-09-20 v4.5 收口：全量 65 门遍历测试固化（@6fb0d28）
 - test_reason_quality_all_gates.py 入契约层：策略矩阵（empty/minimal/stripped/corrupted/real + corpus 三票空报告面）逐门触发，断言 FAIL 输出「值+动作」双达标；未触发门逐门登记豁免依据（57 门登记：mode-B 4/条件真空 6/数据健康 9/本票达标态 38），EXEMPT 禁静默膨胀（assertIn 强制）。
 - 方法论：静态 AST 字面量审计有盲区（diag 三键/f-string 动态构造），动态遍历为准；数据健康门 FAIL 面=snapshot 损坏（归 fixture 体系），报告变体打不中属职责边界非偷懒。
+
+## 2026-10-09 snapshot_view exec_shell 视图 PFD 行措辞对齐（警戒线→出场规则阈值）
+- 改：`_print_exec_shell` PFD 行 `（as-of …；警戒线 {th}；状态 …）` → `（as-of …；出场规则阈值 {th}，仅对止盈后剩余仓生效；数据状态 …）`。
+- 为什么：status=数据在位性非告警态，th=T11 剩余仓出场规则阈值——视图是 b-trade-sheet §执行壳 的照抄源，两层措辞必须同步（详细语义见 stock-analysis-quality REFACTOR_LOG 同日条目）。
+- 影响面：G74 对拍面零变化（首冒号后数值位置不变）；test_exec_shell_view_user_position / test_execution_shell_golden 均不钉该行文本（已核实）；None 键路径 `_fmt` 兜底形态不变。

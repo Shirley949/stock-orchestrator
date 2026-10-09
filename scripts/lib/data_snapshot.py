@@ -18,6 +18,7 @@ financial-data-routing/runner.py 统一使用本库。
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -170,6 +171,7 @@ class DataSnapshot:
 
     def __init__(self, stock_code: str, as_of: str = None):
         self.stock_code = stock_code
+        self._as_of = bool(as_of)   # as-of 回放标记：save() 据此跳过日分片落盘
         # as_of（盲测回测用）：归一 YYYY-MM-DD → YYYYMMDD。生效点一石三鸟——
         # 缓存文件名分片隔离(:_cache_path) + save date + staleness 基准(summary)。
         # None=今天（A/live B 不传不受扰）。
@@ -277,6 +279,11 @@ class DataSnapshot:
 
     def save(self):
         """持久化缓存到磁盘（临界区：json.dump 迭代活跃 dict 时并发 mutate 会撕裂）"""
+        # getattr 守卫：_FrozenDS 等子类绕开 __init__，无 _as_of 属性
+        if getattr(self, "_as_of", False):
+            print(f"[cache] as-of 回放跳过日分片落盘（{self.stock_code}_{self._today}）",
+                  file=sys.stderr, flush=True)
+            return
         with self._lock:
             payload = {
                 "stock_code": self.stock_code,
@@ -291,6 +298,31 @@ class DataSnapshot:
                     json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
             except OSError as e:
                 self._warnings.append(f"[cache] 写入磁盘缓存失败: {e}")
+        try:
+            self._sweep_stale_root()
+        except Exception as e:
+            self._warnings.append(f"[cache] 清扫旧分片失败: {e}")
+
+    # 形态确证：仅 {code}_{YYYYMMDD}.json 日分片可自清（600584.SH 变体兼容；A_*.json 类散件不删）
+    _SHARD_NAME = re.compile(r"\d{6}(?:\.[A-Z]{2})?_\d{8}")
+
+    def _sweep_stale_root(self):
+        """清扫根目录非当日日分片（仅删形态确证且非今日者；不递归——
+        full/ 与 modeb_ledger/ 豁免；非形态散件永不自动删，留人工脚本处置）。"""
+        keep = f"_{datetime.now().strftime('%Y%m%d')}.json"   # now() 非 self._today（跨午夜防误留）
+        removed = 0
+        for f in self._cache_dir.glob("*.json"):
+            if f == self._cache_path or f.name.endswith(keep):
+                continue   # 自身豁免（防跨午夜自删刚写出的文件）
+            if not self._SHARD_NAME.fullmatch(f.stem):
+                continue
+            try:
+                f.unlink(missing_ok=True)
+                removed += 1
+            except OSError:
+                pass
+        if removed:
+            print(f"[cache] 自清非当日日分片 {removed} 个", file=sys.stderr, flush=True)
 
     # --------------------------------------------------------
     # 核心接口: fetch_or_cache

@@ -16,7 +16,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent.parent / "financial-data-routing"))
 
-from report_views import build_market_context_report_view          # noqa: E402
+from report_views import build_market_context_report_view, build_t0_check_view  # noqa: E402
 from short_term_engine import _build_report_view                   # noqa: E402
 
 SV = str(_HERE.parent / "scripts" / "snapshot_view.py")
@@ -55,6 +55,18 @@ class TestBuilderEnvelopeHead(unittest.TestCase):
         self.assertEqual(v["sh_close"], 3888.11)
         self.assertEqual(v["cyb_ret5"], 0.01)
         self.assertEqual(v["board"]["status"], "degraded")
+
+    def test_t0_check_head_all_branches(self):
+        """t0_check 三态信封头：缺 rq → degraded；rq 同日 → hidden；均带 {view,status} 头。"""
+        v = build_t0_check_view({"s2_quote_kline": {"data": {"realtime_quote": {}}}})
+        self.assertEqual(v["view"], "t0_check")
+        self.assertEqual(v["status"], "degraded")
+        v2 = build_t0_check_view({"s2_quote_kline": {"data": {
+            "realtime_quote": {"status": "ok", "date": "2026-09-30", "time": "16:00:00",
+                               "current": 10.0},
+            "daily_kline": {"data": [{"date": "2026-09-30", "close": 10.0}]}}}})
+        self.assertEqual(v2["view"], "t0_check")
+        self.assertEqual(v2["status"], "hidden")
 
 
 class TestListConsumesHead(unittest.TestCase):

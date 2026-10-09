@@ -260,6 +260,7 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json fund_flow     # B：资金�
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：状态头 4 行 + head_draft_md 预渲染（b-trade-sheet 照抄源）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json trade_sheet  # B：交易指令单 rows 六列 + kelly/state_tuple/event_calendar
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell   # B：v3.3+T11 执行壳交易决策（仓位/今日动作/出场栈/PFD）+ v3.1 辅助参考（权重=0）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json t0_check     # B：T-1 决策×当日实况对账（盘中 ok 渲染/hidden 省略/degraded 披露；操作指引唯一来源 rows[].guide）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqvoice       # 站内声量六/七维 + module_map（Phase 1.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqcheck       # 站内结论求证 verdicts/objections（Phase 4.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json webfindings   # B：websearch 策展清单直读（topic/entry_id/url/value，写回后当场新鲜）
@@ -302,7 +303,7 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --raw s1_financial.data.bal
    ```
    示例：`~/analysis_report/analysis_report-glm5.3flash-三环集团-modeB-20261007-300408/analysis_report-glm5.3flash-三环集团-modeB-20261007-300408.md`（日期段=运行日 YYYYMMDD；无日期旧目录如 `analysis_report-glm5.1-源杰科技-modeA-688498/` 原地保留兼容）
    > `<模型>` = 当前会话模型简称；**模式段 `mode<A|B>` 置于股票名后；日期段（如有）置于代码前——目录名尾 6 位必须仍是代码**（token_audit `endswith("-{code}")` 与 diff_engine 正则的既有合同，勿破坏）。
-   > **覆盖规则（用户裁定 2026-09-09）：只有同模式才可覆盖**——模式B 只写自己的 `modeB` 目录，模式A 目录（含无 mode 段的旧目录，原地保留不再改名）永不触碰；带日期段后同股多日运行各自成目录天然不互覆。runner 数据存档 `~/.cache/skill-snapshots/full/` 本就按日并集合并（A∪B），无需处理。
+   > **覆盖规则（用户裁定 2026-09-09）：只有同模式才可覆盖**——模式B 只写自己的 `modeB` 目录，模式A 目录（含无 mode 段的旧目录，原地保留不再改名）永不触碰；带日期段后同股多日运行各自成目录天然不互覆。runner 数据存档 `~/.cache/skill-snapshots/full/` 本就按日并集合并（A∪B），无需处理。根目录日分片 `{code}_{YYYYMMDD}.json` 仅当日有效（每次 save 尾自清非当日形态片；as-of 运行不落盘）；`full/` 与 `modeb_ledger/` 永久。
 3. **如果 `sys.exit(1)`**（`verdict==FAIL`）→ 报告不能输出，必须按脚本提示补全失败的 Gate 后重跑。
    **FAIL 修法直接看 verify 输出**：action_required 自带 `💡 Gxx 修法` hint（GATE_HINTS，高频 gate
    败因+修法速查）。hint 不足再 Read `stock-analysis-quality/references/modules/m11-gates.md` 对应节；

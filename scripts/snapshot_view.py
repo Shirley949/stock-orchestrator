@@ -54,6 +54,8 @@ VIEW_PATHS = {
     # 模式B核心结论头块（2026-08-31）：跨 scene 聚合 + head_draft_md 整块预渲染（m38/G71）
     "b_head":        ("s4_technical", "data", "b_head"),
     "trade_sheet":   ("s4_technical", "data", "trade_sheet"),
+    # T-1 决策×当日实况对账（2026-10-08 盘中增强批）：ok/hidden/degraded 三态
+    "t0_check":      ("s4_technical", "data", "t0_check"),
     "valuation": ("valuation_snapshot", "data", "report_view"),
     "consensus": ("consensus_forecast", "data", "report_view"),
     "peer":      ("s11_peer", "data", "report_view"),
@@ -507,12 +509,35 @@ def _print_exec_shell(v):
         print("  出场栈活跃档 / 挂单：无挂单")
     pfd = v.get('pfd') or {}
     print(f"  PFD（5 日主力净流占比）：{_fmt(pfd.get('ratio_5d'))}（as-of {_fmt(pfd.get('as_of_date'))}；"
-          f"警戒线 {_fmt(pfd.get('th'))}；状态 {_fmt(pfd.get('status'))}）")
+          f"出场规则阈值 {_fmt(pfd.get('th'))}，仅对止盈后剩余仓生效；数据状态 {_fmt(pfd.get('status'))}）")
+    up = v.get('user_position') or {}
+    if up:
+        print(f"  你的持仓（personal overlay，不进状态机）：{_fmt(up.get('position'))} ｜ "
+              f"动作 {_fmt(up.get('action'))} ｜ {_fmt(up.get('reason'))}")
+        ladder, atr = up.get('ladder'), up.get('atr_stop')
+        if ladder is not None or atr is not None:
+            print(f"    你的梯子 {_fmt(ladder)} / ATR止损 {_fmt(atr)}")
+        watch = up.get('watch') or {}
+        spec = up.get('watch_spec') if up.get('watch_spec') is not None else watch.get('spec_band')
+        if spec:
+            print(f"    等待触发位（buy_spec）：{spec}")
+    else:
+        print("  你的持仓：未提供仓位（空仓视角，无 watch 带）")
     cmp_ = v.get('comparison') or {}
     v33 = cmp_.get('v33_t11') or {}
     if v33:
         print(f"  主方案 v3.3+T11：净盈亏 {_fmt(v33.get('net_pnl'))}"
               f"（{_fmt(v33.get('trades_n'))} 笔，期末 {_fmt(v33.get('end_position'))}）")
+    trd = ((v.get('results') or {}).get('v33_t11') or {}).get('trades')
+    for t in (trd or [])[-3:]:
+        print(f"    逐笔（近3） [{_fmt(t.get('action'))}] {_fmt(t.get('date'))} "
+              f"{_fmt(t.get('price'))} × {_fmt(t.get('shares'))}股 ｜ {_fmt(t.get('reason'))}")
+    decl = v.get('v31_declaration') or {}
+    if decl.get('declaration'):
+        th = decl.get('th_ep_dd')
+        print(f"  v3.1 适用性：{decl.get('tag')} ｜ {decl['declaration']}"
+              + (f"（判据：episode 回撤 ≤ {th}% 或 base_mult ≥ {decl.get('th_base_mult')} → 不适用）"
+                 if th is not None else ""))
     v31 = cmp_.get('v31_ref') or {}
     if v31:
         print(f"  v3.1 辅助参考（权重=0，禁据此切换核心状态机）：净盈亏 {_fmt(v31.get('net_pnl'))}"
@@ -522,6 +547,42 @@ def _print_exec_shell(v):
     cp = v.get('context_panel') or {}
     print(f"  L2 上下文面板（权重=0，不进状态机）：news_n={_fmt(cp.get('news_n'))} "
           f"announcements_n={_fmt(cp.get('announcements_n'))} xq_voice_n={_fmt(cp.get('xq_voice_n'))}")
+
+
+def _print_t0_check(v):
+    """T-1 决策×当日实况对账视图（盘中增强批 2026-10-08；b-trade-sheet 第六块照抄源）。"""
+    st = v.get("status")
+    print(f"## T-1×当日对账 status={_fmt(st)} 决策基准 {_fmt((v.get('decision_base') or {}).get('date'))}"
+          f"（方向 {_fmt((v.get('decision_base') or {}).get('direction'))}）"
+          f"｜ 实况截至 {v.get('as_of_date', '—')} {v.get('as_of_time', '—')}")
+    if st == "hidden":
+        print("  决策基准已含当日（盘后当日跑/as-of）→ 模板整块省略")
+        return
+    if st in ("degraded", "failed"):
+        print(f"  降级：{_fmt(v.get('degraded_reason') or v.get('error'))} → 当日实况对账不可用，"
+              "报告写一行披露，裁决仍以点位表为准")
+        return
+    print(f"  相位 {_fmt((v.get('session') or {}).get('phase'))} ｜ 最后成交日 "
+          f"{_fmt((v.get('session') or {}).get('last_trade_date'))}")
+    if v.get("headline"):
+        print(f"  ⚡ 速览：{v['headline']}")
+    for r in v.get("rows") or []:
+        t = r.get("today") or {}
+        ht = f"（{t.get('hit_time')}）" if t.get("hit_time") else ""
+        print(f"  [{r.get('kind')}] {r.get('item')} @ {_fmt(r.get('price'))} → "
+              f"{_fmt(r.get('verdict'))}（今{'高' if r.get('kind') in ('reduce_band', 'pullback_watch') else '低'} "
+              f"{_fmt(t.get('extreme'))}{ht}，距 {_fmt(r.get('dist_pct'))}%）｜ {r.get('guide')}")
+    rc = v.get("range_check")
+    if rc:
+        pos = "在区间内" if rc.get("in_range") else "出区间"
+        print(f"  T-1 波动区间 {_fmt(rc.get('er_low'))}~{_fmt(rc.get('er_high'))}："
+              f"现价 {_fmt(rc.get('current'))} {pos}（拉取时点）")
+    ctx = v.get("context") or {}
+    if ctx:
+        print(f"  当日语境（辅助不决策）：量比 {_fmt(ctx.get('volume_ratio'))} ｜ "
+              f"换手 {_fmt(ctx.get('turnover_pct'))}% ｜ 当日主力净额 {_fmt(ctx.get('main_net_today'))} 亿"
+              f"（{_fmt(ctx.get('main_net_note'))}）｜ 大盘 {_fmt(ctx.get('market_regime'))}")
+    print(f"  纪律：{_fmt(v.get('l2_discipline'))}")
 
 
 def _print_b_head(v):
@@ -634,6 +695,7 @@ PRINTERS = {
     "xqvoice": _print_xqvoice, "xqcheck": _print_xqcheck,
     "webfindings": _print_webfindings,
     "exec_shell": _print_exec_shell,
+    "t0_check": _print_t0_check,
 }
 
 

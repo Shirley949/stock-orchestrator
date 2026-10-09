@@ -215,7 +215,7 @@ PHASE_STEPS = {
             {"id": "c50b", "desc": "视图认知重建：snapshot_view --list（合法视图以 --list 输出为准——❌未挂载视图勿引用；凭记忆写视图名/写非法视图名 exit 2 是 fumble 主源，命令见下方 Runner 调用命令块）"},
         ],
         "phase_3": [
-            {"id": "c59", "desc": "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）"},
+            {"id": "c59", "desc": "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）+ t0_check 对账块（snapshot_view t0_check 照抄，status=ok 才渲染、hidden 省略、degraded 一行披露）"},
             {"id": "c60", "desc": "策略段（≤5 行：主推荐/触发位/失效复述/事件行[权威度分级]+数据降级 1 行；禁概率词/期望股价）"},
             {"id": "c61", "desc": "站内声量 T1-B（可选增强：xqvoice status=ok 才消费一行；默认跳过，m39 R1-R6 引文纪律仍然适用）"},
         ],

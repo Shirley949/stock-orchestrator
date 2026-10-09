@@ -53,6 +53,10 @@ echo "[① 契约层] test_g28_dupont.py（G28 纯快照完整性两极+东财 f
 python3 "$HERE/test_g28_dupont.py" 2>&1 | tail -3
 echo "[① 契约层] test_report_views_kline.py（kline 视图内存态类型回归+except 加法式保 raw）"
 python3 "$ROUTING/test_report_views_kline.py" 2>&1 | tail -3
+echo "[① 契约层] test_t0_check.py（T-1×当日对账视图：盘中/盘后/停牌/未开盘/穿带/次新两极+bull 阶梯语义+attach 注册）"
+python3 "$ROUTING/test_t0_check.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_user_position_price_source.py（user_position 现价源三守卫：rq 优先/kline 兜底/停牌显式/盘中尾注）"
+python3 "$ROUTING/test_user_position_price_source.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_view_envelope_contract.py（视图信封合同：挂载视图终端必带{view,status}头+--list 挂载列零 None 两极）"
 python3 "$HERE/test_view_envelope_contract.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_lixinger_client.py（S8 lixinger_client：EV/EBITDA 快照+分位箱 gzip 路径+三态短路 冻结响应 golden）"
@@ -111,6 +115,12 @@ echo "[① 契约层] test_c2_inject.py（批4.4 C2注入器：A/B路由主信�
 python3 "$HERE/test_c2_inject.py" 2>&1 | tail -3
 echo "[① 契约层] test_token_audit.py（表计 v2 语义自检：去重/result-only/挂载前缀分层/写回目标同一/排除正交）"
 python3 "$HERE/test_token_audit.py" 2>&1 | tail -3
+echo "[① 契约层] test_token_audit_label.py（--label 批次审计：命名/落点/history label 键/R8 不松动/并存优先级）"
+python3 "$HERE/test_token_audit_label.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_exec_shell_view_trades.py（trades/v31_fit 导出面+printer 渲染两极+DIR_ZH 提升）"
+python3 "$HERE/test_exec_shell_view_trades.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_b_portfolio_sheet.py（合集渲染：title/三块/NONE 语义/触发表两态/账本四词/selfcheck/降级）"
+python3 "$HERE/test_b_portfolio_sheet.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_snapshot_view_field.py（--field 外科投影六语义+footer/截断指针+炸弹双帽）"
 python3 "$HERE/test_snapshot_view_field.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-run FAIL+fallback emit 四态+capstone 富字段+m6/m1 锚点）"
@@ -151,6 +161,8 @@ echo "[① 契约层] test_event_fetch.py（事件层 timeline：dedup 三元组
 python3 "$HERE/test_event_fetch.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_full_archive.py（模式B full/ 存档：全量性+同日复用+A∪B合并+cleanup白名单+90天旧档识别）"
 python3 "$HERE/test_full_archive.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_day_cache_lifecycle.py（日分片生命周期：live save 落盘+自清非当日形态片/as-of 零落盘/子目录豁免/散件白名单 两极）"
+python3 "$HERE/test_day_cache_lifecycle.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_s10_checklist_cached.py（收单三态语义两极：ok/cached→True，failed/缺失→False）"
 python3 "$HERE/test_s10_checklist_cached.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_market_context_order.py（market_context 排序契约两极：desc存储→最新消费+board键必挂载+统一信封）"

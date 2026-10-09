@@ -818,14 +818,14 @@ SCENES = {
             {"path": "data.tail_signal", "confidence": CONFIRMED,
              "note": "尾盘抢筹/砸盘/连阳/连阴/None（末3根方向+量能 vs 前10根均量）"},
             {"path": "data.tail_10_bars", "confidence": CONFIRMED,
-             "note": "末10根摘要 [{dt,c,v}]（快照体积纪律：240根raw不落盘）"},
+             "note": "末10根摘要 [{dt,h,l,c,v}]（快照体积纪律：240根raw不落盘；h/l 供 t0_check hit_time 定位）"},
             {"path": "data.report_view", "confidence": CONFIRMED,
              "note": "ma60_state/ma60/last_close/tail_signal/t1_window 投影"},
         ],
         "consumers": {
             "data.ma60_state":  ["short_term_engine", "m36-short-term", "m38-b-conclusion-head"],
             "data.tail_signal": ["m36-short-term", "m38-b-conclusion-head"],
-            "data.tail_10_bars": ["m36-short-term"],
+            "data.tail_10_bars": ["m36-short-term", "t0_check"],
             "data.report_view": ["m36-short-term", "m38-b-conclusion-head"],
         },
         "priority": P1,
@@ -1026,11 +1026,17 @@ SCENES = {
                      "（side/price/type/confirm_rule/action/invalidation）+ kelly/state_tuple/fund_sustain；"
                      "事件日历不物化（webfindings 写回期 scene，读取面活算 snapshot_view._webfindings_events）；"
                      "价位照抄 layers/stops，confirm_rule 含确认语义（G73 词表）"},
+            {"path": "data.t0_check", "confidence": CONFIRMED,
+             "note": "模式B T-1 决策×当日实况对账视图（report_views.build_t0_check_view，盘中增强批 "
+                     "2026-10-08）：rows 三态裁决（hit=当日 high/low 累计口径，attach 期单调不减）+ "
+                     "range_check/context 被动聚合；status ok/hidden/degraded 自洽，degraded 不进 "
+                     "_warnings；操作指引唯一来源 rows[].guide（语境/声音层不进状态机）"},
         ],
         "consumers": {
             "data.report_view":        ["m3-technical", "m6-decision"],
             "data.b_head":             ["b-trade-sheet", "G65", "G71", "G73"],
             "data.trade_sheet":        ["b-trade-sheet", "G63", "G68", "G71", "G73"],
+            "data.t0_check":           ["b-trade-sheet"],
             "data.short_term_enrich":  ["m36-short-term", "m6-decision", "G65", "G66", "G67", "G68", "m38-b-conclusion-head", "G71"],  # m36 周期状态表、m6 forecast block、G65-68+G71 消费对拍（m38 头块/G71 读 b_head 子树）
             "data.technical":          ["m3-technical", "m6-decision", "G1"],       # m3 §3.2/3.5 技术指标、m6 矩阵、G1 技术词消费
             "data.chip":               ["m3-technical", "m6-decision", "m7-risk", "G41", "m38-b-conclusion-head"],  # 筹码分布（chipAvgCost=成本压力位→m6/m7止损、chipProfitRate/集中度、G41 消费校验；m38 头块筹码槽经 b_head 换算消费）

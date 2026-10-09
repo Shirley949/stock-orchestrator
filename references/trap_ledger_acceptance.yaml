@@ -1,4 +1,4 @@
-seen_through: '2026-09-03'
+seen_through: '2026-10-07'
 signatures:
   G63#percentile_variant:bai_percentile_leak:
     probe: percentile
@@ -10,22 +10,22 @@ signatures:
     status: closed_pass
   G30#5:negation_context_v2:
     probe: negation
-    window_left: 1
+    window_left: 0
     threshold: 2
-    exposed: 0
+    exposed: 60
     recurred: 0
     extended: false
-    status: open
+    status: closed_pass
   G30#1:synonym_dingzeng:
     probe: dingzeng
-    window_left: 1
+    window_left: 0
     threshold: 1
-    exposed: 0
+    exposed: 245
     recurred: 0
     extended: false
-    status: open
+    status: closed_pass
 warn_upgrade:
-  zero_hit_windows: 1
+  zero_hit_windows: 2
   flipped: true
   rule: 一轮 cron（当窗全部 sidecar）bool_return_warn 零命中 → flipped=true，verify_gates 按硬断言执法（verdict
     中性：FAIL 恒 FAIL，只升 reason/action_required）

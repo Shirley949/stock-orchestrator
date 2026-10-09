@@ -52,6 +52,8 @@ VIEW_NAMES = ["kline", "cash_flow", "income", "mainfina", "news", "events", "hol
               "balance", "timeline", "technical", "valuation", "consensus", "peer", "annual",
               # 模式B视图（B 面归属经 IS_B_SESSION 重映射到 b-trade-sheet）
               "short_term", "market_context", "fund_flow", "b_head", "trade_sheet",
+              # T-1×当日对账（2026-10-08 盘中增强批）
+              "t0_check",
               # 雪球站内声量视图（2026-09-09 原型）
               "xqvoice", "xqcheck",
               # websearch 策展清单 + 执行壳（2026-10-06/07 雪球同构批 + v3.3+T11）
@@ -62,7 +64,7 @@ VIEW_TO_MODULE = {"kline": "m3", "cash_flow": "m2", "income": "m2", "mainfina": 
                   "balance": "m2", "timeline": "m4", "technical": "m3",
                   "valuation": "m5", "consensus": "m4", "peer": "m5", "annual": "m9",
                   "short_term": "m36", "market_context": "m36", "fund_flow": "m37",
-                  "b_head": "m38", "trade_sheet": "m37",
+                  "b_head": "m38", "trade_sheet": "m37", "t0_check": "b-trade-sheet",
                   "xqvoice": "m4", "xqcheck": "m6",
                   "webfindings": "m4", "exec_shell": "m37"}
 
@@ -237,6 +239,8 @@ def main():
     ap.add_argument("session", nargs="?", help="会话 JSONL 路径")
     ap.add_argument("--latest", action="store_true", help="取最新会话")
     ap.add_argument("--stock", default="", help="股票代码（仅用于标注/文件名）")
+    ap.add_argument("--label", default="",
+                    help="批次标签（混拉合集会话审计；R8 闸照常对 --stock 生效）")
     ap.add_argument("--mode", default="", choices=["", "A", "B"],
                     help="归档目录模式过滤（analysis_report-*-mode<A|B>-<code>）；空 = 不过滤（兼容旧目录）")
     ap.add_argument("-o", "--out", default="", help="输出 md 路径（默认 ~/analysis_report/token_audits/）")
@@ -553,7 +557,8 @@ def main():
     # v3（S4b）：模式B 的 B 面视图归属 b-trade-sheet（模块 token=basename[:3]，与 module_reads 同刻度）
     if IS_B_SESSION:
         for b in blocks:
-            if b.get("module") in ("m36", "m37", "m38") or b["cat"] in ("视图:b_head", "视图:trade_sheet"):
+            if b.get("module") in ("m36", "m37", "m38") or b["cat"] in (
+                    "视图:b_head", "视图:trade_sheet", "视图:t0_check"):
                 b["module"] = "b-t"
     by_phase = defaultdict(lambda: Counter())
     by_cat = defaultdict(Counter)   # phase -> cat -> cost
@@ -649,9 +654,10 @@ def main():
         gate_converged = first_pass is not None
         seq = fails_seq[:first_pass] if gate_converged else fails_seq
         gate_fix_rounds = sum(1 for f in seq if f > 0)
-    stock = args.stock or detected_code or "?"
+    stock = args.stock or args.label or detected_code or "?"   # label 优先于自提码（混拉批次多码不归因单票）
     hist_path = os.path.expanduser("~/.cache/token_audit_history.jsonl")
     hist_entry = dict(date=datetime.now().strftime("%Y-%m-%d %H:%M"), stock=stock,
+                      label=(args.label or None),   # 批次标签（None=单票/迁移前条目）
                       mode=("B" if IS_B_SESSION else "A"),   # 3.1：无默认值——旧条目读回 None=迁移前
                       cli=cli_chars, handwrite=hw_chars, total=total_pull,
                       coverage=round(view_cov_pct, 1), gate_fails=gate_fails,
@@ -684,21 +690,27 @@ def main():
         out_path = args.out
     else:
         base = os.path.expanduser("~/analysis_report")
-        stock_dir = None
-        if os.path.isdir(base):
-            for d in sorted(os.listdir(base)):
-                if not (d.startswith("analysis_report-") and d.endswith(f"-{stock}")):
-                    continue
-                if args.mode and f"-mode{args.mode}-" not in d:
-                    continue
-                stock_dir = os.path.join(base, d)
-                break
-        if stock_dir:
+        if args.label:
+            # 批次审计不落单票目录（混拉批次无单一归巢目录）
             out_path = os.path.join(
-                stock_dir, f"token_audit-{stock}-{datetime.now():%Y%m%d-%H%M}.md")
+                base, "token_audits",
+                f"label-{args.label}-{datetime.now():%Y%m%d-%H%M}.md")
         else:
-            out_path = os.path.join(
-                base, "token_audits", f"{stock}-{datetime.now():%Y%m%d-%H%M}.md")
+            stock_dir = None
+            if os.path.isdir(base):
+                for d in sorted(os.listdir(base)):
+                    if not (d.startswith("analysis_report-") and d.endswith(f"-{stock}")):
+                        continue
+                    if args.mode and f"-mode{args.mode}-" not in d:
+                        continue
+                    stock_dir = os.path.join(base, d)
+                    break
+            if stock_dir:
+                out_path = os.path.join(
+                    stock_dir, f"token_audit-{stock}-{datetime.now():%Y%m%d-%H%M}.md")
+            else:
+                out_path = os.path.join(
+                    base, "token_audits", f"{stock}-{datetime.now():%Y%m%d-%H%M}.md")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     L = []
@@ -713,7 +725,9 @@ def main():
                  "建议显式传路径")
     if detected_code:
         L.append(f"- 内容自提股票码：{detected_code}"
-                 + ("（与 --stock 一致 ✓）" if args.stock else "（--stock 未传，自动采用）"))
+                 + ("（与 --stock 一致 ✓）" if args.stock
+                    else ("（未采用：--label 混拉批次，多码不归因单票）" if args.label
+                          else "（--stock 未传，自动采用）")))
     L.append(f"- 真实口径（per-request usage 累计）："
              f"input **{tot_in:,}**（cache_read {tot_cache:,} / cache_write {tot_cc:,}）"
              f"+ output **{tot_out:,}**")

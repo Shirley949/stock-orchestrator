@@ -39,6 +39,12 @@ clean_dir "$CACHE/skill-snapshots"  "_${TODAY}.json"   "skill-snapshots"
 clean_dir "$CACHE/skill-probes"     "/${TODAY_DASH}.json" "skill-probes"
 clean_dir "$CACHE/westock_api_cache" "/${TODAY}.json"   "westock_api_cache"
 
+# /tmp as-of 回放工件（>24h 才删，防误删在用件；live mode 输出为固定名复用不在此列）
+# 真实命名 runner_snapshot_{code}_mode{X}_asof{date}.json（asof 后无下划线），stderr 件为 .log
+n_asof=$(find /tmp -maxdepth 1 \( -name 'runner_snapshot_*_asof*.json' -o -name 'runner_stderr_*_asof*.log' \) -mmin +1440 2>/dev/null | wc -l)
+find /tmp -maxdepth 1 \( -name 'runner_snapshot_*_asof*.json' -o -name 'runner_stderr_*_asof*.log' \) -mmin +1440 -delete 2>/dev/null
+echo "  /tmp asof 工件: 删 $n_asof 个（>24h）"
+
 # full/ 合并存档白名单（模式B v2 §2.5）：A/B 每次运行的全量数据存档，"不删"是用户硬指令。
 # 上方 clean_dir 的 "$dir"/*.json 只匹配顶层文件，full/ 子目录天然不中——此处显式声明 +
 # 清点留痕，防未来有人改成 find -delete / globstar 时误伤。

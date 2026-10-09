@@ -35,8 +35,8 @@ REP = Path("/home/ubuntu/analysis_report/analysis_report-glm5.3f-东材科技-mo
 SNAP = REP.with_name("runner_snapshot_601208_modeA.json")
 CLAUDE_MD = Path("/home/ubuntu/CLAUDE.md")
 
-B_PHASE3_FROZEN = [  # S4a v3（2026-10-04）：b-trade-sheet 单模板链 3 步（原 v2 五步链退役）
-    "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）",
+B_PHASE3_FROZEN = [  # S4a v3（2026-10-04）：b-trade-sheet 单模板链 3 步（原 v2 五步链退役）；2026-10-08 盘中增强批 c59 并入 t0_check 对账块
+    "b-trade-sheet 头块+点位表（模块 modules/b-trade-sheet.md；b_head v3 整块照抄 + trade_sheet.rows 六列渲染，数字禁改；G11 声明后置顶）+ t0_check 对账块（snapshot_view t0_check 照抄，status=ok 才渲染、hidden 省略、degraded 一行披露）",
     "策略段（≤5 行：主推荐/触发位/失效复述/事件行[权威度分级]+数据降级 1 行；禁概率词/期望股价）",
     "站内声量 T1-B（可选增强：xqvoice status=ok 才消费一行；默认跳过，m39 R1-R6 引文纪律仍然适用）",
 ]
