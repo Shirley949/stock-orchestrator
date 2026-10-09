@@ -723,3 +723,13 @@ entries:
   status: inflight
   root_cause: engine
   fix: '（600378 首证；605376 二证同日 2026-10-08，晋级 inflight；2026-10-09 605376 盘中批三证）head_draft_v3 渲染 conditional_winrate 0.568(n=185)（规则条件胜率口径），G65 真值源读 sample_win_rate=0.71（方向概率口径）——两统计量并存且不等时，照抄 hint 修法（bull 形态照抄头行）仍恒软 FAIL；写作侧按引擎软过路径走「分析局限性」标注+方向概率锚行双披露（快照两字段均实证：direction_forecast.probability/win_rate_ref/sample_win_rate=0.71 vs conditional_winrate.win_rate=0.568）。修向=引擎统一 draft 与 gate 胜率口径（draft 双值并列或 gate 兼容 conditional 口径）。三证补充：写作侧已验证更优形态=头行置信括注内联双披露「置信：高（恐慌超跌规则，规则回测胜率 0.71）」——报告首个「胜率 N」匹配=sample_win_rate 过 gate 臂、条件胜率 0.568 照旧披露，全过零软过，引擎修复后此括注形态同批退役。买行 cw 括注 as_of 照抄 conditional_winrate.as_of（2026-10-03，非快照日）。'
+- signature: engine#kline_cache:sameday_postclose_bar_miss
+  gate: N/A
+  subcheck: runner_cache
+  reason_class: sameday_cache_postclose_miss
+  match: daily_kline status=cached
+  count: 13
+  last_seen: '2026-10-09'
+  status: pending
+  root_cause: engine
+  fix: '（2026-10-09 21:31 盘后重拉 12 票全实证）data_snapshot KLINE 缓存 staleness 粒度=天（should_reject_cache 阈值 10 覆盖长假），当日盘中首拉的日K缓存（fetch_time=12:33，末日 T-1）到 21:31 盘后重拉仍命中（status=cached 实证）→ kline_max 恒=T-1 → 盘后定格形态（t0.status=hidden/kline_max=当日/回放含当日 bar/今日动作定格/当日逐笔进账本）在同日永不可达，违背 b-trade-sheet §7 今日动作口径「当日盘后跑（kline_max=当日）以全天数据定格成交」的文档化设计。直拉源实证 sina 当日 bar 21:27 已存在（非源延迟，纯缓存命中）。写作侧临时规避=盘后重拉前删根层当日分片 ~/.cache/skill-snapshots/{code}_{date}.json 再跑 runner（实证有效：删后 kline 末日=当日、hidden 12/12、博迁/昊华账本当日 BUY 定格成交）。引擎修向（另批裁决）：KLINE 类缓存加「data 末日 < rq.date 且 now>16:00 → 判 stale」细化臂，或 runner 盘后窗口对 kline scene 强制 bypass cache。执法面缺口：同日重跑取数行为无测试锚定（staleness 阈值测试只测隔日语义）。'
