@@ -74,15 +74,6 @@ if [[ $DRY_RUN -eq 1 ]]; then
   exit 0
 fi
 
-# 盘后窗口（≥16:00）清当日根层 K线缓存分片——KLINE 缓存陪跑全天会使盘后重拉仍命中
-# 盘中旧 K 线（kline_max 恒 T-1，盘后定格不可达；trap: engine#kline_cache:sameday_postclose_bar_miss）
-if [ "$(date +%H)" -ge 16 ]; then
-  for c in "${CODES[@]}"; do
-    rm -f "$HOME/.cache/skill-snapshots/${c}_${TODAY}.json"
-  done
-  echo "[precheck] 盘后窗口：已清 ${#CODES[@]} 票当日根层缓存分片（KLINE 缓存陪跑防御）"
-fi
-
 # ---- 主循环 ----
 printf "code\tname\trc\tsnap_ok\tfull_snapshot_path\tstderr_path\tduration_s\n" > "$MANIFEST"
 OK=0; FAIL=0

@@ -730,6 +730,7 @@ entries:
   match: daily_kline status=cached
   count: 13
   last_seen: '2026-10-09'
-  status: pending
+  status: landed
+  blocked: false
   root_cause: engine
-  fix: '（2026-10-09 21:31 盘后重拉 12 票全实证）data_snapshot KLINE 缓存 staleness 粒度=天（should_reject_cache 阈值 10 覆盖长假），当日盘中首拉的日K缓存（fetch_time=12:33，末日 T-1）到 21:31 盘后重拉仍命中（status=cached 实证）→ kline_max 恒=T-1 → 盘后定格形态（t0.status=hidden/kline_max=当日/回放含当日 bar/今日动作定格/当日逐笔进账本）在同日永不可达，违背 b-trade-sheet §7 今日动作口径「当日盘后跑（kline_max=当日）以全天数据定格成交」的文档化设计。直拉源实证 sina 当日 bar 21:27 已存在（非源延迟，纯缓存命中）。写作侧临时规避=盘后重拉前删根层当日分片 ~/.cache/skill-snapshots/{code}_{date}.json 再跑 runner（实证有效：删后 kline 末日=当日、hidden 12/12、博迁/昊华账本当日 BUY 定格成交）。引擎修向（另批裁决）：KLINE 类缓存加「data 末日 < rq.date 且 now>16:00 → 判 stale」细化臂，或 runner 盘后窗口对 kline scene 强制 bypass cache。执法面缺口：同日重跑取数行为无测试锚定（staleness 阈值测试只测隔日语义）。'
+  fix: '【landed 2026-10-09 同日】根修=daily_kline no_cache 恒真拉：data_snapshot.fetch_or_cache(+no_cache keyword，跳缓存读/写/staleness 改写，fail_cache 保留)+ds.fetch_with_fallback/runner.fetch_with_fallback 透传+runner live kline 调用点 no_cache=True（as-of 点不传——live 不写后 key 恒缺，as-of 自然恒新鲜且 slice 守卫不变）。实弹：不清分片直接重跑 002202 → status=ok 真拉、末日=当日、t0=hidden。写作侧规避（run_batch_B 盘后清分片块）随 landed 同批删除。执法=test_kline_no_cache 6 案（恒新/不污染/默认缓存护栏/fail_cache 保留/fetch_log 留痕/源码契约）。【缺陷原文】（2026-10-09 21:31 盘后重拉 12 票全实证）data_snapshot KLINE 缓存 staleness 粒度=天（should_reject_cache 阈值 10 覆盖长假），当日盘中首拉的日K缓存（fetch_time=12:33，末日 T-1）到 21:31 盘后重拉仍命中（status=cached 实证）→ kline_max 恒=T-1 → 盘后定格形态（t0.status=hidden/kline_max=当日/回放含当日 bar/今日动作定格/当日逐笔进账本）在同日永不可达，违背 b-trade-sheet §7 今日动作口径「当日盘后跑（kline_max=当日）以全天数据定格成交」的文档化设计。直拉源实证 sina 当日 bar 21:27 已存在（非源延迟，纯缓存命中）。写作侧临时规避=盘后重拉前删根层当日分片 ~/.cache/skill-snapshots/{code}_{date}.json 再跑 runner（实证有效：删后 kline 末日=当日、hidden 12/12、博迁/昊华账本当日 BUY 定格成交）。引擎修向（另批裁决）：KLINE 类缓存加「data 末日 < rq.date 且 now>16:00 → 判 stale」细化臂，或 runner 盘后窗口对 kline scene 强制 bypass cache。执法面缺口：同日重跑取数行为无测试锚定（staleness 阈值测试只测隔日语义）。'

@@ -121,6 +121,8 @@ echo "[① 契约层] test_exec_shell_view_trades.py（trades/v31_fit 导出面+
 python3 "$HERE/test_exec_shell_view_trades.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_b_portfolio_sheet.py（合集渲染：title/三块/NONE 语义/触发表两态/账本四词/selfcheck/降级）"
 python3 "$HERE/test_b_portfolio_sheet.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
+echo "[① 契约层] test_kline_no_cache.py（kline 恒真拉：no_cache 两极+默认缓存护栏+fail_cache 保留+runner 源码契约）"
+python3 "$HERE/test_kline_no_cache.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_snapshot_view_field.py（--field 外科投影六语义+footer/截断指针+炸弹双帽）"
 python3 "$HERE/test_snapshot_view_field.py" 2>&1 | grep -E '^(OK|FAILED|Ran)' | tail -3
 echo "[① 契约层] test_peer_pipeline.py（peer handoff：G15 weight3+never-run FAIL+fallback emit 四态+capstone 富字段+m6/m1 锚点）"

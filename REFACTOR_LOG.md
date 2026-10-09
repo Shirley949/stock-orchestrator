@@ -1,3 +1,10 @@
+## 2026-10-09 kline no_cache 恒真拉根修（trap engine#kline_cache:sameday_postclose_bar_miss landed）
+- **根因**：KLINE 当日缓存陪跑全天（`_is_data_stale` staleness 粒度=天，防隔日脏缓存不防当日盘中→盘后 bar 滚动）——盘中首拉的日K分片（12:33，末日 T-1）到 21:31 盘后重拉仍 `status=cached` 命中 → kline_max 恒=T-1 → 盘后定格形态（t0 hidden/kline_max=当日/今日动作定格/当日逐笔进账本）同日不可达，违背 b-trade-sheet §7 文档化设计。直拉源实证当日 bar 已存在（非源延迟，纯缓存命中；13 票实证入 trap_ledger）。
+- **根修**：`data_snapshot.fetch_or_cache` 加 keyword-only `no_cache`（True=跳缓存读/写/staleness 改写，数据原样 ok 返回，fetch_log 照记，fail_cache 保留）+ `ds.fetch_with_fallback`/`runner.fetch_with_fallback` 透传 + runner live kline 调用点 `no_cache=True`。as-of 调用点不传——live 不写后缓存键恒缺，as-of 自然恒新鲜且 `_asof_slice_rows` 切片守卫不变（零泄漏面变化）。60min 无同病（直调 fetch_kline_sina 不经缓存，实证排除）；THS fallback 不走缓存（排除）。
+- **重拉代价研究结论**：单次直调 ~0.7s（批量自然间隔无限流实测，当日多轮真拉 20+ 次零失败）；失败双兜底（退火重试 [1,3,6] + THS 官方日K fallback）；kline 每 run 单次调用（唯一消费点）无 run 内不一致面；不再写缓存反而消除「坏结果缓存陪跑全天」中毒面，分片更小。
+- **写作侧规避同批删除**（宪法②）：run_batch_B.sh 盘后清分片块随 landed 删（含期间引入的 dry-run 副作用 bug 一并消除）。
+- **执法面**：`test_kline_no_cache.py` 6 案（no_cache 恒新两极/不污染 _mem_cache/默认缓存语义护栏/fail_cache 保留/fetch_log 留痕/runner 源码契约）挂 run_regression 注册；实弹复验=不清分片直接重跑 002202 → status=ok 真拉、末日=当日、t0=hidden。
+
 ## 2026-10-09 Phase 6 批：多票合集报告链（run_batch_B + b_portfolio_sheet + token_audit --label）
 - **新增 ① `scripts/run_batch_B.sh`**：12 票批跑固化（/tmp/batch_runner_B.sh 实战两轮原型）——`--label`（必填 ≤16 字符禁空白）/`--codes` 子集 6 位校验/`--dry-run`/`--stop-on-fail`；NAME 中文名映射启用 runner RCA-1 `--expected-name` 守卫（名不符 exit 2 硬失败该票防错标快照混入合集）；快照后检 json+三键（execution_shell/t0_check/realtime_quote，rc=0 半吊子仍记 FAIL）；manifest.tsv（④ 的输入契约）+ batch_checklist.md（机器数据面+人工报告面 5 项）；RUNROOT=`/tmp/run_batch_B_{label}_{date}` 避开 c2 glob；退出码 0/1/2/3。
 - **新增 ② `scripts/b_portfolio_sheet.py`**：合集渲染件，纯照抄零引擎调用——表1 综合判断六列（现价/今日/主力净额/方向/今日动作）/表2 决策档（t0 rows hit==True 全集重算，kind→确认映射）/表3 持仓纪律（持续态 SELL_ALL/SELL_PARTIAL + HOLD 触及后收回）/账本总持仓（trades 今日变动四词状态机；盘中缺键不降级，盘后缺键 exit 3）；`cell()` 全格溯源 + selfcheck 二次独立重读对拍（不等→exit 2 零写出）；title=`{m}-{d}{相位}{K}票合集` ≤33 硬断言；`BP_SNAPSHOT_DIR` 环境钩子供测试隔离。

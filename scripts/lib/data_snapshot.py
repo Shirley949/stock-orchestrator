@@ -356,6 +356,8 @@ class DataSnapshot:
         params: dict,
         cross_check: bool = False,
         empty_is_ok: bool = False,
+        *,
+        no_cache: bool = False,
     ) -> dict:
         """
         拉取数据（带缓存 + 交叉验证）。
@@ -387,7 +389,9 @@ class DataSnapshot:
         #    A 删除过期项时 B 的 copy 会 KeyError；锁只护命中检查，网络调用在锁外）
         with self._lock:
             # 1a. 成功缓存命中（含时效性二次检查；仅 ok 落盘，逻辑不变）
-            if key in self._mem_cache:
+            # no_cache=True 恒真拉（kline 类恒新鲜场景：当日盘中→盘后 bar 滚动，缓存陪跑
+            # 会使盘后重拉丢当日 bar——trap engine#kline_cache:sameday_postclose_bar_miss）
+            if not no_cache and key in self._mem_cache:
                 cached = self._mem_cache[key].copy()
                 if self._is_data_stale(api_name, cached):
                     del self._mem_cache[key]  # 删除过期缓存，重新拉取
@@ -424,13 +428,15 @@ class DataSnapshot:
         # 4. 缓存写回（临界区：_mem_cache/_fail_cache 写 + _fetch_log 追加原子化）
         with self._lock:
             if result.get("status") == "ok":
-                if self._is_data_stale(api_name, result):
-                    result["status"] = "stale"
-                    result.setdefault("_warnings", []).append(
-                        f"[stale] {api_name} 数据过期，拒绝缓存"
-                    )
-                else:
-                    self._mem_cache[key] = result.copy()
+                if not no_cache:
+                    if self._is_data_stale(api_name, result):
+                        result["status"] = "stale"
+                        result.setdefault("_warnings", []).append(
+                            f"[stale] {api_name} 数据过期，拒绝缓存"
+                        )
+                    else:
+                        self._mem_cache[key] = result.copy()
+                # no_cache=True：数据原样 ok 返回（不跑 staleness 改写、不写缓存），fetch_log 照记
                 self._fetch_log.append({
                     "api": api_name,
                     "params": params,
@@ -463,6 +469,7 @@ class DataSnapshot:
         fallbacks: list = None,
         cross_check: bool = False,
         empty_is_ok: bool = False,
+        no_cache: bool = False,
     ) -> dict:
         """
         尝试 api_name，失败则依次尝试 fallbacks。
@@ -472,7 +479,8 @@ class DataSnapshot:
         apis_to_try = [(api_name, params)] + (fallbacks or [])
 
         for api, p in apis_to_try:
-            result = self.fetch_or_cache(api, p, cross_check=cross_check, empty_is_ok=empty_is_ok)
+            result = self.fetch_or_cache(api, p, cross_check=cross_check, empty_is_ok=empty_is_ok,
+                                         no_cache=no_cache)
             if result.get("status") in ("ok", "cached"):
                 return result
             # stale 数据视为失败，继续尝试下一个降级源
