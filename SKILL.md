@@ -184,6 +184,8 @@ exit 1 = 停机不写报告；其 stderr 即完整「执行后验证」（_warni
 
 runner 一条命令（scene 编排 = `fetch_for_mode` 阶段B，含 `short_term_enrich` 预计算 + `execution_shell` 执行壳重放（v3.3+T11 交易决策 + v3.1 辅助参考）——读结论勿自算）；命令与 stop-gate 见 Phase 2「Runner 调用强制规范」及 routing SKILL.md。
 
+多票批跑与合集（2026-10-09 Phase 6 批）：`scripts/run_batch_B.sh --label <标签>`（12 票池+`--expected-name` 守卫+快照后检+manifest/checklist；`--codes` 子集/`--dry-run`）→ 单票照常 SOP → `scripts/b_portfolio_sheet.py --label <标签> --date <YYYYMMDD>`（合集三块纯照抄+selfcheck 对拍 exit 2 零写出；缺档 exit 1/降级 exit 3）→ `token_audit.py <会话> --label <标签>`（批次审计落 token_audits/label-*）。
+
 ### ⚠️ websearch 素材落 snapshot（读侧协议——恒驻铁律见 `~/.claude/docs/tooling-playbook.md` §读侧协议，引擎读面见 `~/.claude/docs/websearch-protocols/{exa,doubao,tavily,firecrawl}.md`，载荷白名单/合并/修剪细则见 [`phase-protocols §P2`](references/phase-protocols.md#p2-web_research-素材落盘)）
 
 用户要求 websearch（行业规模/全球份额/需求预测/新闻线索等）时，素材**必须**先经 runner 写回 snapshot 再引用——**禁止对话内贴 findings 直写报告**（同票两次运行结论漂移、G21 溯源无从执法）。**读侧三步（全链路必走，缺一即断链）**：
@@ -232,7 +234,7 @@ python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py web_rese
 | 模式 | 报告涉及模块（按此顺序 JIT） | 延迟加载 |
 |------|------------------------------|---------|
 | **A** | m0 / m1 / m2 / m25 / m3 / m4 / m5 / m6 / m9 / m7 / m8 / m10 / m12 | **m11-gates.md：首次 verify 有 FAIL 时才 Read**（verify 输出自带失败原因，全过时不需要） |
-| **B** | b-trade-sheet | 同上 m11（b-trade-sheet=v3 单模板：状态头+点位表+策略+数据与口径；m39 R1-R6 仅在可选消费 T1-B 声量时才读） |
+| **B** | b-trade-sheet | 同上 m11（b-trade-sheet=v3 单模板六块：状态头+点位表+策略+执行壳+T-1×当日对账+数据与口径；m39 R1-R6 仅在可选消费 T1-B 声量时才读） |
 
 ### ⚠️ 数据读取：snapshot_view 视图直出（禁手写提取脚本）
 
@@ -259,12 +261,11 @@ python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json market_context # B：大盘
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json fund_flow     # B：资金流（当日+历史）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json b_head        # B：状态头 4 行 + head_draft_md 预渲染（b-trade-sheet 照抄源）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json trade_sheet  # B：交易指令单 rows 六列 + kelly/state_tuple/event_calendar
-python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell   # B：v3.3+T11 执行壳交易决策（仓位/今日动作/出场栈/PFD）+ v3.1 辅助参考（权重=0）
+python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell   # B：v3.3+T11 执行壳交易决策（今日动作/挂单/出场栈/PFD/账本/你的持仓/逐笔近3/v3.1 适用性）+ v3.1 辅助参考（权重=0）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json t0_check     # B：T-1 决策×当日实况对账（盘中 ok 渲染/hidden 省略/degraded 披露；操作指引唯一来源 rows[].guide）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqvoice       # 站内声量六/七维 + module_map（Phase 1.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json xqcheck       # 站内结论求证 verdicts/objections（Phase 4.5 产物）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json webfindings   # B：websearch 策展清单直读（topic/entry_id/url/value，写回后当场新鲜）
-python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json exec_shell    # B：执行壳（今日动作/挂单/PFD/账本，v3.3+T11）
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json --list      # 全部视图挂载状态 + 顶层 scene 键（= any 的目标空间；合法视图以 --list 输出为准，勿凭记忆写视图名）
 # any 探查（视图外数据的第一入口）：
 python3 $SV /tmp/runner_snapshot_<code>_mode<X>.json any governance --depth 1                                # ① 顶层 scene 第一步（结构探查/字段发现）
