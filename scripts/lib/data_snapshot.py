@@ -362,7 +362,7 @@ class DataSnapshot:
         """
         拉取数据（带缓存 + 交叉验证）。
 
-        1. 检查缓存（相同 api_name + sorted params）
+        1. 检查缓存（相同 api_name + sorted params；no_cache=True 跳过读/写/staleness 改写恒真拉）
         2. 未命中则调用 akshare API
         3. 运行 3 项校验
         4. 缓存结果
