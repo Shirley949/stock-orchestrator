@@ -88,5 +88,75 @@ class TestChecklistHardening(unittest.TestCase):
         self.assertIn("phase-protocols.md", SKILL_MD.read_text(encoding="utf-8"))
 
 
+# ---------------------------------------------------------------------------
+# extract_position 多票 prompt 熔断（trap engine#checklist:extract_position_multi_prompt，
+# 2026-10-09 close3 批实证：12 票整段 prompt 下每票清单都首位捕获 603993 的仓位）
+# ---------------------------------------------------------------------------
+from generate_checklist import extract_position  # noqa: E402
+
+# close3 批真实原文形态（首位=603993，含全角小数点 52。85/29。63）
+_MULTITICKET_PROMPT = (
+    "洛阳钼业603993（仓位2500@17.32）,工业富联601138（仓位700@52。85）,"
+    "三祥新材603663（仓位200@29。63）,博迁新材605376（仓位300@130.42）,"
+    "特变电工600089（仓位2200@19.36）,水晶光电002273（仓位600@24.42）,"
+    "昊华科技600378（仓位500@42.69）,领益智造002600（仓位1200@12.29）,"
+    "星源材质300568（仓位600@15.72）,新易盛300502（仓位100@393.1）,"
+    "铜冠铜箔301217（仓位200@98.67）,金风科技002202（仓位1300@22.72）"
+)
+
+
+class ExtractPositionMultiPromptTest(unittest.TestCase):
+    """多票 prompt 禁首位猜测：熔断可观测 + 全角小数点归一 + --position 显式通道。"""
+
+    def test_multiticket_returns_ambiguous(self):
+        """反例：12 处仓位段 → ambiguous 熔断值，绝不返回首位数字。"""
+        pos = extract_position(_MULTITICKET_PROMPT)
+        self.assertEqual(pos.get("ambiguous"), 12)
+        self.assertNotIn("shares", pos)
+
+    def test_multiticket_checklist_fuses_no_position_line(self):
+        """反例：多票 prompt 生成的 B 清单带 🚨 熔断行且零 --position 命令行（宁空仓不错仓）。"""
+        md = generate_checklist(_MULTITICKET_PROMPT, stock_codes="300502", mode="B")
+        self.assertIn("🚨 多票 prompt 熔断", md)
+        # 命令续行形态（两空格缩进）必须缺席；熔断/双态提示文案里的 "--position \"shares=N" 指引文本不在此列
+        self.assertNotIn('\n  --position "shares=', md)
+        self.assertNotIn("shares=2500,cost=17.32", md)  # 首位捕获不复活（close3 受害形态）
+
+    def test_fullwidth_decimal_normalized(self):
+        """反例：全角句号小数（52。85）归一为 52.85，禁静默截断成 52。"""
+        pos = extract_position("工业富联 仓位700@52。85")
+        self.assertEqual(pos.get("shares"), 700)
+        self.assertEqual(pos.get("cost"), 52.85)
+
+    def test_single_ticket_still_resolves(self):
+        """正例：单票 prompt 原文检出路径不回退（shares/cost 正解 + 清单带检出行）。"""
+        pos = extract_position("模式B盘中分析 300502 仓位100@393.1")
+        self.assertEqual(pos, {"shares": 100, "cost": 393.1})
+        md = generate_checklist("模式B盘中分析 300502 仓位100@393.1",
+                                stock_codes="300502", mode="B")
+        self.assertIn("仓位已从原文检出：shares=100 cost=393.1", md)
+        self.assertIn('--position "shares=100,cost=393.1"', md)
+
+    def test_explicit_position_bypasses_parsing(self):
+        """正例：--position 显式直传 → 显式传入行 + 直传 flag（多票批跑唯一免熔断通道）。"""
+        md = generate_checklist("模式B盘中分析 300502", stock_codes="300502", mode="B",
+                                explicit_position="shares=100,cost=393.1")
+        self.assertIn("仓位已显式传入：shares=100,cost=393.1", md)
+        self.assertIn('--position "shares=100,cost=393.1"', md)
+        self.assertNotIn("仓位已从原文检出", md)
+
+    def test_bad_explicit_position_shape_exits(self):
+        """反例：--position 坏形态 CLI exit 1（确定性输入走确定性通道，坏了必须响）。"""
+        import subprocess
+        script = HERE.parent / "scripts" / "generate_checklist.py"
+        r = subprocess.run(
+            [sys.executable, str(script), "--user-prompt", "盘中分析 测试股",
+             "--stock-codes", "300054", "--mode", "B",
+             "--position", "shares=100 cost=393.1"],
+            capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("形态非法", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

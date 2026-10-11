@@ -106,23 +106,33 @@ def extract_stock_codes(user_prompt: str) -> list[str]:
 def extract_position(user_prompt: str) -> dict:
     """从用户 prompt 确定性提取持仓股数与成本 → 模式B runner --position（输入腿代码化）。
     执法者=本函数（清单命令块直出具体 flag）；提取值打印进清单供 LLM 对照原文复核。
-    未检出时命令块出双态提示行（缺输入=报告走空仓视角的静默降级面）。"""
+    未检出时命令块出双态提示行（缺输入=报告走空仓视角的静默降级面）。
+    多票 prompt（检出 >1 处仓位段）→ 返回 {"ambiguous": N}：禁首位猜测，消费点渲染
+    🚨 熔断行且不给 --position（宁走空仓双态提示，不可错仓）——程序化调用方应改传
+    --position 显式值。全角小数点（52。85）先归一化再解析（防静默截断成 52）。"""
     if not user_prompt:
         return {}
+    text = re.sub(r'(\d)[。．](\d)', r'\1.\2', user_prompt)
+    pairs: list = []
+    for pat in (r'(\d+)\s*股\s*@\s*([\d.]+)',
+                r'仓位[:：]?\s*(\d+)\s*股?\s*@\s*([\d.]+)',
+                r'持仓[:：]?\s*(\d+)\s*股[，,;\s]*成本[:：]?\s*([\d.]+)'):
+        pairs = re.findall(pat, text)
+        if pairs:
+            break
+    if len(pairs) > 1:
+        return {"ambiguous": len(pairs)}
     shares = cost = None
-    m = re.search(r'(\d+)\s*股\s*@\s*([\d.]+)', user_prompt) or \
-        re.search(r'仓位[:：]?\s*(\d+)\s*股?\s*@\s*([\d.]+)', user_prompt) or \
-        re.search(r'持仓[:：]?\s*(\d+)\s*股[，,;\s]*成本[:：]?\s*([\d.]+)', user_prompt)
-    if m:
-        shares, cost = int(m.group(1)), float(m.group(2))
+    if pairs:
+        shares, cost = int(pairs[0][0]), float(pairs[0][1])
     if cost is None:
-        m = re.search(r'成本[价格]?[:：]?\s*([\d.]+)', user_prompt) or \
-            re.search(r'买入价[:：]?\s*([\d.]+)', user_prompt)
+        m = re.search(r'成本[价格]?[:：]?\s*([\d.]+)', text) or \
+            re.search(r'买入价[:：]?\s*([\d.]+)', text)
         if m:
             cost = float(m.group(1))
     if shares is None:
-        m = re.search(r'(?:仓位|持仓)[:：]?\s*(\d+)\s*股', user_prompt) or \
-            re.search(r'(\d+)\s*股', user_prompt)
+        m = re.search(r'(?:仓位|持仓)[:：]?\s*(\d+)\s*股', text) or \
+            re.search(r'(\d+)\s*股', text)
         if m:
             shares = int(m.group(1))
     return {"shares": shares, "cost": cost} if shares is not None and cost is not None else {}
@@ -371,7 +381,8 @@ def generate_skeleton(required_files: list, mode_steps: dict, stock_codes: str,
 
 def generate_checklist(user_prompt: str, stock_codes: str = None,
                        mode: str = None, output: str = None,
-                       skeleton_out: str = None) -> str:
+                       skeleton_out: str = None,
+                       explicit_position: str = None) -> str:
     """
     生成完整执行清单的主函数。
 
@@ -449,7 +460,15 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
             lines.append(f"# 数据拉取（routing runner）")
             lines.append(f"# ⚠️ 必须使用 > file 重定向，禁止 | head / | tail 等管道截断")
             _pos = extract_position(user_prompt)
-            if _pos:
+            if explicit_position:
+                lines.append(f"# 仓位已显式传入：{explicit_position}（--position 直传，绕过 prompt 解析）")
+                lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
+                lines.append(f"  --position \"{explicit_position}\" \\")
+            elif _pos.get("ambiguous"):
+                lines.append(f"# 🚨 多票 prompt 熔断：检出 {_pos['ambiguous']} 处仓位段，禁首位猜测（trap engine#checklist:extract_position_multi_prompt）——逐票重生成清单，或加 --position \"shares=N,cost=M\" 显式传值")
+                lines.append(f"# ⚠️ 未检出仓位/成本——若用户原文给了持仓须补 --position \"shares=N,cost=M\" 重拉；确无仓位则直接跑（缺输入=报告走空仓视角）")
+                lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
+            elif _pos:
                 lines.append(f"# 仓位已从原文检出：shares={_pos['shares']} cost={_pos['cost']}（personal overlay 不进状态机；报告照抄 execution_shell.user_position，勿手算盈亏）")
                 lines.append(f"python ~/.hermes/skills/stock-analysis/financial-data-routing/runner.py B {sc} \\")
                 lines.append(f"  --position \"shares={_pos['shares']},cost={_pos['cost']}\" \\")
@@ -622,6 +641,11 @@ def generate_checklist(user_prompt: str, stock_codes: str = None,
         output_path.write_text(content, encoding="utf-8")
         print(f"✅ 执行清单已生成: {output}")
         print(f"   模式: {mode} | 股票: {stock_codes} | 步骤: {total_steps}")
+        if mode == "B" and not explicit_position:
+            _pos = extract_position(user_prompt)
+            if _pos.get("ambiguous"):
+                print(f"   🚨 多票 prompt：检出 {_pos['ambiguous']} 处仓位段，清单已熔断（禁首位猜测）——"
+                      f"逐票重生成或 --position 显式传值", file=sys.stderr)
         if question_result["unmapped"]:
             print(f"   ⚠️  {len(question_result['unmapped'])} 条问题需要 LLM 兜底")
         if skeleton_out:
@@ -649,9 +673,41 @@ def main():
     parser.add_argument("--mode", choices=["A", "B"], help="分析模式，不传则自动判定")
     parser.add_argument("--output", help="输出清单文件路径")
     parser.add_argument("--skeleton-out", help="C1' 加载骨架输出路径（A-only，B 豁免）")
+    parser.add_argument("--position", dest="explicit_position",
+                        help='显式传入持仓 "shares=N,cost=M"（多票批跑必用，绕过 prompt 解析；'
+                             'prompt 检出多处仓位段时唯一免熔断通道）')
+    parser.add_argument("--emit-batch", dest="emit_batch",
+                        help="多票整段 prompt 一键出批：名字→代码确定性解析（stock_name_resolver，"
+                             "akshare 表日缓存）→ 逐票清单（各带正确 --position）+ batch_pool.tsv "
+                             "写入指定目录；解析失败 exit 2（显式报错，禁静默错配）。模式固定 B")
     parser.add_argument("--ignore-trap-ledger", action="store_true",
                         help="逃生口：跳过 TRAP_LEDGER blocked(P3) 硬阻断检查")
     args = parser.parse_args()
+
+    if args.explicit_position is not None and \
+            not re.fullmatch(r'shares=\d+,cost=\d+(\.\d+)?', args.explicit_position):
+        print(f"❌ --position 形态非法：'{args.explicit_position}'（须 shares=N,cost=M，如 shares=2500,cost=17.32）",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if args.emit_batch:
+        import stock_name_resolver as _snr
+        _res = _snr.emit_batch_pool(args.user_prompt, args.emit_batch)
+        if "error" in _res:
+            print(f"❌ 多票解析失败：{_res['error']}——逐票重生成清单，或 --position 显式传值",
+                  file=sys.stderr)
+            sys.exit(2)
+        for _w in _res.get("warnings", []):
+            print(f"ℹ️ {_w}", file=sys.stderr)
+        for _p in _res["pairs"]:
+            generate_checklist(
+                user_prompt=f"模式B盘中分析 {_p['name']} {_p['code']}",
+                stock_codes=_p["code"], mode="B",
+                output=str(Path(args.emit_batch) / f"analysis_checklist_{_p['code']}_modeB.md"),
+                explicit_position=f"shares={_p['shares']},cost={_p['cost']}")
+        print(f"✅ 本次申报 {len(_res['pairs'])} 票持仓 → {_res['pool']} + 逐票清单"
+              f"（持仓以当日申报为准，系统不记忆）")
+        sys.exit(0)
 
     # E10（TRAP_LEDGER P3 硬阻断）：台账存在 blocked 条目（某 trap 复发/回退到
     # 「未修复不能再开新票」的运营态）→ 拒生成新清单 exit 2；修复后置 blocked: false。
@@ -671,6 +727,7 @@ def main():
         mode=args.mode,
         output=args.output,
         skeleton_out=args.skeleton_out,
+        explicit_position=args.explicit_position,
     )
 
 

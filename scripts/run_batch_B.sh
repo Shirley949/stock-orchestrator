@@ -1,6 +1,7 @@
 #!/bin/bash
 # run_batch_B.sh — 模式B 多票批跑固化（2026-10-09 Phase 6 批；原型 /tmp/batch_runner_B.sh 实战两轮全绿）
 # 用法：run_batch_B.sh --label morning [--codes 603993,601138] [--dry-run] [--stop-on-fail]
+#       空仓票：pool 行 shares 写 0（cost 0 占位）→ 不传 --position，报告走空仓视角
 # 退出码：0=全成功 1=参数/预检失败 2=部分失败 3=全失败
 # 约束：/tmp 产物命名 run_batch_B_* / runner_snapshot_{code}_modeB.json（c2_compact_inject
 #       消费面，禁改名）；合集目录名由 b_portfolio_sheet.py 生成（8 位日期尾，glob 消费方安全）。
@@ -10,6 +11,8 @@ SKILL_ROOT="$HOME/.hermes/skills/stock-analysis/financial-data-routing"
 RUNNER="$SKILL_ROOT/runner.py"
 TODAY="$(date +%Y%m%d)"
 
+# 内置池 = 2026-10-09 持仓快照（兜底）；唯一真相源 = 用户最新原文 → --emit-batch → --pool 直灌。
+# 换票日禁改本表——重新生成池文件，防第二真相源漂移。
 declare -A POS=(
   [603993]="shares=2500,cost=17.32"
   [601138]="shares=700,cost=52.85"
@@ -32,16 +35,32 @@ declare -A NAME=(
 )
 CODES_ORDERED=(603993 601138 603663 605376 600089 002273 600378 002600 300568 300502 301217 002202)
 
-LABEL="" CODES_ARG="" DRY_RUN=0 STOP_ON_FAIL=0
+LABEL="" CODES_ARG="" DRY_RUN=0 STOP_ON_FAIL=0 WITH_CHECKLISTS=0 POOL_ARG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --label) LABEL="$2"; shift 2 ;;
     --codes) CODES_ARG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --stop-on-fail) STOP_ON_FAIL=1; shift ;;
-    *) echo "❌ 未知参数：$1（可用：--label --codes --dry-run --stop-on-fail）" >&2; exit 1 ;;
+    --with-checklists) WITH_CHECKLISTS=1; shift ;;
+    --pool) POOL_ARG="$2"; shift 2 ;;
+    *) echo "❌ 未知参数：$1（可用：--label --codes --dry-run --stop-on-fail --with-checklists --pool）" >&2; exit 1 ;;
   esac
 done
+
+# ---- --pool：批量池直灌（generate_checklist --emit-batch 产物 batch_pool.tsv），
+#      覆盖内置 12 票表——用户原文→(code,name,shares,cost) 全链代码化零手工转录 ----
+if [[ -n "$POOL_ARG" ]]; then
+  [[ -f "$POOL_ARG" ]] || { echo "❌ --pool 文件不存在：$POOL_ARG" >&2; exit 1; }
+  POS=(); NAME=(); CODES_ORDERED=()
+  while IFS=$'\t' read -r c nm sh co; do
+    [[ -z "$c" || "$c" == \#* ]] && continue
+    [[ "$c" =~ ^[0-9]{6}$ && "$nm" != "" && "$sh" =~ ^[0-9]+$ && "$co" =~ ^[0-9.]+$ ]] \
+      || { echo "❌ pool 行非法（须 code\\tname\\tshares\\tcost）：'$c $nm $sh $co'" >&2; exit 1; }
+    POS[$c]="shares=$sh,cost=$co"; NAME[$c]="$nm"; CODES_ORDERED+=("$c")
+  done < "$POOL_ARG"
+  [[ ${#CODES_ORDERED[@]} -ge 1 ]] || { echo "❌ pool 空：$POOL_ARG" >&2; exit 1; }
+fi
 
 # ---- 参数预检 ----
 [[ -z "$LABEL" ]] && { echo "❌ --label 必填（批次标签，如 morning/close）" >&2; exit 1; }
@@ -74,6 +93,26 @@ if [[ $DRY_RUN -eq 1 ]]; then
   exit 0
 fi
 
+# ---- Phase 0 清单预生成（--with-checklists：权威 POS 表逐票直传 --position，
+#      绕过 prompt 解析——多票整段 prompt 下 extract_position 首位捕获已熔断，
+#      trap engine#checklist:extract_position_multi_prompt）----
+if [[ $WITH_CHECKLISTS -eq 1 ]]; then
+  GEN="$HOME/.hermes/skills/stock-analysis/stock-orchestrator/scripts/generate_checklist.py"
+  [[ -f "$GEN" ]] || { echo "❌ generate_checklist 缺失：$GEN" >&2; exit 1; }
+  for c in "${CODES[@]}"; do
+    pos="${POS[$c]:-}"; pos_args=()
+    _sh=""; [[ -n "$pos" ]] && { _sh="${pos#shares=}"; _sh="${_sh%%,*}"; }
+    [[ -n "$pos" && "$_sh" != "0" ]] && pos_args=(--position "$pos")
+    python3 "$GEN" \
+      --user-prompt "模式B盘后分析 ${NAME[$c]} ${c}" \
+      --stock-codes "$c" \
+      ${pos_args+"${pos_args[@]}"} \
+      --output "/tmp/analysis_checklist_${c}_modeB_${TODAY}_batch_${LABEL}.md" >/dev/null \
+      || echo "❌ checklist $c 生成失败（继续批跑，报告面人工补）" >&2
+  done
+  echo "checklists: ${#CODES[@]} 份 → /tmp/analysis_checklist_*_modeB_${TODAY}_batch_${LABEL}.md"
+fi
+
 # ---- 主循环 ----
 printf "code\tname\trc\tsnap_ok\tfull_snapshot_path\tstderr_path\tduration_s\n" > "$MANIFEST"
 OK=0; FAIL=0
@@ -81,13 +120,25 @@ T0_ALL=$(date +%s)
 for c in "${CODES[@]}"; do
   nm="${NAME[$c]:-}"
   [[ -z "$nm" ]] && { echo "❌ $c 无 NAME 映射（RCA-1 守卫需中文名）" >&2; printf "%s\t%s\t%d\t%d\t%s\t%s\t%s\n" "$c" "?" 1 0 "-" "-" "-" >> "$MANIFEST"; FAIL=$((FAIL+1)); continue; }
-  [[ "${POS[$c]:-}" =~ ^shares=[0-9]+,cost=[0-9.]+$ ]] || { echo "❌ $c POS 形态非法：${POS[$c]:-}" >&2; printf "%s\t%s\t%d\t%d\t%s\t%s\t%s\n" "$c" "$nm" 1 0 "-" "-" "-" >> "$MANIFEST"; FAIL=$((FAIL+1)); continue; }
+  pos="${POS[$c]:-}"
+  if [[ -n "$pos" ]]; then
+    [[ "$pos" =~ ^shares=[0-9]+,cost=[0-9.]+$ ]] || { echo "❌ $c POS 形态非法：$pos" >&2; printf "%s\t%s\t%d\t%d\t%s\t%s\t%s\n" "$c" "$nm" 1 0 "-" "-" "-" >> "$MANIFEST"; FAIL=$((FAIL+1)); continue; }
+  fi
+  # 空仓票（POS 缺省或 shares=0）→ 不传 --position（execution_shell._user_position 合同：缺输入=空仓视角；
+  # 传 shares=0,cost=0 会落持仓分支输出「0股 @成本0」坏行）
+  _sh=""; [[ -n "$pos" ]] && { _sh="${pos#shares=}"; _sh="${_sh%%,*}"; }
   echo "=== RUN $c $nm $(date '+%T') ==="
   t0=$(date +%s)
   set +e
-  timeout "${BATCH_TIMEOUT:-600}" python3 "$RUNNER" B "$c" \
-    --expected-name "$nm" --position "${POS[$c]}" \
-    > "/tmp/runner_snapshot_${c}_modeB.json" 2>"/tmp/runner_stderr_${c}_modeB.log"
+  if [[ -z "$pos" || "$_sh" == "0" ]]; then
+    timeout "${BATCH_TIMEOUT:-600}" python3 "$RUNNER" B "$c" \
+      --expected-name "$nm" \
+      > "/tmp/runner_snapshot_${c}_modeB.json" 2>"/tmp/runner_stderr_${c}_modeB.log"
+  else
+    timeout "${BATCH_TIMEOUT:-600}" python3 "$RUNNER" B "$c" \
+      --expected-name "$nm" --position "${POS[$c]}" \
+      > "/tmp/runner_snapshot_${c}_modeB.json" 2>"/tmp/runner_stderr_${c}_modeB.log"
+  fi
   rc=$?
   t1=$(date +%s); dur=$((t1-t0))
   full="$HOME/.cache/skill-snapshots/full/${c}_${TODAY}.json"
@@ -127,7 +178,7 @@ FULL_LIST="$HOME/.cache/skill-snapshots/full"
   done < "$MANIFEST"
   echo ""
   echo "## 报告面（人工勾）"
-  echo "- [ ] 12 份单票报告 verify_gates --profile quick 全 PASS（含新增 v3.1 适用性行）"
+  echo "- [ ] ${#CODES[@]} 份单票报告 verify_gates --profile quick 全 PASS（含新增 v3.1 适用性行）"
   echo "- [ ] b_portfolio_sheet.py 自检 cells=N 全对 exit 0"
   echo "- [ ] 合集 title ≤33 字符"
   echo "- [ ] tdx_publish.py prepare L14 PASS"

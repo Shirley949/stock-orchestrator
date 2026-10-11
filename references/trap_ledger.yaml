@@ -718,11 +718,11 @@ entries:
   subcheck: winrate
   reason_class: dual_source_draft_vs_gate
   match: 胜率对拍不一致
-  count: 3
-  last_seen: '2026-10-09'
+  count: 8
+  last_seen: '2026-10-10'
   status: inflight
   root_cause: engine
-  fix: '（600378 首证；605376 二证同日 2026-10-08，晋级 inflight；2026-10-09 605376 盘中批三证）head_draft_v3 渲染 conditional_winrate 0.568(n=185)（规则条件胜率口径），G65 真值源读 sample_win_rate=0.71（方向概率口径）——两统计量并存且不等时，照抄 hint 修法（bull 形态照抄头行）仍恒软 FAIL；写作侧按引擎软过路径走「分析局限性」标注+方向概率锚行双披露（快照两字段均实证：direction_forecast.probability/win_rate_ref/sample_win_rate=0.71 vs conditional_winrate.win_rate=0.568）。修向=引擎统一 draft 与 gate 胜率口径（draft 双值并列或 gate 兼容 conditional 口径）。三证补充：写作侧已验证更优形态=头行置信括注内联双披露「置信：高（恐慌超跌规则，规则回测胜率 0.71）」——报告首个「胜率 N」匹配=sample_win_rate 过 gate 臂、条件胜率 0.568 照旧披露，全过零软过，引擎修复后此括注形态同批退役。买行 cw 括注 as_of 照抄 conditional_winrate.as_of（2026-10-03，非快照日）。'
+  fix: '（600378 首证；605376 二证同日 2026-10-08，晋级 inflight；2026-10-09 605376 盘中批三证）head_draft_v3 渲染 conditional_winrate 0.568(n=185)（规则条件胜率口径），G65 真值源读 sample_win_rate=0.71（方向概率口径）——两统计量并存且不等时，照抄 hint 修法（bull 形态照抄头行）仍恒软 FAIL；写作侧按引擎软过路径走「分析局限性」标注+方向概率锚行双披露（快照两字段均实证：direction_forecast.probability/win_rate_ref/sample_win_rate=0.71 vs conditional_winrate.win_rate=0.568）。修向=引擎统一 draft 与 gate 胜率口径（draft 双值并列或 gate 兼容 conditional 口径）。三证补充：写作侧已验证更优形态=头行置信括注内联双披露「置信：高（恐慌超跌规则，规则回测胜率 0.71）」——报告首个「胜率 N」匹配=sample_win_rate 过 gate 臂、条件胜率 0.568 照旧披露，全过零软过，引擎修复后此括注形态同批退役。买行 cw 括注 as_of 照抄 conditional_winrate.as_of（2026-10-03，非快照日）。四证（2026-10-10 q3watch 批 5 bull 票 301308/001309/002384/688127/300433 独立再证+独立重推导同款括注规避，5/5 翻绿 self_score=100）——写作侧规避条款失效条件不变：引擎统一口径 landed 同批删除括注。'
 - signature: engine#kline_cache:sameday_postclose_bar_miss
   gate: N/A
   subcheck: runner_cache
@@ -734,3 +734,36 @@ entries:
   blocked: false
   root_cause: engine
   fix: '【landed 2026-10-09 同日】根修=daily_kline no_cache 恒真拉：data_snapshot.fetch_or_cache(+no_cache keyword，跳缓存读/写/staleness 改写，fail_cache 保留)+ds.fetch_with_fallback/runner.fetch_with_fallback 透传+runner live kline 调用点 no_cache=True（as-of 点不传——live 不写后 key 恒缺，as-of 自然恒新鲜且 slice 守卫不变）。实弹：不清分片直接重跑 002202 → status=ok 真拉、末日=当日、t0=hidden。写作侧规避（run_batch_B 盘后清分片块）随 landed 同批删除。执法=test_kline_no_cache 6 案（恒新/不污染/默认缓存护栏/fail_cache 保留/fetch_log 留痕/源码契约）。【缺陷原文】（2026-10-09 21:31 盘后重拉 12 票全实证）data_snapshot KLINE 缓存 staleness 粒度=天（should_reject_cache 阈值 10 覆盖长假），当日盘中首拉的日K缓存（fetch_time=12:33，末日 T-1）到 21:31 盘后重拉仍命中（status=cached 实证）→ kline_max 恒=T-1 → 盘后定格形态（t0.status=hidden/kline_max=当日/回放含当日 bar/今日动作定格/当日逐笔进账本）在同日永不可达，违背 b-trade-sheet §7 今日动作口径「当日盘后跑（kline_max=当日）以全天数据定格成交」的文档化设计。直拉源实证 sina 当日 bar 21:27 已存在（非源延迟，纯缓存命中）。写作侧临时规避=盘后重拉前删根层当日分片 ~/.cache/skill-snapshots/{code}_{date}.json 再跑 runner（实证有效：删后 kline 末日=当日、hidden 12/12、博迁/昊华账本当日 BUY 定格成交）。引擎修向（另批裁决）：KLINE 类缓存加「data 末日 < rq.date 且 now>16:00 → 判 stale」细化臂，或 runner 盘后窗口对 kline scene 强制 bypass cache。执法面缺口：同日重跑取数行为无测试锚定（staleness 阈值测试只测隔日语义）。'
+- signature: engine#checklist:extract_position_multi_prompt
+  gate: N/A
+  subcheck: checklist_position
+  reason_class: multi_prompt_first_match
+  match: 多票 prompt 整段传 generate_checklist
+  count: 1
+  last_seen: '2026-10-09'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: '【landed 2026-10-09 同日】根修三层防线（generate_checklist.py + run_batch_B.sh）：①extract_position 改 findall——多票 prompt（>1 处仓位段）返回 {"ambiguous": N}，消费点渲染 🚨 熔断行且不给 --position（禁首位猜测，宁走空仓双态提示不可错仓）+ stdout/stderr 即时告警；同函数加全角小数点归一化（52。85→52.85，防 [\d.]+ 静默截断成本）；②--position "shares=N,cost=M" CLI 显式直传（形态校验 fullmatch，坏形态 exit 1），输入腿代码化、绕过 prompt 解析；③run_batch_B.sh --with-checklists 用权威 POS 表逐票生成清单（batch 路径缺陷面归零）。写作侧规避（逐票 prompt 手工重生成）随 landed 同批删除。执法=regression-tests/test_checklist_hardening.py 两极 6 案（多票熔断/全角归一/单票正解/--position 直传/坏形态 exit1/首位捕获不复活）+ test_name_resolver.py 7 案（注入表零网络+CLI emit-batch 缓存隔离）。第④层（同批复）stock_name_resolver.py：名字→代码确定性解析（akshare 全表日缓存，简称零重复实测；全角小数归一/括号裸 N@M 形态/名字+代码双实体去重/DANGLING·DUPLICATE·UNAVAILABLE 显式错）→generate_checklist --emit-batch 一命令出批（逐票清单+batch_pool.tsv）→run_batch_B.sh --pool 直灌（池表零手工转录）；实弹=2026-10-09 12 票原文回放对拍权威 POS 表 12/12 全中。【缺陷原文】（2026-10-09 23:00 close3 批实证）12 票整段 prompt 下 extract_position 对每票清单都 re.search 首位捕获 603993 的 2500@17.32（300502 清单错挂他票仓位）；同族潜伏面：用户原文 52。85/29。63 全角句号被 [\d.]+ 截成 52/29（静默错成本，比错仓更隐蔽）。'
+- signature: G74#today_action:r_state_bracket
+  gate: G74
+  subcheck: today_action_bracket
+  reason_class: r_state_bracket_divergence
+  match: 今日动作行缺中文括注
+  count: 1
+  last_seen: '2026-10-10'
+  status: pending
+  blocked: false
+  root_cause: engine
+  fix: '【缺陷+跨 2 批实证】end_state.position=R（episode 纸面持仓态）时 exec_shell 视图打印机渲染长形「HOLD（N股 @成本X 现价Y）」，check_g74 臂②正则要求括注==position 原值且 ≤8 字符——照抄视图恒 FAIL（空仓态 position=空仓 时两者一致不触发）。实证：close3 批 600378/605376、q3watch 批 000657/002008。写作侧规避条款（工单=G74#today_action:r_state_bracket）：今日动作行括注改照抄 position 原值「HOLD（R）」，持仓明细由主方案行携带（实测 G74 翻绿）；失效条件=视图打印机对 R 态改渲染「{action}（{pos}）」紧凑形即回归视图照抄。引擎修向建议：execution_shell 视图 printer today 行与 check_g74 臂②对齐（R 态输出 pos 原值括注）。'
+- signature: engine#board_westock:truncation_case_singlerpick
+  gate: N/A
+  subcheck: market_context_board
+  reason_class: board_westock_resolve_chain
+  match: westock 与东财板块K线均失败
+  count: 1
+  last_seen: '2026-10-10'
+  status: landed
+  blocked: false
+  root_cause: engine
+  fix: '【landed 2026-10-10 同日】三层根因一次根修：①search CLI 默认「显示前10」截断（exact 申万二级「电池」pt01801737 排第15位不可见→exact=0）→ search_sector 加 --limit 50；②normalize_code 整体 .lower() 压碎含字母码（pt02GN2016→pt02gn2016 后端「数据为空」，CLI 码大小写敏感实测同灭 usaapl）→ 前缀归一小写+码身保留原样，顺带恢复美股域（us 域旧实现全灭），并补 .SS 后缀缺口；③resolver pref[0] 单发无轮换 → pick_sector_candidates 纯函数（exact 恒队首不独占）+ 调用侧 kline<5 顺位下试。伴生修：base_client.cache_set 加锁+os.replace 原子写（批跑日缓存 2 条 vs 串行日 112 条竞态实证）、call() 空表不缓存（防瞬态空转被当日 L2 冻结）。跨日伪间歇机制：10-08 首条=纯数字钠离子电池 pt02081420（lower 无害）ok，10-09/10-10 首条=含字母刀片电池必炸。执法=TestNormalizeCodeCasePreserve/TestPickSectorCandidates/TestHasDataRow/TestCacheSetThreadSafety（34/34）；活体=301217 board=ok code=pt01801737。写作侧规避（无——报告面 degraded 披露本就诚实，无需删除）。'

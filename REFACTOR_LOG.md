@@ -997,3 +997,8 @@ checklist 增 c_webread_4（搜前 API 覆盖反查，计入分母 47=47 实测�
 - 改：`_print_exec_shell` PFD 行 `（as-of …；警戒线 {th}；状态 …）` → `（as-of …；出场规则阈值 {th}，仅对止盈后剩余仓生效；数据状态 …）`。
 - 为什么：status=数据在位性非告警态，th=T11 剩余仓出场规则阈值——视图是 b-trade-sheet §执行壳 的照抄源，两层措辞必须同步（详细语义见 stock-analysis-quality REFACTOR_LOG 同日条目）。
 - 影响面：G74 对拍面零变化（首冒号后数值位置不变）；test_exec_shell_view_user_position / test_execution_shell_golden 均不钉该行文本（已核实）；None 键路径 `_fmt` 兜底形态不变。
+
+## 2026-10-10 run_batch_B.sh 空仓票支持（--pool shares=0 → 不传 --position）
+- 改：主循环与 --with-checklists 对 POS 缺省或 shares=0 的票不传 `--position`（清单 prompt 同步「盘后」措辞）；G7 报告面条目票数 `${#CODES[@]}` 化（原硬编码 12）。
+- 为什么：`execution_shell._user_position` 合同=缺输入走空仓视角；传 `shares=0,cost=0` 会落持仓分支输出「0股 @成本0 → 持有」坏行。q3watch 批（27 票全无持仓）实跑 27/27 ok。
+- 影响面：内置 12 票池路径（有 POS）行为零变化；空仓判定仅 `shares=0` 或 POS 缺省两形态。
